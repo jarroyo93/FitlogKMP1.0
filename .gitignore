@@ -1,19 +1,35 @@
+# ==========================================
+# Android & Kotlin / Gradle
+# ==========================================
 *.iml
 .kotlin
 .gradle
 **/build/
-xcuserdata
 !src/**/build/
 local.properties
-.idea
-.DS_Store
 captures
 .externalNativeBuild
 .cxx
+
+# ==========================================
+# IDEs & Sistema Operativo
+# ==========================================
+.idea
+.DS_Store
+
+# ==========================================
+# iOS, Xcode & CocoaPods
+# ==========================================
+**/Pods/
+xcuserdata
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
 !*.xcodeproj/xcshareddata/
 !*.xcodeproj/project.xcworkspace/
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
+
+# ==========================================
+# Otros
+# ==========================================
 node_modules/
