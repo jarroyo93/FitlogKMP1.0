@@ -59,6 +59,7 @@ kotlin {
             implementation(libs.androidx.navigation.compose)
             implementation(compose.materialIconsExtended)
             implementation(libs.firebase.firestore)
+            implementation(libs.firebase.auth)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
