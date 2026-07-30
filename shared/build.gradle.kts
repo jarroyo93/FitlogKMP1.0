@@ -8,6 +8,10 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+compose.resources {
+    packageOfResClass = "dev.josearroyo.fitlog.resources"
+}
+
 kotlin {
     listOf(
         iosArm64(),
