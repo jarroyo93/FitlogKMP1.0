@@ -33,6 +33,9 @@ import dev.josearroyo.fitlog.viewmodel.entrenador.AddAtletaViewModel
 import dev.josearroyo.fitlog.viewmodel.entrenador.AddAtletaEvent
 import dev.josearroyo.fitlog.viewmodel.entrenador.AddAtletaState
 import dev.josearroyo.fitlog.formatearFechaCorto
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -47,6 +50,7 @@ fun AddAtletaScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(state.isSuccess) {
         if (state.isSuccess) {
@@ -74,6 +78,9 @@ fun AddAtletaScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .background(FondoOscuro)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                }
                 .padding(16.dp)
         ) {
             Row(

@@ -1,7 +1,9 @@
 package dev.josearroyo.fitlog.ui.dashboard.entrenador
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -9,7 +11,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.josearroyo.fitlog.data.model.TipoPlanSuscripcion
@@ -31,6 +36,7 @@ fun RenovarSuscripcionDialog(
     var planSeleccionado by remember { mutableStateOf(TipoPlanSuscripcion.MENSUAL) }
     var diasCustomStr by remember { mutableStateOf("30") }
     var iniciarInmediato by remember { mutableStateOf(true) }
+    val focusManager = LocalFocusManager.current
 
     // Estado del DatePicker nativo de Compose Multiplatform
     var mostrarDatePicker by remember { mutableStateOf(false) }
@@ -52,6 +58,9 @@ fun RenovarSuscripcionDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { focusManager.clearFocus() })
+                    }
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -61,7 +70,7 @@ fun RenovarSuscripcionDialog(
                     style = MaterialTheme.typography.bodyMedium
                 )
 
-                // Render de opciones usando los entries del Enum de tu modelo
+                // Render de opciones usando los entries del Enum
                 TipoPlanSuscripcion.entries.forEach { plan ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -69,7 +78,10 @@ fun RenovarSuscripcionDialog(
                     ) {
                         RadioButton(
                             selected = (planSeleccionado == plan),
-                            onClick = { planSeleccionado = plan },
+                            onClick = {
+                                focusManager.clearFocus()
+                                planSeleccionado = plan
+                            },
                             colors = RadioButtonDefaults.colors(
                                 selectedColor = NaranjaAcento,
                                 unselectedColor = TextoSecundario
@@ -89,7 +101,13 @@ fun RenovarSuscripcionDialog(
                         value = diasCustomStr,
                         onValueChange = { diasCustomStr = it.filter { char -> char.isDigit() } },
                         label = { Text("Cantidad de días", color = TextoSecundario) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { focusManager.clearFocus() }
+                        ),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
@@ -114,7 +132,10 @@ fun RenovarSuscripcionDialog(
                     )
                     Switch(
                         checked = iniciarInmediato,
-                        onCheckedChange = { iniciarInmediato = it },
+                        onCheckedChange = {
+                            focusManager.clearFocus()
+                            iniciarInmediato = it
+                        },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = NaranjaAcento,
                             checkedTrackColor = NaranjaAcento.copy(alpha = 0.5f),
@@ -134,7 +155,10 @@ fun RenovarSuscripcionDialog(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Button(
-                            onClick = { mostrarDatePicker = true },
+                            onClick = {
+                                focusManager.clearFocus()
+                                mostrarDatePicker = true
+                            },
                             colors = ButtonDefaults.buttonColors(containerColor = FondoOscuro),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -150,6 +174,7 @@ fun RenovarSuscripcionDialog(
         confirmButton = {
             TextButton(
                 onClick = {
+                    focusManager.clearFocus()
                     val dias = diasCustomStr.toIntOrNull() ?: 30
                     onRenovar(planSeleccionado, dias, iniciarInmediato, fechaSeleccionadaMilis)
                 }
@@ -158,13 +183,17 @@ fun RenovarSuscripcionDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = {
+                    focusManager.clearFocus()
+                    onDismiss()
+                }
+            ) {
                 Text("Cancelar", color = TextoSecundario)
             }
         }
     )
 
-    // Modal DatePickerDialog nativo de Compose Multiplatform (Zero JVM Dependencies)
     if (mostrarDatePicker) {
         DatePickerDialog(
             onDismissRequest = { mostrarDatePicker = false },

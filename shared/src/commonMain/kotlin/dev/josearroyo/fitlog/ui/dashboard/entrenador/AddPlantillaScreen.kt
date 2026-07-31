@@ -23,6 +23,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.ElementoRutina
 import dev.josearroyo.fitlog.ui.dashboard.EditorSeriesPrescritas
 import dev.josearroyo.fitlog.viewmodel.entrenador.AddPlantillaViewModel
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -38,6 +41,7 @@ fun AddPlantillaScreen(
 ) {
     val viewModel: AddPlantillaViewModel = viewModel { AddPlantillaViewModel() }
     val state by viewModel.state.collectAsState()
+    val focusManager = LocalFocusManager.current
 
     // 🟢 CORREGIDO: Uso de rememberSaveable para que no se cierre el bottom sheet accidentalmente
     var showBottomSheet by rememberSaveable { mutableStateOf(false) }
@@ -75,7 +79,16 @@ fun AddPlantillaScreen(
             }
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize().background(FondoOscuro).padding(horizontal = 16.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .background(FondoOscuro)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                }
+                .padding(horizontal = 16.dp)
+        ) {
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(
                 value = state.nombrePlantilla,

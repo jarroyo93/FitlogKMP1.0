@@ -27,6 +27,9 @@ import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
 import dev.josearroyo.fitlog.viewmodel.entrenador.EntrenadorViewModel
 import dev.josearroyo.fitlog.viewmodel.entrenador.AsistenciaAtletaUI
 import dev.josearroyo.fitlog.esCumpleanosHoy
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)

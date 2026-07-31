@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.GrupoMuscular
 import dev.josearroyo.fitlog.viewmodel.entrenador.AddEjercicioViewModel
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -38,6 +41,7 @@ fun AddEjercicioScreen(
     val state by viewModel.state.collectAsState()
 
     var expanded by rememberSaveable { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(ejercicioId) {
         viewModel.cargarEjercicioSiExiste(ejercicioId)
@@ -80,6 +84,9 @@ fun AddEjercicioScreen(
             Column(
                 modifier = Modifier
                     .padding(padding)
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { focusManager.clearFocus() })
+                    }
                     .padding(24.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(20.dp)

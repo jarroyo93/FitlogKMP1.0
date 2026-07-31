@@ -32,6 +32,11 @@ import dev.josearroyo.fitlog.formatearFechaHistorial
 import dev.josearroyo.fitlog.getCurrentTimeMillis
 import dev.josearroyo.fitlog.viewmodel.FacturacionViewModel
 import dev.josearroyo.fitlog.viewmodel.FiltroFacturacion
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 
 
 private val FondoOscuro = Color(0xFF241B3C)
@@ -390,6 +395,7 @@ fun DialogoRenovacion(
     var diasPersonalizadosInput by remember { mutableStateOf("30") }
     var iniciarEnseguida by remember { mutableStateOf(true) }
     var diasOffsetSeleccionado by remember { mutableStateOf(0) }
+    val focusManager = LocalFocusManager.current
 
     val ahora = getCurrentTimeMillis()
     val fechaInicioCalculada = ahora + (diasOffsetSeleccionado * 86400000L)
@@ -407,7 +413,12 @@ fun DialogoRenovacion(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 🟢 Captura toques fuera del campo de texto dentro del modal
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { focusManager.clearFocus() })
+                    },
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
@@ -420,7 +431,6 @@ fun DialogoRenovacion(
                 Text("Selecciona el tipo de plan:", color = TextoSecundario, fontSize = 12.sp)
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // 🟢 CORRECCIÓN: Uso de .entries en lugar de .values() para mejor rendimiento
                     TipoPlanSuscripcion.entries.forEach { plan ->
                         val esPlanActual = planSeleccionado == plan
                         Row(
@@ -435,13 +445,19 @@ fun DialogoRenovacion(
                                     if (esPlanActual) NaranjaAcento else FondoOscuro,
                                     RoundedCornerShape(8.dp)
                                 )
-                                .clickable { planSeleccionado = plan }
+                                .clickable {
+                                    focusManager.clearFocus()
+                                    planSeleccionado = plan
+                                }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
                                 selected = esPlanActual,
-                                onClick = { planSeleccionado = plan },
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    planSeleccionado = plan
+                                },
                                 colors = RadioButtonDefaults.colors(selectedColor = NaranjaAcento, unselectedColor = TextoSecundario)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -462,7 +478,14 @@ fun DialogoRenovacion(
                             if (input.all { it.isDigit() }) diasPersonalizadosInput = input
                         },
                         label = { Text("Duración del plan (Días)", color = TextoSecundario) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        // 🟢 Se añade ImeAction.Done y la acción para ocultar teclado al presionar Aceptar
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { focusManager.clearFocus() }
+                        ),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = NaranjaAcento,
                             unfocusedBorderColor = FondoOscuro,
@@ -484,7 +507,10 @@ fun DialogoRenovacion(
                     }
                     Switch(
                         checked = iniciarEnseguida,
-                        onCheckedChange = { iniciarEnseguida = it },
+                        onCheckedChange = {
+                            focusManager.clearFocus()
+                            iniciarEnseguida = it
+                        },
                         colors = SwitchDefaults.colors(checkedThumbColor = NaranjaAcento, checkedTrackColor = NaranjaAcento.copy(alpha = 0.3f))
                     )
                 }
@@ -494,7 +520,6 @@ fun DialogoRenovacion(
                         Text("Configurar fecha diferida de activación:", color = TextoSecundario, fontSize = 12.sp)
 
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // 🟢 CORRECCIÓN: Usamos la constante definida arriba para evitar re-creación
                             items(Offsets) { (dias, label) ->
                                 val esOffsetActual = diasOffsetSeleccionado == dias
                                 Box(
@@ -503,7 +528,10 @@ fun DialogoRenovacion(
                                             if (esOffsetActual) NaranjaAcento else FondoOscuro,
                                             RoundedCornerShape(20.dp)
                                         )
-                                        .clickable { diasOffsetSeleccionado = dias }
+                                        .clickable {
+                                            focusManager.clearFocus()
+                                            diasOffsetSeleccionado = dias
+                                        }
                                         .padding(horizontal = 14.dp, vertical = 8.dp)
                                 ) {
                                     Text(
@@ -530,6 +558,7 @@ fun DialogoRenovacion(
         confirmButton = {
             Button(
                 onClick = {
+                    focusManager.clearFocus()
                     val diasPersonalizados = diasPersonalizadosInput.toIntOrNull() ?: 30
                     onConfirm(planSeleccionado, diasPersonalizados, iniciarEnseguida, fechaInicioCalculada)
                 },
@@ -540,7 +569,13 @@ fun DialogoRenovacion(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = TextoSecundario)) {
+            TextButton(
+                onClick = {
+                    focusManager.clearFocus()
+                    onDismiss()
+                },
+                colors = ButtonDefaults.textButtonColors(contentColor = TextoSecundario)
+            ) {
                 Text("Cancelar")
             }
         }
@@ -557,8 +592,8 @@ fun DialogoPausar(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
-    // 🟢 CORREGIDO: Usar rememberSaveable para persistir el texto ante cambios de configuración
     var motivoInput by rememberSaveable { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -573,7 +608,12 @@ fun DialogoPausar(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 🟢 Captura toques fuera del campo de texto dentro del modal
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { focusManager.clearFocus() })
+                    },
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
@@ -592,8 +632,16 @@ fun DialogoPausar(
                     onValueChange = { motivoInput = it },
                     label = { Text("Motivo de la pausa", color = TextoSecundario) },
                     placeholder = { Text("Ej: Lesión médica, vacaciones...", color = TextoSecundario.copy(alpha = 0.5f)) },
+                    // 🟢 Se añade ImeAction.Done y la acción para ocultar teclado al presionar Aceptar
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { focusManager.clearFocus() }
+                    ),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFFFFB74D), // Manteniendo tu color naranja/amarillo de advertencia
+                        focusedBorderColor = Color(0xFFFFB74D),
                         unfocusedBorderColor = FondoOscuro,
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White
@@ -606,7 +654,7 @@ fun DialogoPausar(
         confirmButton = {
             Button(
                 onClick = {
-                    // Limpieza del texto antes de enviar
+                    focusManager.clearFocus()
                     onConfirm(motivoInput.trim().ifEmpty { "Pausa solicitada por el entrenador" })
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB74D), contentColor = FondoOscuro),
@@ -617,7 +665,10 @@ fun DialogoPausar(
         },
         dismissButton = {
             TextButton(
-                onClick = onDismiss,
+                onClick = {
+                    focusManager.clearFocus()
+                    onDismiss()
+                },
                 colors = ButtonDefaults.textButtonColors(contentColor = TextoSecundario)
             ) {
                 Text("Cancelar")

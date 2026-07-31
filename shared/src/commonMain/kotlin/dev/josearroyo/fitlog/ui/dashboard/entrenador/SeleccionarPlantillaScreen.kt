@@ -2,11 +2,14 @@ package dev.josearroyo.fitlog.ui.dashboard.entrenador
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
@@ -17,7 +20,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -36,8 +42,8 @@ fun SeleccionarPlantillaScreen(
     onBack: () -> Unit,
     viewModel: AsignarRutinaViewModel = viewModel { AsignarRutinaViewModel() }
 ) {
-    val viewModel: AsignarRutinaViewModel = viewModel()
     val state by viewModel.state.collectAsState()
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(entrenadorId) { viewModel.cargarBiblioteca(entrenadorId) }
     LaunchedEffect(state.isSuccess) { if (state.isSuccess) onBack() }
@@ -59,7 +65,10 @@ fun SeleccionarPlantillaScreen(
             Surface(color = FondoOscuro, tonalElevation = 0.dp) {
                 Box(modifier = Modifier.padding(16.dp).navigationBarsPadding()) {
                     Button(
-                        onClick = { viewModel.construirYAsignarRutina(atletaId) },
+                        onClick = {
+                            focusManager.clearFocus()
+                            viewModel.construirYAsignarRutina(atletaId)
+                        },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
                         shape = RoundedCornerShape(12.dp),
@@ -81,6 +90,9 @@ fun SeleccionarPlantillaScreen(
                     .fillMaxSize()
                     .background(FondoOscuro)
                     .padding(padding)
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { focusManager.clearFocus() })
+                    }
                     .padding(horizontal = 16.dp)
             ) {
                 if (state.error != null) {
@@ -97,6 +109,8 @@ fun SeleccionarPlantillaScreen(
                     onValueChange = { viewModel.actualizarNombreRutina(it) },
                     label = { Text("Nombre del Bloque o Macrociclo", color = TextoSecundario) },
                     placeholder = { Text("Ej: Hipertrofia Bloque 1", color = TextoSecundario.copy(alpha = 0.4f)) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
@@ -135,7 +149,10 @@ fun SeleccionarPlantillaScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(vertical = 8.dp)
                     ) {
-                        itemsIndexed(state.plantillasSeleccionadas) { index, plantilla ->
+                        itemsIndexed(
+                            items = state.plantillasSeleccionadas,
+                            key = { index, plantilla -> "${plantilla.id}_$index" }
+                        ) { index, plantilla ->
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
@@ -161,7 +178,10 @@ fun SeleccionarPlantillaScreen(
 
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         IconButton(
-                                            onClick = { viewModel.moverPlantillaSeleccionada(index, -1) },
+                                            onClick = {
+                                                focusManager.clearFocus()
+                                                viewModel.moverPlantillaSeleccionada(index, -1)
+                                            },
                                             enabled = index > 0
                                         ) {
                                             Icon(
@@ -171,7 +191,10 @@ fun SeleccionarPlantillaScreen(
                                             )
                                         }
                                         IconButton(
-                                            onClick = { viewModel.moverPlantillaSeleccionada(index, 1) },
+                                            onClick = {
+                                                focusManager.clearFocus()
+                                                viewModel.moverPlantillaSeleccionada(index, 1)
+                                            },
                                             enabled = index < state.plantillasSeleccionadas.size - 1
                                         ) {
                                             Icon(
@@ -180,7 +203,10 @@ fun SeleccionarPlantillaScreen(
                                                 tint = if (index < state.plantillasSeleccionadas.size - 1) Color.White else TextoSecundario.copy(alpha = 0.3f)
                                             )
                                         }
-                                        IconButton(onClick = { viewModel.removerPlantillaSeleccionada(index) }) {
+                                        IconButton(onClick = {
+                                            focusManager.clearFocus()
+                                            viewModel.removerPlantillaSeleccionada(index)
+                                        }) {
                                             Icon(Icons.Default.Clear, contentDescription = "Quitar", tint = Color(0xFFE57373))
                                         }
                                     }
@@ -204,11 +230,14 @@ fun SeleccionarPlantillaScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
-                    items(state.plantillas) { plantilla ->
+                    items(state.plantillas, key = { it.id }) { plantilla ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { viewModel.agregarPlantilla(plantilla) },
+                                .clickable {
+                                    focusManager.clearFocus()
+                                    viewModel.agregarPlantilla(plantilla)
+                                },
                             shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(containerColor = FondoTarjeta.copy(alpha = 0.5f)),
                             border = androidx.compose.foundation.BorderStroke(1.dp, FondoTarjeta)

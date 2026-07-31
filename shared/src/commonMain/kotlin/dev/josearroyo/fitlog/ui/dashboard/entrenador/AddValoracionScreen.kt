@@ -24,6 +24,9 @@ import dev.josearroyo.fitlog.data.model.MetodoComposicionCorporal
 import dev.josearroyo.fitlog.data.model.NivelExperiencia
 import dev.josearroyo.fitlog.data.model.ValoracionFisica
 import dev.josearroyo.fitlog.viewmodel.entrenador.AddValoracionViewModel
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -39,6 +42,7 @@ fun AddValoracionScreen(
     val viewModel: AddValoracionViewModel = viewModel { AddValoracionViewModel() }
     val state by viewModel.state.collectAsState()
     val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(state.isGuardado) {
         if (state.isGuardado) {
@@ -84,6 +88,9 @@ fun AddValoracionScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                }
                 .padding(horizontal = 16.dp)
                 .verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(20.dp)
