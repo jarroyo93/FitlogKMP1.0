@@ -24,7 +24,10 @@ import dev.josearroyo.fitlog.data.model.TipoSerie
 import dev.josearroyo.fitlog.viewmodel.atleta.EditRutinaAsignadaViewModel
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.sp
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -297,6 +300,7 @@ fun EditorSeriesPrescritas(
     seriesPrescritas: List<PrescripcionSerie>,
     onSeriesUpdate: (List<PrescripcionSerie>) -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(modifier = Modifier.fillMaxWidth().background(FondoOscuro, RoundedCornerShape(8.dp)).padding(vertical = 8.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("#", color = NaranjaAcento, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.4f), textAlign = TextAlign.Center, fontSize = 12.sp)
@@ -338,6 +342,7 @@ fun EditorSeriesPrescritas(
                     }
 
                     Box(modifier = Modifier.weight(0.9f).padding(horizontal = 2.dp)) {
+                        // Dentro de EditorSeriesPrescritas en el OutlinedTextField de repeticiones:
                         OutlinedTextField(
                             value = if (serie.repeticiones == 0) "" else serie.repeticiones.toString(),
                             onValueChange = { valor ->
@@ -346,7 +351,12 @@ fun EditorSeriesPrescritas(
                                 nuevaLista[index] = serie.copy(repeticiones = limpiado.toIntOrNull() ?: 0)
                                 onSeriesUpdate(nuevaLista)
                             },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Done // 🟢
+                            ),
+                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }), // 🟢
+                            singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 14.sp),
                             colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta),
                             modifier = Modifier.fillMaxWidth().height(46.dp)

@@ -23,6 +23,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.Habitos
 import dev.josearroyo.fitlog.viewmodel.atleta.AddHabitosViewModel
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.LocalFocusManager
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -38,6 +43,7 @@ fun AddHabitosScreen(atletaId: String, onBack: () -> Unit) {
     var mostrarPickerDormir by remember { mutableStateOf(false) }
     var mostrarPickerDespertar by remember { mutableStateOf(false) }
     var mostrarPickerEntrenamiento by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(state.isGuardado) {
         if (state.isGuardado) onBack()
@@ -67,6 +73,9 @@ fun AddHabitosScreen(atletaId: String, onBack: () -> Unit) {
                 .padding(padding)
                 .fillMaxSize()
                 .background(FondoOscuro)
+                .pointerInput(Unit) { // 🟢 Oculta teclado al tocar fuera
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                }
                 .padding(24.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -161,7 +170,11 @@ fun AddHabitosScreen(atletaId: String, onBack: () -> Unit) {
                             viewModel.actualizarHabitos(state.habitos.copy(tiempoDisponibleMinutos = minutos))
                         },
                         label = { Text("Tiempo disponible por sesión (minutos)", color = TextoSecundario) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done // 🟢
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }), // 🟢
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f))
                     )

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -23,6 +24,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.*
 import dev.josearroyo.fitlog.viewmodel.atleta.EntrenarViewModel
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.platform.LocalFocusManager
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -238,6 +241,7 @@ fun EjercicioInteractivoCard(
     var mostrarRpeSheet by remember { mutableStateOf(false) }
     var serieSeleccionadaParaRpe by remember { mutableStateOf(-1) }
     var rpeActualSeleccionado by remember { mutableStateOf(8) }
+    val focusManager = LocalFocusManager.current
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -319,20 +323,27 @@ fun EjercicioInteractivoCard(
                         ) {
                             Text(textoSerie, modifier = Modifier.weight(0.6f), fontWeight = FontWeight.Black, color = colorTextoSerie, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
 
+                            // En los inputs dentro de EjercicioInteractivoCard:
+
+                            // 1. Campo de PESO:
                             OutlinedTextField(
                                 value = if (serie.pesoKg <= 0.0) "" else if (serie.pesoKg % 1.0 == 0.0) serie.pesoKg.toInt().toString() else serie.pesoKg.toString(),
                                 onValueChange = { newValue ->
-                                    if (newValue.isEmpty() || newValue.matches(Regex("^\\d*[.,]?\\d*\$"))) {
+                                    if (newValue.isEmpty() || newValue.matches(Regex("^\\d*[.,]?\\d*$"))) {
                                         onActualizarSerie(sIndex, newValue.replace(",", ".").toDoubleOrNull() ?: 0.0, serie.repeticionesLogradas)
                                     }
                                 },
                                 modifier = Modifier.weight(1f).padding(horizontal = 2.dp).heightIn(min = 56.dp),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal,
+                                    imeAction = ImeAction.Next // 🟢 Salta al siguiente campo
+                                ),
                                 singleLine = true,
                                 textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center, color = Color.White, fontWeight = FontWeight.Bold),
                                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.2f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta)
                             )
 
+                            // 2. Campo de REPETICIONES:
                             OutlinedTextField(
                                 value = if (serie.repeticionesLogradas <= 0) "" else serie.repeticionesLogradas.toString(),
                                 onValueChange = { newValue ->
@@ -341,7 +352,11 @@ fun EjercicioInteractivoCard(
                                     }
                                 },
                                 modifier = Modifier.weight(0.8f).padding(horizontal = 2.dp).heightIn(min = 56.dp),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Done // 🟢 Cierra teclado al terminar la serie
+                                ),
+                                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }), // 🟢
                                 singleLine = true,
                                 textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center, color = Color.White, fontWeight = FontWeight.Bold),
                                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.2f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta)

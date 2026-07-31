@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExitToApp
@@ -21,7 +23,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -444,6 +449,7 @@ fun PantallaHuerfano(
     var correoEntrenador by remember { mutableStateOf("") }
     var codigoEntrenador by remember { mutableStateOf("") }
     var errorVinculacion by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
 
     Box(
         modifier = Modifier
@@ -476,12 +482,12 @@ fun PantallaHuerfano(
 
             OutlinedTextField(
                 value = correoEntrenador,
-                onValueChange = { newValue ->
-                    correoEntrenador = newValue
-                    errorVinculacion = false
-                },
+                onValueChange = { correoEntrenador = it; errorVinculacion = false },
                 label = { Text("Correo del Entrenador", color = TextoSecundario) },
-                placeholder = { Text("ejemplo@entrenador.com", color = TextoSecundario.copy(alpha = 0.3f)) },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next
+                ), // 🟢
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -498,12 +504,15 @@ fun PantallaHuerfano(
 
             OutlinedTextField(
                 value = codigoEntrenador,
-                onValueChange = { newValue ->
-                    codigoEntrenador = newValue
-                    errorVinculacion = false
-                },
+                onValueChange = { codigoEntrenador = it; errorVinculacion = false },
                 label = { Text("Código de Vinculación", color = TextoSecundario) },
-                placeholder = { Text("A1B2C3", color = TextoSecundario.copy(alpha = 0.3f)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done), // 🟢
+                keyboardActions = KeyboardActions(onDone = {
+                    focusManager.clearFocus()
+                    if (correoEntrenador.isNotBlank() && codigoEntrenador.isNotBlank()) {
+                        onIngresarCodigo(correoEntrenador, codigoEntrenador)
+                    }
+                }), // 🟢
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = errorVinculacion,

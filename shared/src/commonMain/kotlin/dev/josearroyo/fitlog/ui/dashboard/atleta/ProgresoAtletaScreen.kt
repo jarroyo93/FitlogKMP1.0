@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -706,7 +707,10 @@ fun DetalleSesionDialog(sesion: SesionEntrenamiento, onDismiss: () -> Unit) {
                         .padding(vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(sesion.ejerciciosRealizados, key = { it.nombreEjercicio }) { ej ->
+                    itemsIndexed(
+                        items = sesion.ejerciciosRealizados,
+                        key = { index, ej -> "${ej.nombreEjercicio}_$index" }
+                    ) { index, ej ->
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
