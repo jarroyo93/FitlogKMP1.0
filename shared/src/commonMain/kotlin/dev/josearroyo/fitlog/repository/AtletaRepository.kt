@@ -5,6 +5,7 @@ import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.firestore
 import dev.gitlive.firebase.firestore.where
+import dev.josearroyo.fitlog.crearCuentaEnInstanciaSecundaria
 import dev.josearroyo.fitlog.data.model.*
 import dev.josearroyo.fitlog.getCurrentTimeMillis
 import kotlin.uuid.Uuid
@@ -41,7 +42,6 @@ class AtletaRepository {
         emptyList()
     }
 
-    // 🚀 CORRECCIÓN: Cambiado .add() por .set() con ID pre-generado para evitar IDs huérfanos internos
     suspend fun guardarValoracion(atletaId: String, valoracion: ValoracionFisica): Boolean = try {
         val nuevoId = Uuid.random().toString()
         val valoracionConFecha = valoracion.copy(id = nuevoId, fechaRegistro = getCurrentTimeMillis())
@@ -69,7 +69,6 @@ class AtletaRepository {
         emptyList()
     }
 
-    // 🚀 CORRECCIÓN: Cambiado .add() por .set() con ID pre-generado
     suspend fun guardarHabitos(atletaId: String, habitos: Habitos): Boolean = try {
         val nuevoId = Uuid.random().toString()
         val habitosConFecha = habitos.copy(id = nuevoId, fechaRegistro = getCurrentTimeMillis())
@@ -98,8 +97,6 @@ class AtletaRepository {
         true
     } catch (e: Exception) { false }
 
-    // 🚀 CORRECCIÓN CRÍTICA: Reemplazado .add() por .set() con Uuid nativo.
-    // Evita que la app se rompa silenciosamente al invocar rutinas con IDs vacíos.
     suspend fun asignarRutina(atletaId: String, rutina: RutinaAsignada): Boolean = try {
         val nuevoId = Uuid.random().toString()
         val rutinaConId = rutina.copy(id = nuevoId)
@@ -119,19 +116,24 @@ class AtletaRepository {
         return auth.currentUser?.uid
     }
 
-    // AtletaRepository.kt
     suspend fun crearAtletaCompleto(
-        usuario: Usuario, valoracion: ValoracionFisica, habitos: Habitos, contrasenaTemporal: String, primerPeriodo: PeriodoFacturable
+        usuario: Usuario,
+        valoracion: ValoracionFisica,
+        habitos: Habitos,
+        contrasenaTemporal: String,
+        primerPeriodo: PeriodoFacturable
     ): Boolean {
+        // 1. Validaciones de existencia en Firestore
         val snapshotCorreo = db.collection("users").where("correo", equalTo = usuario.correo).get()
         val snapshotDoc = db.collection("users").where("numeroDocumento", equalTo = usuario.numeroDocumento).where("rol", equalTo = "ATLETA").get()
 
         if (snapshotCorreo.documents.isNotEmpty()) throw Exception("El correo ya se encuentra registrado en Firestore.")
         if (snapshotDoc.documents.isNotEmpty()) throw Exception("El documento ya se encuentra registrado en Firestore.")
 
-        val authResult = auth.createUserWithEmailAndPassword(usuario.correo, contrasenaTemporal)
-        val authUid = authResult.user?.uid ?: throw Exception("Fallo al obtener credenciales de autenticación")
+        // 2. Crear usuario en Auth mediante la instancia secundaria en memoria (mantiene activa la sesión del entrenador)
+        val authUid = crearCuentaEnInstanciaSecundaria(usuario.correo, contrasenaTemporal)
 
+        // 3. Escritura atómica (WriteBatch)
         val nuevoRef = usersRef.document(authUid)
         val ahoraMilis = getCurrentTimeMillis()
 
@@ -155,9 +157,15 @@ class AtletaRepository {
         batch.set(periodoRef, primerPeriodo.copy(id = idUnicoCompartido, atletaId = authUid, entrenadorId = usuario.entrenadorId ?: ""))
 
         val reciboContableInicial = mapOf(
-            "id" to idUnicoCompartido, "entrenadorId" to (usuario.entrenadorId ?: ""), "atletaId" to authUid,
-            "atletaNombreSnapshot" to "${usuario.nombres} ${usuario.apellidos}".trim(), "tipoPlan" to primerPeriodo.tipoPlan,
-            "fechaInicio" to primerPeriodo.fechaInicio, "fechaFin" to primerPeriodo.fechaFin, "fechaRegistroTransaccion" to ahoraMilis, "estado" to primerPeriodo.estado.name
+            "id" to idUnicoCompartido,
+            "entrenadorId" to (usuario.entrenadorId ?: ""),
+            "atletaId" to authUid,
+            "atletaNombreSnapshot" to "${usuario.nombres} ${usuario.apellidos}".trim(),
+            "tipoPlan" to primerPeriodo.tipoPlan,
+            "fechaInicio" to primerPeriodo.fechaInicio,
+            "fechaFin" to primerPeriodo.fechaFin,
+            "fechaRegistroTransaccion" to ahoraMilis,
+            "estado" to primerPeriodo.estado.name
         )
         batch.set(registroContableRef, reciboContableInicial)
 

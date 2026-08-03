@@ -1,6 +1,9 @@
 package dev.josearroyo.fitlog
 
 import android.os.Build
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -25,7 +28,6 @@ actual fun calcularFechaCierreCiclo(inicioMilis: Long): Long {
     return calendar.timeInMillis
 }
 
-// 🔥 Nueva implementación para Android:
 actual fun calcularFechaFinSuscripcion(inicioMilis: Long, dias: Int): Long {
     val calendar = Calendar.getInstance().apply {
         timeInMillis = inicioMilis
@@ -55,7 +57,6 @@ actual fun formatearFechaHora(timestamp: Long): String {
     return SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale("es", "ES")).format(date)
 }
 
-// 🔥 Nueva implementación para Android:
 actual fun formatearFechaCorto(timestamp: Long): String {
     val date = java.util.Date(timestamp)
     return SimpleDateFormat("dd/MM/yyyy", Locale("es", "ES")).format(date)
@@ -104,7 +105,7 @@ actual fun obtenerUltimos7DiasTimestamps(): List<Long> {
     for (i in 6 downTo 0) {
         val cal = Calendar.getInstance().apply {
             add(Calendar.DAY_OF_YEAR, -i)
-            set(Calendar.HOUR_OF_DAY, 12) // Mediodía para evitar problemas de huso horario
+            set(Calendar.HOUR_OF_DAY, 12)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
@@ -112,4 +113,20 @@ actual fun obtenerUltimos7DiasTimestamps(): List<Long> {
         list.add(cal.timeInMillis)
     }
     return list
+}
+
+actual suspend fun crearCuentaEnInstanciaSecundaria(correo: String, contrasena: String): String {
+    val mainApp = FirebaseApp.getInstance()
+    val options = mainApp.options
+    val tempAppName = "TempAuthApp_${System.currentTimeMillis()}"
+
+    val secondaryApp = FirebaseApp.initializeApp(mainApp.applicationContext, options, tempAppName)
+    val secondaryAuth = FirebaseAuth.getInstance(secondaryApp)
+
+    return try {
+        val result = secondaryAuth.createUserWithEmailAndPassword(correo, contrasena).await()
+        result.user?.uid ?: throw Exception("No se obtuvo el UID del atleta creado.")
+    } finally {
+        secondaryApp.delete()
+    }
 }

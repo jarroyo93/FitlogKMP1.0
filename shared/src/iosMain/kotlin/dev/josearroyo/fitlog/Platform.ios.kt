@@ -11,6 +11,9 @@ import platform.Foundation.NSLocale
 import platform.Foundation.dateWithTimeIntervalSince1970
 import platform.Foundation.localeWithLocaleIdentifier
 import platform.Foundation.timeIntervalSince1970
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 class IOSPlatform: Platform {
     override val name: String = UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
@@ -35,7 +38,6 @@ actual fun calcularFechaCierreCiclo(inicioMilis: Long): Long {
         ?.timeIntervalSince1970?.times(1000)?.toLong() ?: (inicioMilis + 604800000L)
 }
 
-// 🔥 Nueva implementación para iOS:
 actual fun calcularFechaFinSuscripcion(inicioMilis: Long, dias: Int): Long {
     val calendar = NSCalendar.currentCalendar
     val date = NSDate.dateWithTimeIntervalSince1970(inicioMilis / 1000.0)
@@ -78,7 +80,6 @@ actual fun formatearFechaHora(timestamp: Long): String {
     return formatter.stringFromDate(date)
 }
 
-// 🔥 Nueva implementación para iOS:
 actual fun formatearFechaCorto(timestamp: Long): String {
     val date = NSDate.dateWithTimeIntervalSince1970(timestamp / 1000.0)
     val formatter = NSDateFormatter().apply {
@@ -160,3 +161,24 @@ actual fun obtenerUltimos7DiasTimestamps(): List<Long> {
     }
     return list
 }
+
+object IOSSecondaryAuthBridge {
+    // Firma compatible con Objective-C / Swift: (correo, contraseña, completion(uid?, errorMsg?))
+    var handler: ((String, String, (String?, String?) -> Unit) -> Unit)? = null
+}
+
+actual suspend fun crearCuentaEnInstanciaSecundaria(correo: String, contrasena: String): String =
+    suspendCancellableCoroutine { continuation ->
+        val handler = IOSSecondaryAuthBridge.handler
+            ?: return@suspendCancellableCoroutine continuation.resumeWithException(
+                Exception("El manejador secundario de Auth en iOS no ha sido inicializado.")
+            )
+
+        handler(correo, contrasena) { uid, errorMsg ->
+            if (uid != null) {
+                continuation.resume(uid)
+            } else {
+                continuation.resumeWithException(Exception(errorMsg ?: "Error desconocido en iOS Auth."))
+            }
+        }
+    }
