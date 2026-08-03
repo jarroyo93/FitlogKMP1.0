@@ -2,8 +2,10 @@ package dev.josearroyo.fitlog.ui.login
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExitToApp
@@ -14,6 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -39,6 +43,7 @@ fun CambiarContrasenaScreen(
     val state by viewModel.activationState.collectAsState()
     val scope = rememberCoroutineScope()
     val authRepository = remember { AuthRepository() }
+    val focusManager = LocalFocusManager.current // 🟢 Administrador de foco
 
     var contrasena by remember { mutableStateOf("") }
     var confirmarContrasena by remember { mutableStateOf("") }
@@ -46,7 +51,11 @@ fun CambiarContrasenaScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
 
+    val isValid = contrasena.isNotBlank() && contrasena == confirmarContrasena && contrasena.length >= 6
+    val isButtonEnable = isValid && !state.isLoading
+
     val handleLogout = {
+        focusManager.clearFocus()
         scope.launch {
             authRepository.logout()
             onLogout()
@@ -86,6 +95,9 @@ fun CambiarContrasenaScreen(
                 .fillMaxSize()
                 .background(FondoOscuro)
                 .padding(paddingValues)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { focusManager.clearFocus() }) // 🟢 Oculta el teclado al tocar la pantalla
+                }
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -156,6 +168,14 @@ fun CambiarContrasenaScreen(
                     keyboardType = KeyboardType.Password,
                     imeAction = ImeAction.Done
                 ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus() // 🟢 Oculta el teclado
+                        if (isButtonEnable) {
+                            viewModel.actualizarContrasenaPrimeraVez(uid, contrasena)
+                        }
+                    }
+                ),
                 visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     val imagenIcono = if (confirmPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
@@ -197,11 +217,9 @@ fun CambiarContrasenaScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            val isValid = contrasena.isNotBlank() && !noCoincide && contrasena.length >= 6
-            val isButtonEnable = isValid && !state.isLoading
-
             Button(
                 onClick = {
+                    focusManager.clearFocus() // 🟢 Oculta el teclado al iniciar el guardado
                     viewModel.actualizarContrasenaPrimeraVez(uid, contrasena)
                 },
                 modifier = Modifier

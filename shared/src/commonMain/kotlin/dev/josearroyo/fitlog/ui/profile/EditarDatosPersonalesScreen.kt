@@ -1,11 +1,13 @@
 package dev.josearroyo.fitlog.ui.profile
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -15,7 +17,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.josearroyo.fitlog.data.model.Usuario
@@ -44,6 +50,8 @@ fun EditarDatosPersonalesScreen(
         nacionalidad: String?
     ) -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
+
     // 1. Estados de Campos Universales
     var nombres by remember { mutableStateOf(usuarioActual.nombres) }
     var apellidos by remember { mutableStateOf(usuarioActual.apellidos) }
@@ -92,13 +100,13 @@ fun EditarDatosPersonalesScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                }
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ==========================================
-            // 👥 SECCIÓN 1: DATOS UNIVERSALES
-            // ==========================================
             Text(
                 text = "Identificación de Usuario",
                 color = NaranjaAcento,
@@ -112,6 +120,7 @@ fun EditarDatosPersonalesScreen(
                 label = { Text("Nombres", color = TextoSecundario) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                     focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
@@ -125,6 +134,7 @@ fun EditarDatosPersonalesScreen(
                 label = { Text("Apellidos", color = TextoSecundario) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                     focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
@@ -144,10 +154,16 @@ fun EditarDatosPersonalesScreen(
                             imageVector = Icons.Default.ArrowDropDown,
                             contentDescription = null,
                             tint = NaranjaAcento,
-                            modifier = Modifier.clickable { mostrarTiposDoc = true }
+                            modifier = Modifier.clickable {
+                                focusManager.clearFocus()
+                                mostrarTiposDoc = true
+                            }
                         )
                     },
-                    modifier = Modifier.fillMaxWidth().clickable { mostrarTiposDoc = true },
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        focusManager.clearFocus()
+                        mostrarTiposDoc = true
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                         focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
@@ -177,6 +193,10 @@ fun EditarDatosPersonalesScreen(
                 label = { Text("Número de Documento", color = TextoSecundario) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Next
+                ),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                     focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
@@ -190,6 +210,13 @@ fun EditarDatosPersonalesScreen(
                 label = { Text("Teléfono de Contacto", color = TextoSecundario) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Phone,
+                    imeAction = if (esAtleta) ImeAction.Next else ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = { focusManager.clearFocus() }
+                ),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                     focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
@@ -197,9 +224,6 @@ fun EditarDatosPersonalesScreen(
                 )
             )
 
-            // ==========================================
-            // 🏋️ SECCIÓN 2: EXCLUSIVA ATLETA
-            // ==========================================
             if (esAtleta) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -209,7 +233,6 @@ fun EditarDatosPersonalesScreen(
                     fontSize = 14.sp
                 )
 
-                // Selector de Tipo de Sangre
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = tipoSangre,
@@ -221,10 +244,16 @@ fun EditarDatosPersonalesScreen(
                                 imageVector = Icons.Default.ArrowDropDown,
                                 contentDescription = null,
                                 tint = NaranjaAcento,
-                                modifier = Modifier.clickable { mostrarTiposSangre = true }
+                                modifier = Modifier.clickable {
+                                    focusManager.clearFocus()
+                                    mostrarTiposSangre = true
+                                }
                             )
                         },
-                        modifier = Modifier.fillMaxWidth().clickable { mostrarTiposSangre = true },
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            focusManager.clearFocus()
+                            mostrarTiposSangre = true
+                        },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                             focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
@@ -254,6 +283,8 @@ fun EditarDatosPersonalesScreen(
                     label = { Text("Nacionalidad", color = TextoSecundario) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                         focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
@@ -274,7 +305,6 @@ fun EditarDatosPersonalesScreen(
 
             Spacer(modifier = Modifier.weight(1.5f))
 
-            // Validaciones dinámicas basadas en rol
             val formValido = nombres.isNotBlank() &&
                     apellidos.isNotBlank() &&
                     numeroDocumento.isNotBlank() &&
@@ -282,6 +312,7 @@ fun EditarDatosPersonalesScreen(
 
             Button(
                 onClick = {
+                    focusManager.clearFocus()
                     onGuardarCambios(
                         nombres.trim(),
                         apellidos.trim(),

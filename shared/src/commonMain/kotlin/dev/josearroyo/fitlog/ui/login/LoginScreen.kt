@@ -3,8 +3,10 @@ package dev.josearroyo.fitlog.ui.login
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
@@ -14,7 +16,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -39,6 +43,7 @@ fun LoginScreen(
     onLoginSuccess: (uid: String, rol: RolUsuario, requiereCambioContrasena: Boolean) -> Unit
 ) {
     val authState by authViewModel.authState.collectAsState()
+    val focusManager = LocalFocusManager.current // 🟢 Administrador de foco
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -57,6 +62,9 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(color = FondoOscuro)
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { focusManager.clearFocus() }) // 🟢 Cierra el teclado al tocar el fondo
+            }
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -69,7 +77,16 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Password(password = password, onTextChange = { password = it })
+        Password(
+            password = password,
+            onTextChange = { password = it },
+            onDone = {
+                if (isLoginEnable) {
+                    focusManager.clearFocus()
+                    authViewModel.login(email.trim(), password)
+                }
+            }
+        )
 
         Spacer(modifier = Modifier.height(32.dp))
 
@@ -79,6 +96,7 @@ fun LoginScreen(
             BotonLogin(
                 isLoginEnable = isLoginEnable,
                 onLoginClicked = {
+                    focusManager.clearFocus() // 🟢 Cierra teclado al presionar el botón
                     authViewModel.login(email.trim(), password)
                 }
             )
@@ -155,7 +173,11 @@ fun EmailField(
 }
 
 @Composable
-fun Password(password: String, onTextChange: (String) -> Unit) {
+fun Password(
+    password: String,
+    onTextChange: (String) -> Unit,
+    onDone: () -> Unit // 🟢 Recibe el callback de acción Hecho/Done
+) {
     var passwordVisibility by remember { mutableStateOf(false) }
 
     TextField(
@@ -168,6 +190,9 @@ fun Password(password: String, onTextChange: (String) -> Unit) {
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.Password,
             imeAction = ImeAction.Done
+        ),
+        keyboardActions = KeyboardActions(
+            onDone = { onDone() } // 🟢 Ejecuta el login desde la tecla Hecho/Done del teclado
         ),
         colors = TextFieldDefaults.colors(
             focusedTextColor = NaranjaAcento,
