@@ -11,6 +11,7 @@ kotlin {
         jvmTarget = JvmTarget.JVM_17
     }
 }
+
 dependencies {
     implementation(project(":shared"))
 
@@ -31,16 +32,21 @@ android {
         applicationId = "dev.josearroyo.fitlog"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+
+        // --- ACTUALIZADO PARA FIREBASE APP DISTRIBUTION ---
+        versionCode = 11
+        versionName = "1.1.8"
     }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -48,10 +54,12 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
     buildFeatures {
         compose = true
     }
