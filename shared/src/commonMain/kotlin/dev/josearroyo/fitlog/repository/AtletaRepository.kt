@@ -98,10 +98,17 @@ class AtletaRepository {
     } catch (e: Exception) { false }
 
     suspend fun asignarRutina(atletaId: String, rutina: RutinaAsignada): Boolean = try {
-        val nuevoId = Uuid.random().toString()
-        val rutinaConId = rutina.copy(id = nuevoId)
-        usersRef.document(atletaId).collection("rutinas_asignadas").document(nuevoId).set(rutinaConId)
-        true
+        // 🟢 Protección en base de datos
+        val activas = obtenerRutinasActivas(atletaId)
+        if (activas.isNotEmpty()) {
+            println("⚠️ No se puede asignar rutina: El atleta ya posee una rutina activa.")
+            false
+        } else {
+            val nuevoId = Uuid.random().toString()
+            val rutinaConId = rutina.copy(id = nuevoId)
+            usersRef.document(atletaId).collection("rutinas_asignadas").document(nuevoId).set(rutinaConId)
+            true
+        }
     } catch (e: Exception) {
         println("🔥 Error en asignarRutina: ${e.message}")
         false

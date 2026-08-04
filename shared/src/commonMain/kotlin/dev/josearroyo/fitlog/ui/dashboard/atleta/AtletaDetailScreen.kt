@@ -372,6 +372,7 @@ fun AtletaDetailScreen(
                         modifier = Modifier.padding(vertical = 4.dp)
                     )
 
+                    // Reemplaza el bloque del Row en la SECCIÓN DE PROGRAMACIÓN DE RUTINAS:
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -383,19 +384,39 @@ fun AtletaDetailScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp
                         )
-                        TextButton(onClick = {
-                            onNavigateToSeleccionarPlantilla(
-                                atletaId,
-                                atleta.entrenadorId ?: ""
-                            )
-                        }, colors = ButtonDefaults.textButtonColors(contentColor = NaranjaAcento)) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text("Asignar", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+
+                        // 🟢 Solo mostramos el botón de asignar si NO hay rutina activa
+                        if (rutina == null) {
+                            TextButton(
+                                onClick = {
+                                    onNavigateToSeleccionarPlantilla(
+                                        atletaId,
+                                        atleta.entrenadorId ?: ""
+                                    )
+                                },
+                                colors = ButtonDefaults.textButtonColors(contentColor = NaranjaAcento)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text("Asignar", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                        } else {
+                            Surface(
+                                color = NaranjaAcento.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "Máximo 1 rutina activa",
+                                    color = NaranjaAcento,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
                         }
                     }
 

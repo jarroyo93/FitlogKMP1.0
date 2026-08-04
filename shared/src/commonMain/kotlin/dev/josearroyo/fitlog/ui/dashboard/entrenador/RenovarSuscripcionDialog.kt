@@ -41,7 +41,11 @@ fun RenovarSuscripcionDialog(
     // Estado del DatePicker nativo de Compose Multiplatform
     var mostrarDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = getCurrentTimeMillis())
-    val fechaSeleccionadaMilis = datePickerState.selectedDateMillis ?: getCurrentTimeMillis()
+
+    // 🟢 AJUSTE DE ZONA HORARIA: Suma 12 horas al timestamp seleccionado para evitar el desfase a medianoche UTC
+    val fechaSeleccionadaMilis = remember(datePickerState.selectedDateMillis) {
+        datePickerState.selectedDateMillis?.let { it + (12 * 60 * 60 * 1000L) } ?: getCurrentTimeMillis()
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,

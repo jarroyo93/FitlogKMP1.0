@@ -947,7 +947,10 @@ fun KmpDatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = {
-                datePickerState.selectedDateMillis?.let { onDateSelected(it) }
+                datePickerState.selectedDateMillis?.let { utcMillis ->
+                    val mediodiaUtcMillis = utcMillis + (12 * 60 * 60 * 1000L)
+                    onDateSelected(mediodiaUtcMillis)
+                }
                 onDismiss()
             }) {
                 Text("Confirmar", color = NaranjaAcento)

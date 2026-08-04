@@ -88,6 +88,18 @@ class AsignarRutinaViewModel(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             try {
+                // 🟢 VALIDACIÓN: Cancelar si el atleta ya posee una rutina activa
+                val rutinasActivas = atletaRepo.obtenerRutinasActivas(atletaId)
+                if (rutinasActivas.isNotEmpty()) {
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            error = "El atleta ya tiene una rutina activa. Debes eliminar la actual antes de asignar una nueva."
+                        )
+                    }
+                    return@launch
+                }
+
                 val diasGenerados = currentState.plantillasSeleccionadas.mapIndexed { indexDia, plantilla ->
                     val ejerciciosDelDia = plantilla.ejercicios.mapIndexed { indexEj, ej ->
                         EjercicioAsignado(
