@@ -112,9 +112,13 @@ class EntrenarViewModel : ViewModel() {
             diaActual = dia,
             sesionEnProgreso = nuevaSesion
         ) }
+
+        // 🟢 Guardamos inmediatamente el borrador en disco al cambiar o generar el día
+        BorradorLocalManager.guardarBorradorLocal(nuevaSesion)
     }
 
     fun actualizarSerie(ejercicioIndex: Int, serieIndex: Int, peso: Double, reps: Int) {
+        var sesionGuardar: SesionEntrenamiento? = null
         _state.update { currentState ->
             val sesionActual = currentState.sesionEnProgreso
             val nuevosEjercicios = sesionActual.ejerciciosRealizados.toMutableList()
@@ -124,34 +128,43 @@ class EntrenarViewModel : ViewModel() {
             nuevasSeries[serieIndex] = nuevasSeries[serieIndex].copy(pesoKg = peso, repeticionesLogradas = reps)
 
             nuevosEjercicios[ejercicioIndex] = ejercicioAModificar.copy(seriesRealizadas = nuevasSeries)
-            currentState.copy(sesionEnProgreso = sesionActual.copy(ejerciciosRealizados = nuevosEjercicios))
+            val sesionActualizada = sesionActual.copy(ejerciciosRealizados = nuevosEjercicios)
+            sesionGuardar = sesionActualizada
+            currentState.copy(sesionEnProgreso = sesionActualizada)
         }
-        BorradorLocalManager.guardarBorradorLocal(_state.value.sesionEnProgreso)
+        sesionGuardar?.let { BorradorLocalManager.guardarBorradorLocal(it) }
     }
 
     fun actualizarNotaAtleta(ejercicioIndex: Int, nota: String) {
+        var sesionGuardar: SesionEntrenamiento? = null
         _state.update { currentState ->
             val sesionActual = currentState.sesionEnProgreso
             val nuevosEjercicios = sesionActual.ejerciciosRealizados.toMutableList()
             nuevosEjercicios[ejercicioIndex] = nuevosEjercicios[ejercicioIndex].copy(notasAtleta = nota)
-            currentState.copy(sesionEnProgreso = sesionActual.copy(ejerciciosRealizados = nuevosEjercicios))
+            val sesionActualizada = sesionActual.copy(ejerciciosRealizados = nuevosEjercicios)
+            sesionGuardar = sesionActualizada
+            currentState.copy(sesionEnProgreso = sesionActualizada)
         }
-        BorradorLocalManager.guardarBorradorLocal(_state.value.sesionEnProgreso)
+        sesionGuardar?.let { BorradorLocalManager.guardarBorradorLocal(it) }
     }
 
     fun toggleSaltarEjercicio(ejercicioIndex: Int, fueSaltado: Boolean, justificacion: String = "") {
+        var sesionGuardar: SesionEntrenamiento? = null
         _state.update { currentState ->
             val sesionActual = currentState.sesionEnProgreso
             val nuevosEjercicios = sesionActual.ejerciciosRealizados.toMutableList()
             nuevosEjercicios[ejercicioIndex] = nuevosEjercicios[ejercicioIndex].copy(
                 fueSaltado = fueSaltado, justificacionSalto = justificacion
             )
-            currentState.copy(sesionEnProgreso = sesionActual.copy(ejerciciosRealizados = nuevosEjercicios))
+            val sesionActualizada = sesionActual.copy(ejerciciosRealizados = nuevosEjercicios)
+            sesionGuardar = sesionActualizada
+            currentState.copy(sesionEnProgreso = sesionActualizada)
         }
-        BorradorLocalManager.guardarBorradorLocal(_state.value.sesionEnProgreso)
+        sesionGuardar?.let { BorradorLocalManager.guardarBorradorLocal(it) }
     }
 
     fun actualizarRpe(ejercicioIndex: Int, serieIndex: Int, rpe: Int) {
+        var sesionGuardar: SesionEntrenamiento? = null
         _state.update { currentState ->
             val sesionActual = currentState.sesionEnProgreso
             val nuevosEjercicios = sesionActual.ejerciciosRealizados.toMutableList()
@@ -161,9 +174,11 @@ class EntrenarViewModel : ViewModel() {
             nuevasSeries[serieIndex] = nuevasSeries[serieIndex].copy(rpe = rpe)
 
             nuevosEjercicios[ejercicioIndex] = ejercicioAModificar.copy(seriesRealizadas = nuevasSeries)
-            currentState.copy(sesionEnProgreso = sesionActual.copy(ejerciciosRealizados = nuevosEjercicios))
+            val sesionActualizada = sesionActual.copy(ejerciciosRealizados = nuevosEjercicios)
+            sesionGuardar = sesionActualizada
+            currentState.copy(sesionEnProgreso = sesionActualizada)
         }
-        BorradorLocalManager.guardarBorradorLocal(_state.value.sesionEnProgreso)
+        sesionGuardar?.let { BorradorLocalManager.guardarBorradorLocal(it) }
     }
 
     fun terminarEntrenamiento(authUid: String) {

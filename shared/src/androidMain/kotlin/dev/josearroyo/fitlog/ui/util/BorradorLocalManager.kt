@@ -11,16 +11,23 @@ actual object BorradorLocalManager {
 
     private var appContext: Context? = null
 
-    // Se llama una sola vez al iniciar la App en Android
     fun initialize(context: Context) {
         appContext = context.applicationContext
     }
 
     actual fun guardarBorradorLocal(sesion: SesionEntrenamiento) {
-        val context = appContext ?: return
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val json = Json.encodeToString(sesion)
-        prefs.edit().putString(KEY_BORRADOR, json).apply()
+        val context = appContext ?: run {
+            println("🔥 BorradorLocalManager: ERROR - Context no ha sido inicializado en Android.")
+            return
+        }
+        try {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val json = Json.encodeToString(sesion)
+            // 🟢 Usamos .commit() en lugar de .apply() para garantizar la escritura síncrona en disco
+            prefs.edit().putString(KEY_BORRADOR, json).commit()
+        } catch (e: Exception) {
+            println("🔥 BorradorLocalManager: Error al guardar borrador: ${e.message}")
+        }
     }
 
     actual fun obtenerBorradorLocal(): SesionEntrenamiento? {
@@ -30,6 +37,7 @@ actual object BorradorLocalManager {
         return try {
             Json.decodeFromString<SesionEntrenamiento>(json)
         } catch (e: Exception) {
+            println("🔥 BorradorLocalManager: Error al leer borrador: ${e.message}")
             null
         }
     }
@@ -37,6 +45,6 @@ actual object BorradorLocalManager {
     actual fun eliminarBorradorLocal() {
         val context = appContext ?: return
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().remove(KEY_BORRADOR).apply()
+        prefs.edit().remove(KEY_BORRADOR).commit()
     }
 }
