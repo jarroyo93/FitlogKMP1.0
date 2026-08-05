@@ -8,12 +8,15 @@ import platform.UIKit.UIDevice
 import platform.Foundation.NSDate
 import platform.Foundation.NSDateFormatter
 import platform.Foundation.NSLocale
+import platform.Foundation.NSTimeZone
 import platform.Foundation.dateWithTimeIntervalSince1970
 import platform.Foundation.localeWithLocaleIdentifier
 import platform.Foundation.timeIntervalSince1970
+import platform.Foundation.timeZoneWithName
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import platform.Foundation.dateWithTimeIntervalSince1970
 
 class IOSPlatform: Platform {
     override val name: String = UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
@@ -80,22 +83,28 @@ actual fun formatearFechaHora(timestamp: Long): String {
     return formatter.stringFromDate(date)
 }
 
+// 🟢 CORRECCIÓN: Formatear fechas cortas en UTC para alineación exacta con DatePicker
 actual fun formatearFechaCorto(timestamp: Long): String {
     val date = NSDate.dateWithTimeIntervalSince1970(timestamp / 1000.0)
     val formatter = NSDateFormatter().apply {
         dateFormat = "dd/MM/yyyy"
         locale = NSLocale(localeIdentifier = "es_ES")
+        timeZone = NSTimeZone.timeZoneWithName("UTC")!!
     }
     return formatter.stringFromDate(date)
 }
 
+// 🟢 CORRECCIÓN: Evaluar fecha de cumpleaños en calendario UTC
 actual fun esCumpleanosHoy(fechaNacimiento: Long): Boolean {
-    val calendar = NSCalendar.currentCalendar
+    val calendarLocal = NSCalendar.currentCalendar
+    val calendarUtc = NSCalendar.currentCalendar.apply {
+        timeZone = NSTimeZone.timeZoneWithName("UTC")!!
+    }
     val hoy = NSDate()
     val nac = NSDate.dateWithTimeIntervalSince1970(fechaNacimiento / 1000.0)
 
-    val compHoy = calendar.components(NSCalendarUnitMonth or NSCalendarUnitDay, fromDate = hoy)
-    val compNac = calendar.components(NSCalendarUnitMonth or NSCalendarUnitDay, fromDate = nac)
+    val compHoy = calendarLocal.components(NSCalendarUnitMonth or NSCalendarUnitDay, fromDate = hoy)
+    val compNac = calendarUtc.components(NSCalendarUnitMonth or NSCalendarUnitDay, fromDate = nac)
 
     return compHoy.month == compNac.month && compHoy.day == compNac.day
 }
@@ -163,7 +172,6 @@ actual fun obtenerUltimos7DiasTimestamps(): List<Long> {
 }
 
 object IOSSecondaryAuthBridge {
-    // Firma compatible con Objective-C / Swift: (correo, contraseña, completion(uid?, errorMsg?))
     var handler: ((String, String, (String?, String?) -> Unit) -> Unit)? = null
 }
 
@@ -182,3 +190,12 @@ actual suspend fun crearCuentaEnInstanciaSecundaria(correo: String, contrasena: 
             }
         }
     }
+
+
+
+actual fun esMismoDiaLocal(timestamp1: Long, timestamp2: Long): Boolean {
+    val calendario = NSCalendar.currentCalendar
+    val fecha1 = NSDate.dateWithTimeIntervalSince1970(timestamp1 / 1000.0)
+    val fecha2 = NSDate.dateWithTimeIntervalSince1970(timestamp2 / 1000.0)
+    return calendario.isDate(fecha1, inSameDayAsDate = fecha2)
+}

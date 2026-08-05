@@ -22,6 +22,7 @@ expect fun formatearFechaMesCorto(timestamp: Long): String
 expect fun obtenerLetraDiaSemana(timestamp: Long): String
 expect fun esMesActual(timestamp: Long): Boolean
 expect fun obtenerUltimos7DiasTimestamps(): List<Long>
+expect fun esMismoDiaLocal(timestamp1: Long, timestamp2: Long): Boolean
 
 /**
  * Registra un usuario en Firebase Auth en una instancia secundaria en memoria RAM.

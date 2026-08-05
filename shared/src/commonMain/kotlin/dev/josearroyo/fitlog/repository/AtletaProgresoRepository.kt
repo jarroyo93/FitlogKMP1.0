@@ -6,6 +6,7 @@ import dev.gitlive.firebase.firestore.firestore
 import dev.gitlive.firebase.firestore.where
 import dev.josearroyo.fitlog.data.model.CicloEntrenamiento
 import dev.josearroyo.fitlog.data.model.DiaEntrenamientoAsignado
+import dev.josearroyo.fitlog.data.model.EstadoSesion
 import dev.josearroyo.fitlog.data.model.Pesaje
 import dev.josearroyo.fitlog.data.model.RutinaAsignada
 import dev.josearroyo.fitlog.data.model.SesionEntrenamiento
@@ -49,6 +50,28 @@ class AtletaProgresoRepository {
         }
     }
 
+    // 🟢 CONSULTA LA ÚLTIMA SESIÓN REGISTRADA PARA ESTA RUTINA Y DÍA
+    suspend fun obtenerUltimaSesion(
+        atletaId: String,
+        rutinaId: String,
+        diaId: String
+    ): SesionEntrenamiento? = try {
+        val snapshot = db.collection("users").document(atletaId)
+            .collection("historial_entrenamientos")
+            .where("rutinaAsignadaId", equalTo = rutinaId)
+            .where("diaEntrenamientoId", equalTo = diaId)
+            .orderBy("fechaEjecucion", Direction.DESCENDING)
+            .limit(1)
+            .get()
+
+        snapshot.documents.firstOrNull()?.let { doc ->
+            doc.data<SesionEntrenamiento>().copy(id = doc.id)
+        }
+    } catch (e: Exception) {
+        println("🔥 [AtletaProgresoRepository] Error al consultar última sesión: ${e.message}")
+        null
+    }
+
     // ============================================================
     // HISTORIAL Y CICLOS DE ENTRENAMIENTO
     // ============================================================
@@ -90,14 +113,17 @@ class AtletaProgresoRepository {
     ): Boolean = try {
         val ahoraMilis = getCurrentTimeMillis()
 
-        val rutinaIdReal = rutinaActual.id.ifBlank {
-            println("⚠️ ALERTA DE CONFIGURACIÓN: 'rutinaActual.id' vino VACÍO. Revisa cómo mapeas las rutinas en AtletaRepository.")
-            "ID_RUTINA_DESCONOCIDO"
-        }
+        val rutinaIdReal = rutinaActual.id.ifBlank { "ID_RUTINA_DESCONOCIDO" }
 
-        val nuevaSesionId = Uuid.random().toString()
-        val nuevaSesionRef = db.collection("users").document(atletaId).collection("historial_entrenamientos").document(nuevaSesionId)
-        val sesionFinal = sesionProcesada.copy(id = nuevaSesionId)
+        val sesionIdFinal = sesionProcesada.id.ifBlank { Uuid.random().toString() }
+        val sesionRef = db.collection("users").document(atletaId).collection("historial_entrenamientos").document(sesionIdFinal)
+
+        // Marca explícitamente la sesión como COMPLETADA al guardar
+        val sesionFinal = sesionProcesada.copy(
+            id = sesionIdFinal,
+            estado = EstadoSesion.COMPLETADA,
+            fechaEjecucion = if (sesionProcesada.fechaEjecucion <= 0L) ahoraMilis else sesionProcesada.fechaEjecucion
+        )
 
         val ciclosRef = db.collection("users").document(atletaId).collection("ciclos_entrenamiento")
         val rutinaRef = db.collection("users").document(atletaId).collection("rutinas_asignadas").document(rutinaIdReal)
@@ -113,7 +139,18 @@ class AtletaProgresoRepository {
         }
 
         db.runTransaction {
-            set(nuevaSesionRef, sesionFinal)
+            val sesionExistenteDoc = get(sesionRef)
+            val esEdicion = sesionExistenteDoc.exists
+            val sesionPrevia = if (esEdicion) sesionExistenteDoc.data<SesionEntrenamiento>() else null
+
+            // 🟢 Calcula la diferencia de repeticiones si se trata de una edición del mismo documento
+            val deltaRepsLogradas = if (esEdicion && sesionPrevia != null) {
+                sesionFinal.totalRepsEfectivasLogradas - sesionPrevia.totalRepsEfectivasLogradas
+            } else {
+                sesionFinal.totalRepsEfectivasLogradas
+            }
+
+            set(sesionRef, sesionFinal)
 
             val cicloActualizado: CicloEntrenamiento
             val cicloIdToUse = cicloActivo?.id ?: Uuid.random().toString()
@@ -131,7 +168,7 @@ class AtletaProgresoRepository {
                     }
                 }
 
-                val fechaInicioReal = minOf(ahoraMilis, sesionFinal.fechaEjecucion)
+                val fechaInicioReal = minOf(ahoraMilis, sesionFinal.fechaInicio)
                 val fechaCierreCalculada = calcularFechaCierreCiclo(fechaInicioReal)
 
                 val nuevoCiclo = CicloEntrenamiento(
@@ -160,9 +197,10 @@ class AtletaProgresoRepository {
                     porcentajeVolumenGlobal = porcentajeVol
                 )
             } else {
-                val nuevasSesiones = cicloActivo.sesionesCompletadas + 1
+                // 🟢 Si es edición, 'sesionesCompletadas' no se incrementa
+                val nuevasSesiones = if (esEdicion) cicloActivo.sesionesCompletadas else cicloActivo.sesionesCompletadas + 1
                 val nuevaMetaReps = cicloActivo.repeticionesMetaTotal
-                val nuevasRepsLogradas = cicloActivo.repeticionesLogradasTotal + sesionFinal.totalRepsEfectivasLogradas
+                val nuevasRepsLogradas = maxOf(0, cicloActivo.repeticionesLogradasTotal + deltaRepsLogradas)
 
                 val porcentajeAsist = if (cicloActivo.metaSesionesAsignadas > 0) {
                     (nuevasSesiones.toDouble() / cicloActivo.metaSesionesAsignadas.toDouble()) * 100.0

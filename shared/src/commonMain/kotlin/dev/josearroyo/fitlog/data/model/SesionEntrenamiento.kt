@@ -1,6 +1,13 @@
 package dev.josearroyo.fitlog.data.model
 
+import dev.josearroyo.fitlog.getCurrentTimeMillis
 import kotlinx.serialization.Serializable
+
+@Serializable
+enum class EstadoSesion {
+    EN_PROGRESO,
+    COMPLETADA
+}
 
 @Serializable
 data class SesionEntrenamiento(
@@ -9,9 +16,13 @@ data class SesionEntrenamiento(
     val diaEntrenamientoId: String = "",
     val nombreRutina: String = "",
 
-    // 🚀 SOLUCIÓN AL ERROR DE LOGCAT: Mapea el objeto Timestamp de la base de datos de producción a Long
+    @Serializable(with = TimestampLongSerializer::class)
+    val fechaInicio: Long = getCurrentTimeMillis(),
+
     @Serializable(with = TimestampLongSerializer::class)
     val fechaEjecucion: Long = 0L,
+
+    val estado: EstadoSesion = EstadoSesion.EN_PROGRESO,
 
     val ejerciciosRealizados: List<EjercicioRealizado> = emptyList(),
     val totalRepsEfectivasMeta: Int = 0,
@@ -41,7 +52,6 @@ data class SerieRealizada(
     val repsTarget: Int = 0
 )
 
-// 🔥 Tu función de extensión de métricas intacta y funcional en KMP
 fun SesionEntrenamiento.calcularMetricas(): SesionEntrenamiento {
     var metaTotal = 0
     var logradasTotal = 0

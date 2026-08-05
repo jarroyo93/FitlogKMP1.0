@@ -1,6 +1,7 @@
 package dev.josearroyo.fitlog.ui.dashboard.atleta
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -14,6 +15,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -24,8 +27,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.*
 import dev.josearroyo.fitlog.viewmodel.atleta.EntrenarViewModel
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.platform.LocalFocusManager
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -40,10 +41,12 @@ fun EntrenarScreen(
     onBack: () -> Unit,
     onFinish: () -> Unit
 ) {
-    // 🟢 CORREGIDO: Inicialización explícita compatible con la arquitectura DI KMP
     val viewModel: EntrenarViewModel = viewModel { EntrenarViewModel() }
     val state by viewModel.state.collectAsState()
     var mostrarConfirmacion by remember { mutableStateOf(false) }
+
+    // 🟢 Gestor de foco para limpiar teclado en iOS y Android
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(rutinaId) {
         viewModel.cargarRutina(atletaId, rutinaId)
@@ -66,159 +69,205 @@ fun EntrenarScreen(
         bottomBar = {
             if (state.rutina != null) {
                 Surface(color = FondoOscuro, tonalElevation = 0.dp) {
-                    Box(modifier = Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(16.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                            .padding(16.dp)
                     ) {
                         Button(
-                            onClick = { mostrarConfirmacion = true },
+                            onClick = {
+                                focusManager.clearFocus()
+                                mostrarConfirmacion = true
+                            },
+                            enabled = !state.isLoading,
                             modifier = Modifier.fillMaxWidth().height(54.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NaranjaAcento,
+                                contentColor = FondoOscuro,
+                                disabledContainerColor = NaranjaAcento.copy(alpha = 0.5f)
+                            ),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Default.CheckCircle, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Terminar Entrenamiento", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            if (state.isLoading) {
+                                CircularProgressIndicator(color = FondoOscuro, modifier = Modifier.size(24.dp))
+                            } else {
+                                Icon(Icons.Default.CheckCircle, null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Terminar Entrenamiento", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            }
                         }
                     }
                 }
             }
         }
     ) { paddingValues ->
-        if (state.isLoading) {
-            Box(Modifier.fillMaxSize().background(FondoOscuro), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = NaranjaAcento)
-            }
-        } else {
-            if (mostrarConfirmacion) {
-                AlertDialog(
-                    containerColor = FondoTarjeta,
-                    onDismissRequest = { mostrarConfirmacion = false },
-                    title = { Text("Finalizar Entrenamiento", fontWeight = FontWeight.Bold, color = Color.White) },
-                    text = { Text("¿Estás seguro de que deseas terminar y guardar este entrenamiento? Revisa que todos los pesos y repeticiones estén correctos.", color = TextoSecundario) },
-                    confirmButton = {
-                        Button(
-                            colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
-                            onClick = {
-                                mostrarConfirmacion = false
-                                viewModel.terminarEntrenamiento(atletaId)
+        // 🟢 Contenedor principal interceptor de toques para ocultar el teclado
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(FondoOscuro)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                }
+        ) {
+            if (state.isLoading && state.rutina == null) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = NaranjaAcento)
+                }
+            } else {
+                if (state.mostrarDialogoEdicionHoy) {
+                    AlertDialog(
+                        containerColor = FondoTarjeta,
+                        onDismissRequest = { viewModel.rechazarEdicionSesionHoy() },
+                        title = { Text("Entrenamiento Ya Completado", fontWeight = FontWeight.Bold, color = Color.White) },
+                        text = {
+                            Text(
+                                "Ya registraste y finalizaste este entrenamiento el día de hoy. ¿Deseas modificar tus datos guardados o iniciar un nuevo registro?",
+                                color = TextoSecundario
+                            )
+                        },
+                        confirmButton = {
+                            Button(
+                                colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
+                                onClick = { viewModel.confirmarEdicionSesionHoy() }
+                            ) {
+                                Text("Editar sesión de hoy", fontWeight = FontWeight.Bold)
                             }
-                        ) { Text("Sí, terminar", fontWeight = FontWeight.Bold) }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { mostrarConfirmacion = false }) {
-                            Text("Revisar de nuevo", color = NaranjaAcento)
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { viewModel.rechazarEdicionSesionHoy() }) {
+                                Text("Crear nuevo registro", color = NaranjaAcento)
+                            }
                         }
-                    }
-                )
-            }
-
-            if (state.error != null) {
-                AlertDialog(
-                    containerColor = FondoTarjeta,
-                    onDismissRequest = { viewModel.clearError() },
-                    title = { Text("Atención", fontWeight = FontWeight.Bold, color = Color.White) },
-                    text = { Text(state.error!!, color = TextoSecundario) },
-                    confirmButton = {
-                        TextButton(onClick = { viewModel.clearError() }) { Text("Entendido", color = NaranjaAcento) }
-                    }
-                )
-            }
-
-            val rutina = state.rutina
-            val diaActual = state.diaActual
-            val sesion = state.sesionEnProgreso
-
-            if (rutina != null && diaActual != null && sesion.ejerciciosRealizados.isNotEmpty()) {
-
-                // 🟢 CORREGIDO: Aislamos el ordenamiento visual para no romper el mapeo de datos con el ViewModel
-                val ejerciciosOrdenados = remember(diaActual.ejercicios) {
-                    diaActual.ejercicios.sortedBy { it.ordenSecuencia }
+                    )
                 }
 
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(FondoOscuro),
-                    contentPadding = PaddingValues(
-                        top = paddingValues.calculateTopPadding() + 16.dp,
-                        bottom = paddingValues.calculateBottomPadding() + 16.dp,
-                        start = 16.dp,
-                        end = 16.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    item {
-                        if (rutina.notasEntrenador.isNotBlank()) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.3f))
-                            ) {
-                                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Info, contentDescription = null, tint = NaranjaAcento)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Indicación del Coach: ${rutina.notasEntrenador}", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                if (mostrarConfirmacion) {
+                    AlertDialog(
+                        containerColor = FondoTarjeta,
+                        onDismissRequest = { mostrarConfirmacion = false },
+                        title = { Text("Finalizar Entrenamiento", fontWeight = FontWeight.Bold, color = Color.White) },
+                        text = { Text("¿Estás seguro de que deseas terminar y guardar este entrenamiento? Revisa que todos los pesos y repeticiones estén correctos.", color = TextoSecundario) },
+                        confirmButton = {
+                            Button(
+                                colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
+                                onClick = {
+                                    mostrarConfirmacion = false
+                                    viewModel.terminarEntrenamiento(atletaId)
                                 }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-
-                        var expandedDiaSelector by remember { mutableStateOf(false) }
-
-                        Card(
-                            onClick = { expandedDiaSelector = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text("Bloque de trabajo activo:", style = MaterialTheme.typography.labelMedium, color = TextoSecundario)
-                                    Text("Día ${diaActual.ordenSecuencia}: ${diaActual.nombreDia}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
-                                }
-                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Cambiar Día", tint = NaranjaAcento)
-                            }
-
-                            DropdownMenu(
-                                expanded = expandedDiaSelector,
-                                onDismissRequest = { expandedDiaSelector = false },
-                                modifier = Modifier.background(FondoTarjeta)
-                            ) {
-                                rutina.diasEntrenamiento.sortedBy { it.ordenSecuencia }.forEach { diaOpcion ->
-                                    DropdownMenuItem(
-                                        text = { Text("Día ${diaOpcion.ordenSecuencia}: ${diaOpcion.nombreDia}", color = Color.White) },
-                                        onClick = {
-                                            expandedDiaSelector = false
-                                            viewModel.cambiarDiaSeleccionado(diaOpcion.idDia)
-                                        }
-                                    )
-                                }
+                            ) { Text("Sí, terminar", fontWeight = FontWeight.Bold) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { mostrarConfirmacion = false }) {
+                                Text("Revisar de nuevo", color = NaranjaAcento)
                             }
                         }
+                    )
+                }
+
+                if (state.error != null) {
+                    AlertDialog(
+                        containerColor = FondoTarjeta,
+                        onDismissRequest = { viewModel.clearError() },
+                        title = { Text("Atención", fontWeight = FontWeight.Bold, color = Color.White) },
+                        text = { Text(state.error!!, color = TextoSecundario) },
+                        confirmButton = {
+                            TextButton(onClick = { viewModel.clearError() }) { Text("Entendido", color = NaranjaAcento) }
+                        }
+                    )
+                }
+
+                val rutina = state.rutina
+                val diaActual = state.diaActual
+                val sesion = state.sesionEnProgreso
+
+                if (rutina != null && diaActual != null && sesion.ejerciciosRealizados.isNotEmpty()) {
+                    val ejerciciosOrdenados = remember(diaActual.ejercicios) {
+                        diaActual.ejercicios.sortedBy { it.ordenSecuencia }
                     }
 
-                    // Iteración segura basada en el árbol de dependencias estable de claves hash
-                    itemsIndexed(ejerciciosOrdenados, key = { _, ej -> ej.nombre }) { _, asignado ->
-                        // 🟢 CORREGIDO: Buscamos el índice transaccional real para mantener la integridad de los datos
-                        val realIndex = remember(diaActual.ejercicios, asignado) {
-                            diaActual.ejercicios.indexOf(asignado)
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(FondoOscuro),
+                        contentPadding = PaddingValues(
+                            top = paddingValues.calculateTopPadding() + 16.dp,
+                            bottom = paddingValues.calculateBottomPadding() + 16.dp,
+                            start = 16.dp,
+                            end = 16.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        item {
+                            if (rutina.notasEntrenador.isNotBlank()) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.3f))
+                                ) {
+                                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Info, contentDescription = null, tint = NaranjaAcento)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Indicación del Coach: ${rutina.notasEntrenador}", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+
+                            var expandedDiaSelector by remember { mutableStateOf(false) }
+
+                            Card(
+                                onClick = { expandedDiaSelector = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text("Bloque de trabajo activo:", style = MaterialTheme.typography.labelMedium, color = TextoSecundario)
+                                        Text("Día ${diaActual.ordenSecuencia}: ${diaActual.nombreDia}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Cambiar Día", tint = NaranjaAcento)
+                                }
+
+                                DropdownMenu(
+                                    expanded = expandedDiaSelector,
+                                    onDismissRequest = { expandedDiaSelector = false },
+                                    modifier = Modifier.background(FondoTarjeta)
+                                ) {
+                                    rutina.diasEntrenamiento.sortedBy { it.ordenSecuencia }.forEach { diaOpcion ->
+                                        DropdownMenuItem(
+                                            text = { Text("Día ${diaOpcion.ordenSecuencia}: ${diaOpcion.nombreDia}", color = Color.White) },
+                                            onClick = {
+                                                expandedDiaSelector = false
+                                                viewModel.cambiarDiaSeleccionado(diaOpcion.idDia)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
 
-                        val realizado = sesion.ejerciciosRealizados.getOrNull(realIndex)
-                        if (realizado != null) {
-                            EjercicioInteractivoCard(
-                                ejercicioAsignado = asignado,
-                                ejercicioRealizado = realizado,
-                                onActualizarSerie = { serieIndex, peso, reps -> viewModel.actualizarSerie(realIndex, serieIndex, peso, reps) },
-                                onActualizarRpe = { serieIndex, rpe -> viewModel.actualizarRpe(realIndex, serieIndex, rpe) },
-                                onActualizarNota = { nota -> viewModel.actualizarNotaAtleta(realIndex, nota) },
-                                onToggleSaltar = { fue, just -> viewModel.toggleSaltarEjercicio(realIndex, fue, just) }
-                            )
+                        itemsIndexed(ejerciciosOrdenados, key = { _, ej -> ej.nombre }) { _, asignado ->
+                            val realIndex = remember(diaActual.ejercicios, asignado) {
+                                diaActual.ejercicios.indexOf(asignado)
+                            }
+
+                            val realizado = sesion.ejerciciosRealizados.getOrNull(realIndex)
+                            if (realizado != null) {
+                                EjercicioInteractivoCard(
+                                    ejercicioAsignado = asignado,
+                                    ejercicioRealizado = realizado,
+                                    onActualizarSerie = { serieIndex, peso, reps -> viewModel.actualizarSerie(realIndex, serieIndex, peso, reps) },
+                                    onActualizarRpe = { serieIndex, rpe -> viewModel.actualizarRpe(realIndex, serieIndex, rpe) },
+                                    onActualizarNota = { nota -> viewModel.actualizarNotaAtleta(realIndex, nota) },
+                                    onToggleSaltar = { fue, just -> viewModel.toggleSaltarEjercicio(realIndex, fue, just) }
+                                )
+                            }
                         }
                     }
                 }
@@ -311,7 +360,6 @@ fun EjercicioInteractivoCard(
                         TipoSerie.EFECTIVA -> "${serie.numeroSerie}"
                     }
 
-                    // 🟢 CORREGIDO: Envoltura bajo clave de ejecución única para blindar la retención de foco táctil del sistema
                     key(sIndex) {
                         Row(
                             modifier = Modifier
@@ -323,9 +371,6 @@ fun EjercicioInteractivoCard(
                         ) {
                             Text(textoSerie, modifier = Modifier.weight(0.6f), fontWeight = FontWeight.Black, color = colorTextoSerie, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
 
-                            // En los inputs dentro de EjercicioInteractivoCard:
-
-                            // 1. Campo de PESO:
                             OutlinedTextField(
                                 value = if (serie.pesoKg <= 0.0) "" else if (serie.pesoKg % 1.0 == 0.0) serie.pesoKg.toInt().toString() else serie.pesoKg.toString(),
                                 onValueChange = { newValue ->
@@ -336,14 +381,13 @@ fun EjercicioInteractivoCard(
                                 modifier = Modifier.weight(1f).padding(horizontal = 2.dp).heightIn(min = 56.dp),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Decimal,
-                                    imeAction = ImeAction.Next // 🟢 Salta al siguiente campo
+                                    imeAction = ImeAction.Next
                                 ),
                                 singleLine = true,
                                 textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center, color = Color.White, fontWeight = FontWeight.Bold),
                                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.2f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta)
                             )
 
-                            // 2. Campo de REPETICIONES:
                             OutlinedTextField(
                                 value = if (serie.repeticionesLogradas <= 0) "" else serie.repeticionesLogradas.toString(),
                                 onValueChange = { newValue ->
@@ -354,9 +398,9 @@ fun EjercicioInteractivoCard(
                                 modifier = Modifier.weight(0.8f).padding(horizontal = 2.dp).heightIn(min = 56.dp),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Number,
-                                    imeAction = ImeAction.Done // 🟢 Cierra teclado al terminar la serie
+                                    imeAction = ImeAction.Done
                                 ),
-                                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }), // 🟢
+                                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                                 singleLine = true,
                                 textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center, color = Color.White, fontWeight = FontWeight.Bold),
                                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.2f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta)
@@ -365,7 +409,12 @@ fun EjercicioInteractivoCard(
                             val rpeColor = obtenerColorRpe(serie.rpe ?: 0)
                             ElevatedFilterChip(
                                 selected = serie.rpe != null,
-                                onClick = { serieSeleccionadaParaRpe = sIndex; rpeActualSeleccionado = serie.rpe ?: 8; mostrarRpeSheet = true },
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    serieSeleccionadaParaRpe = sIndex
+                                    rpeActualSeleccionado = serie.rpe ?: 8
+                                    mostrarRpeSheet = true
+                                },
                                 label = { Text(if (serie.rpe != null) "${serie.rpe}" else "-", fontWeight = FontWeight.Black) },
                                 modifier = Modifier.weight(0.8f).padding(start = 4.dp),
                                 colors = FilterChipDefaults.elevatedFilterChipColors(
@@ -409,7 +458,7 @@ fun EjercicioInteractivoCard(
                         }
                         Text("• Serie ${serie.numeroSerie}: $etiquetaTipo - ${serie.repeticiones} reps meta", color = Color.White)
                     }
-                    if(ejercicioAsignado.notasEspecificas.isNotBlank()){
+                    if (ejercicioAsignado.notasEspecificas.isNotBlank()) {
                         HorizontalDivider(color = FondoOscuro, modifier = Modifier.padding(vertical = 4.dp))
                         Text("Nota técnica: ${ejercicioAsignado.notasEspecificas}", fontStyle = FontStyle.Italic, color = TextoSecundario)
                     }
@@ -440,7 +489,7 @@ fun SelectorRpeBottomSheet(rpeInicial: Int, onDismiss: () -> Unit, onRpeSeleccio
             Text("Esfuerzo Percibido (RPE)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
             Spacer(modifier = Modifier.height(8.dp))
 
-            val descripcion = when(rpeEntero) {
+            val descripcion = when (rpeEntero) {
                 10 -> "Máximo esfuerzo. RIR 0 (Fallo Absoluto)."
                 9 -> "Muy pesado. RIR 1 (Quedaba 1 repetición)."
                 8 -> "Pesado. RIR 2 (Quedaban 2 repeticiones)."

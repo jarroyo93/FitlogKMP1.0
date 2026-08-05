@@ -7,6 +7,7 @@ import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 class AndroidPlatform : Platform {
     override val name: String = "Android ${Build.VERSION.SDK_INT}"
@@ -57,14 +58,19 @@ actual fun formatearFechaHora(timestamp: Long): String {
     return SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale("es", "ES")).format(date)
 }
 
+// 🟢 CORRECCIÓN: Usar zona horaria UTC para fechas puras provenientes de DatePicker
 actual fun formatearFechaCorto(timestamp: Long): String {
     val date = java.util.Date(timestamp)
-    return SimpleDateFormat("dd/MM/yyyy", Locale("es", "ES")).format(date)
+    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale("es", "ES")).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
+    return sdf.format(date)
 }
 
+// 🟢 CORRECCIÓN: Evaluar fecha de nacimiento considerando zona horaria UTC
 actual fun esCumpleanosHoy(fechaNacimiento: Long): Boolean {
     val calHoy = Calendar.getInstance()
-    val calNac = Calendar.getInstance().apply { timeInMillis = fechaNacimiento }
+    val calNac = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = fechaNacimiento }
     return calHoy.get(Calendar.MONTH) == calNac.get(Calendar.MONTH) &&
             calHoy.get(Calendar.DAY_OF_MONTH) == calNac.get(Calendar.DAY_OF_MONTH)
 }
@@ -129,4 +135,13 @@ actual suspend fun crearCuentaEnInstanciaSecundaria(correo: String, contrasena: 
     } finally {
         secondaryApp.delete()
     }
+}
+
+
+actual fun esMismoDiaLocal(timestamp1: Long, timestamp2: Long): Boolean {
+    val cal1 = Calendar.getInstance(TimeZone.getDefault()).apply { timeInMillis = timestamp1 }
+    val cal2 = Calendar.getInstance(TimeZone.getDefault()).apply { timeInMillis = timestamp2 }
+
+    return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
+            cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
 }

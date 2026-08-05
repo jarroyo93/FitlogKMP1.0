@@ -7,12 +7,14 @@ import dev.josearroyo.fitlog.repository.AtletaProgresoRepository
 import dev.josearroyo.fitlog.repository.AtletaRepository
 import dev.josearroyo.fitlog.repository.UserRepository
 import dev.josearroyo.fitlog.ui.util.BorradorLocalManager
-import dev.josearroyo.fitlog.getCurrentTimeMillis // 🟢 Tu función de plataforma
+import dev.josearroyo.fitlog.getCurrentTimeMillis
+import dev.josearroyo.fitlog.esMismoDiaLocal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 data class EntrenarState(
@@ -21,9 +23,13 @@ data class EntrenarState(
     val diaActual: DiaEntrenamientoAsignado? = null,
     val sesionEnProgreso: SesionEntrenamiento = SesionEntrenamiento(),
     val isFinished: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    // 🟢 Control de diálogo de edición para el mismo día
+    val mostrarDialogoEdicionHoy: Boolean = false,
+    val sesionGuardadaHoy: SesionEntrenamiento? = null
 )
 
+@OptIn(ExperimentalUuidApi::class)
 class EntrenarViewModel : ViewModel() {
     private val atletaRepository = AtletaRepository()
     private val userRepository = UserRepository()
@@ -32,7 +38,10 @@ class EntrenarViewModel : ViewModel() {
     private val _state = MutableStateFlow(EntrenarState())
     val state: StateFlow<EntrenarState> = _state.asStateFlow()
 
+    private var currentAtletaId: String = ""
+
     fun cargarRutina(authUid: String, rutinaId: String) {
+        currentAtletaId = authUid
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             try {
@@ -42,27 +51,10 @@ class EntrenarViewModel : ViewModel() {
                     return@launch
                 }
 
-
-                val borradorLocal = BorradorLocalManager.obtenerBorradorLocal()
                 val rutina = atletaRepository.obtenerRutinaAsignada(usuario.id, rutinaId)
 
                 if (rutina != null && rutina.diasEntrenamiento.isNotEmpty()) {
-                    if (borradorLocal != null && borradorLocal.rutinaAsignadaId == rutinaId) {
-                        val diaToca = rutina.diasEntrenamiento.find { it.idDia == borradorLocal.diaEntrenamientoId }
-                            ?: rutina.diasEntrenamiento.first()
-
-                        _state.update { it.copy(
-                            isLoading = false,
-                            rutina = rutina,
-                            diaActual = diaToca,
-                            sesionEnProgreso = borradorLocal
-                        ) }
-                    } else {
-                        val diaToca = rutina.diasEntrenamiento.minByOrNull { it.ultimaVezEjecutada ?: 0L }
-                            ?: rutina.diasEntrenamiento.first()
-
-                        generarCuadernoParaElDia(rutina, diaToca)
-                    }
+                    prepararOCargarSesionInicial(usuario.id, rutina)
                 } else {
                     _state.update { it.copy(isLoading = false, error = "Rutina no encontrada o sin días.") }
                 }
@@ -72,10 +64,111 @@ class EntrenarViewModel : ViewModel() {
         }
     }
 
+    private suspend fun prepararOCargarSesionInicial(
+        atletaId: String,
+        rutina: RutinaAsignada
+    ) {
+        val borradorLocal = BorradorLocalManager.obtenerBorradorLocal()
+
+        // 1. Prioridad: Borrador local no finalizado para esta rutina
+        if (borradorLocal != null &&
+            borradorLocal.rutinaAsignadaId == rutina.id &&
+            borradorLocal.estado == EstadoSesion.EN_PROGRESO
+        ) {
+            val diaCorrespondiente = rutina.diasEntrenamiento.find { it.idDia == borradorLocal.diaEntrenamientoId }
+                ?: rutina.diasEntrenamiento.first()
+
+            _state.update { it.copy(
+                isLoading = false,
+                rutina = rutina,
+                diaActual = diaCorrespondiente,
+                sesionEnProgreso = borradorLocal
+            ) }
+            return
+        }
+
+        // 2. Si no hay borrador local, determinar qué día le corresponde por rotación
+        val diaToca = rutina.diasEntrenamiento.minByOrNull { it.ultimaVezEjecutada ?: 0L }
+            ?: rutina.diasEntrenamiento.first()
+
+        prepararOCargarSesionDiaEspecifico(atletaId, rutina, diaToca)
+    }
+
     fun cambiarDiaSeleccionado(diaId: String) {
         val rutina = _state.value.rutina ?: return
         val nuevoDia = rutina.diasEntrenamiento.find { it.idDia == diaId } ?: return
-        generarCuadernoParaElDia(rutina, nuevoDia)
+
+        viewModelScope.launch {
+            _state.update { it.copy(isLoading = true, error = null) }
+            try {
+                prepararOCargarSesionDiaEspecifico(currentAtletaId, rutina, nuevoDia)
+            } catch (e: Exception) {
+                _state.update { it.copy(isLoading = false, error = e.message) }
+            }
+        }
+    }
+
+    private suspend fun prepararOCargarSesionDiaEspecifico(
+        atletaId: String,
+        rutina: RutinaAsignada,
+        dia: DiaEntrenamientoAsignado
+    ) {
+        val borradorLocal = BorradorLocalManager.obtenerBorradorLocal()
+        val ahoraMs = getCurrentTimeMillis()
+
+        // 1. Verificar si hay un borrador en progreso guardado localmente para este día específico
+        if (borradorLocal != null &&
+            borradorLocal.rutinaAsignadaId == rutina.id &&
+            borradorLocal.diaEntrenamientoId == dia.idDia &&
+            borradorLocal.estado == EstadoSesion.EN_PROGRESO
+        ) {
+            _state.update { it.copy(
+                isLoading = false,
+                rutina = rutina,
+                diaActual = dia,
+                sesionEnProgreso = borradorLocal
+            ) }
+            return
+        }
+
+        // 2. Buscar la última sesión en Firestore para este día
+        val ultimaSesion = atletaProgresoRepository.obtenerUltimaSesion(atletaId, rutina.id, dia.idDia)
+
+        // 🟢 3. Si existe una sesión COMPLETADA hoy (según zona horaria local), se intercepta para confirmar edición
+        if (ultimaSesion != null &&
+            ultimaSesion.estado == EstadoSesion.COMPLETADA &&
+            esMismoDiaLocal(ahoraMs, ultimaSesion.fechaEjecucion)
+        ) {
+            _state.update { it.copy(
+                isLoading = false,
+                rutina = rutina,
+                diaActual = dia,
+                mostrarDialogoEdicionHoy = true,
+                sesionGuardadaHoy = ultimaSesion
+            ) }
+        } else {
+            // 4. Si es de otro día o no existe, genera una nueva plantilla con un UUID fresco
+            generarCuadernoParaElDia(rutina, dia)
+        }
+    }
+
+    // 🟢 El usuario acepta editar la sesión guardada hoy: Reutiliza el UUID original
+    fun confirmarEdicionSesionHoy() {
+        val sesionHoy = _state.value.sesionGuardadaHoy ?: return
+        _state.update { it.copy(
+            mostrarDialogoEdicionHoy = false,
+            sesionEnProgreso = sesionHoy.copy(estado = EstadoSesion.EN_PROGRESO),
+            sesionGuardadaHoy = null
+        ) }
+        BorradorLocalManager.guardarBorradorLocal(sesionHoy)
+    }
+
+    // 🔴 El usuario rechaza la edición: Crea una plantilla nueva con un nuevo UUID
+    fun rechazarEdicionSesionHoy() {
+        val rutina = _state.value.rutina ?: return
+        val dia = _state.value.diaActual ?: return
+        _state.update { it.copy(mostrarDialogoEdicionHoy = false, sesionGuardadaHoy = null) }
+        generarCuadernoParaElDia(rutina, dia)
     }
 
     private fun generarCuadernoParaElDia(rutina: RutinaAsignada, dia: DiaEntrenamientoAsignado) {
@@ -100,9 +193,12 @@ class EntrenarViewModel : ViewModel() {
         }
 
         val nuevaSesion = SesionEntrenamiento(
+            id = Uuid.random().toString(),
             rutinaAsignadaId = rutina.id,
             diaEntrenamientoId = dia.idDia,
             nombreRutina = "${rutina.nombreRutina} - Día ${dia.ordenSecuencia}: ${dia.nombreDia}",
+            fechaInicio = getCurrentTimeMillis(),
+            estado = EstadoSesion.EN_PROGRESO,
             ejerciciosRealizados = ejerciciosParaLlenar
         )
 
@@ -113,7 +209,6 @@ class EntrenarViewModel : ViewModel() {
             sesionEnProgreso = nuevaSesion
         ) }
 
-        // 🟢 Guardamos inmediatamente el borrador en disco al cambiar o generar el día
         BorradorLocalManager.guardarBorradorLocal(nuevaSesion)
     }
 
@@ -182,11 +277,12 @@ class EntrenarViewModel : ViewModel() {
     }
 
     fun terminarEntrenamiento(authUid: String) {
+        if (_state.value.isLoading) return
+
         val currentState = _state.value
         val rutinaActual = currentState.rutina
         val diaActual = currentState.diaActual
 
-        // 1. CORRECCIÓN: En lugar de salir en silencio, notificamos a la UI si falta contexto
         if (rutinaActual == null || diaActual == null) {
             _state.update {
                 it.copy(
@@ -198,19 +294,20 @@ class EntrenarViewModel : ViewModel() {
         }
 
         val contieneMensajesNuevos = currentState.sesionEnProgreso.ejerciciosRealizados.any { it.notasAtleta.isNotBlank() }
-        val nuevoIdSesion = Uuid.random().toString()
 
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             try {
-                // 2. CORRECCIÓN: Trasladamos el cálculo de métricas DENTRO del entorno seguro try-catch
-                // Aquí aseguramos que el cálculo global se ejecute sin tumbar la aplicación
+                val sesionIdFinal = currentState.sesionEnProgreso.id.ifBlank { Uuid.random().toString() }
+                val ahora = getCurrentTimeMillis()
+
                 val sesionFinal = currentState.sesionEnProgreso
                     .copy(
-                        id = nuevoIdSesion,
-                        fechaEjecucion = getCurrentTimeMillis()
+                        id = sesionIdFinal,
+                        fechaEjecucion = ahora,
+                        estado = EstadoSesion.COMPLETADA
                     )
-                    .calcularMetricas() // 🚀 Extensión segura de repeticiones globales
+                    .calcularMetricas()
 
                 val usuario = userRepository.obtenerUsuario(authUid)
 
@@ -240,7 +337,6 @@ class EntrenarViewModel : ViewModel() {
                     _state.update { it.copy(isLoading = false, error = "Usuario no encontrado.") }
                 }
             } catch (e: Exception) {
-                // Cualquier división por cero o fallo de red caerá aquí de manera segura, liberando la UI
                 _state.update {
                     it.copy(
                         isLoading = false,
