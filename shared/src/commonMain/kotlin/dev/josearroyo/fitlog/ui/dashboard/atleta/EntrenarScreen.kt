@@ -45,7 +45,6 @@ fun EntrenarScreen(
     val state by viewModel.state.collectAsState()
     var mostrarConfirmacion by remember { mutableStateOf(false) }
 
-    // 🟢 Gestor de foco para limpiar teclado en iOS y Android
     val focusManager = LocalFocusManager.current
 
     LaunchedEffect(rutinaId) {
@@ -102,7 +101,6 @@ fun EntrenarScreen(
             }
         }
     ) { paddingValues ->
-        // 🟢 Contenedor principal interceptor de toques para ocultar el teclado
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -303,7 +301,28 @@ fun EjercicioInteractivoCard(
                 IconButton(onClick = { mostrarInfoEntrenador = true }) { Icon(Icons.Default.Info, null, tint = NaranjaAcento) }
             }
 
-            Text("Objetivo: ${ejercicioAsignado.seriesPrescritas.size} series prescritas", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+            // 🟢 VISUALIZACIÓN DE SERIES Y TIEMPO DE DESCANSO EN SEGUNDOS
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("Objetivo: ${ejercicioAsignado.seriesPrescritas.size} series", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+                if (ejercicioAsignado.descansoSegundos > 0) {
+                    Text("•", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
+                    Icon(
+                        imageVector = Icons.Default.Timer,
+                        contentDescription = "Descanso",
+                        tint = NaranjaAcento,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = "${ejercicioAsignado.descansoSegundos}s de descanso entre series",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NaranjaAcento,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider(color = FondoOscuro)
@@ -371,21 +390,13 @@ fun EjercicioInteractivoCard(
                         ) {
                             Text(textoSerie, modifier = Modifier.weight(0.6f), fontWeight = FontWeight.Black, color = colorTextoSerie, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
 
-                            OutlinedTextField(
-                                value = if (serie.pesoKg <= 0.0) "" else if (serie.pesoKg % 1.0 == 0.0) serie.pesoKg.toInt().toString() else serie.pesoKg.toString(),
-                                onValueChange = { newValue ->
-                                    if (newValue.isEmpty() || newValue.matches(Regex("^\\d*[.,]?\\d*$"))) {
-                                        onActualizarSerie(sIndex, newValue.replace(",", ".").toDoubleOrNull() ?: 0.0, serie.repeticionesLogradas)
-                                    }
+                            // 🟢 CAMPO DE PESO CORREGIDO PARA DECIMALES EN ANDROID E IOS
+                            SeriePesoInput(
+                                pesoKg = serie.pesoKg,
+                                onPesoChange = { nuevoPeso ->
+                                    onActualizarSerie(sIndex, nuevoPeso, serie.repeticionesLogradas)
                                 },
-                                modifier = Modifier.weight(1f).padding(horizontal = 2.dp).heightIn(min = 56.dp),
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Decimal,
-                                    imeAction = ImeAction.Next
-                                ),
-                                singleLine = true,
-                                textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center, color = Color.White, fontWeight = FontWeight.Bold),
-                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.2f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta)
+                                modifier = Modifier.weight(1f).padding(horizontal = 2.dp).heightIn(min = 56.dp)
                             )
 
                             OutlinedTextField(
@@ -448,6 +459,14 @@ fun EjercicioInteractivoCard(
             title = { Text("Prescripción del Ciclo", color = NaranjaAcento, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (ejercicioAsignado.descansoSegundos > 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Timer, contentDescription = null, tint = NaranjaAcento, modifier = Modifier.size(18.dp))
+                            Text("Descanso recomendado entre series: ${ejercicioAsignado.descansoSegundos} segundos", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                        HorizontalDivider(color = FondoOscuro, modifier = Modifier.padding(vertical = 4.dp))
+                    }
+
                     ejercicioAsignado.seriesPrescritas.forEach { serie ->
                         val etiquetaTipo = when (serie.tipo) {
                             TipoSerie.EFECTIVA -> "Efectiva"
@@ -475,6 +494,61 @@ fun EjercicioInteractivoCard(
             onRpeSeleccionado = { nuevoRpe -> onActualizarRpe(serieSeleccionadaParaRpe, nuevoRpe); mostrarRpeSheet = false }
         )
     }
+}
+
+// 🟢 COMPONENTE REUTILIZABLE PARA ENTRADA DE PESO DECIMAL (FLUIDO EN ANDROID E IOS)
+@Composable
+fun SeriePesoInput(
+    pesoKg: Double,
+    onPesoChange: (Double) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var textValue by remember {
+        mutableStateOf(
+            if (pesoKg <= 0.0) ""
+            else if (pesoKg % 1.0 == 0.0) pesoKg.toInt().toString()
+            else pesoKg.toString()
+        )
+    }
+
+    // Sincroniza el texto únicamente si el valor externo cambia (evita borrar el separador mientras se escribe)
+    LaunchedEffect(pesoKg) {
+        val parsedCurrent = textValue.replace(",", ".").toDoubleOrNull() ?: 0.0
+        if (parsedCurrent != pesoKg) {
+            textValue = if (pesoKg <= 0.0) ""
+            else if (pesoKg % 1.0 == 0.0) pesoKg.toInt().toString()
+            else pesoKg.toString()
+        }
+    }
+
+    OutlinedTextField(
+        value = textValue,
+        onValueChange = { newValue ->
+            val sanitized = newValue.replace(",", ".")
+            if (sanitized.isEmpty() || sanitized.matches(Regex("^\\d*\\.?\\d*$"))) {
+                textValue = newValue
+                val parsed = sanitized.toDoubleOrNull() ?: 0.0
+                onPesoChange(parsed)
+            }
+        },
+        modifier = modifier,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Decimal,
+            imeAction = ImeAction.Next
+        ),
+        singleLine = true,
+        textStyle = LocalTextStyle.current.copy(
+            textAlign = TextAlign.Center,
+            color = Color.White,
+            fontWeight = FontWeight.Bold
+        ),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = NaranjaAcento,
+            unfocusedBorderColor = TextoSecundario.copy(alpha = 0.2f),
+            focusedContainerColor = FondoTarjeta,
+            unfocusedContainerColor = FondoTarjeta
+        )
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
