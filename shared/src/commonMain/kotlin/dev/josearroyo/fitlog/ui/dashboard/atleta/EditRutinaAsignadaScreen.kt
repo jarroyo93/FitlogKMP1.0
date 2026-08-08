@@ -1,11 +1,15 @@
 package dev.josearroyo.fitlog.ui.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -14,23 +18,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
 import dev.josearroyo.fitlog.data.model.PrescripcionSerie
 import dev.josearroyo.fitlog.data.model.TipoSerie
 import dev.josearroyo.fitlog.viewmodel.atleta.EditRutinaAsignadaViewModel
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.sp
-import dev.gitlive.firebase.Firebase
-import dev.gitlive.firebase.auth.auth
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -40,6 +42,7 @@ private val TextoSecundario = Color(0xFFB3AEC6)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> Unit) {
+    val focusManager = LocalFocusManager.current
     val viewModel: EditRutinaAsignadaViewModel = viewModel { EditRutinaAsignadaViewModel() }
     val state by viewModel.state.collectAsState()
 
@@ -78,13 +81,21 @@ fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> U
         val ejerciciosFiltrados = state.bibliotecaEjercicios.filter { it.nombre.contains(searchQuery, ignoreCase = true) }
 
         ModalBottomSheet(onDismissRequest = { showBottomSheetEjercicios = false }, sheetState = sheetState, containerColor = FondoTarjeta) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp).padding(bottom = 32.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) }
+                    .padding(16.dp)
+                    .padding(bottom = 32.dp)
+            ) {
                 Text("Seleccionar Ejercicio", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
                 Spacer(Modifier.height(16.dp))
                 OutlinedTextField(
                     value = searchQuery, onValueChange = { searchQuery = it },
                     label = { Text("Buscar ejercicio...", color = TextoSecundario) },
                     leadingIcon = { Icon(Icons.Default.Search, null, tint = NaranjaAcento) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                     modifier = Modifier.fillMaxWidth(), singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoOscuro, unfocusedContainerColor = FondoOscuro)
                 )
@@ -140,13 +151,24 @@ fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> U
         } else {
             val rutina = state.rutina!!
             Column(
-                modifier = Modifier.fillMaxSize().background(FondoOscuro).padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(FondoOscuro)
+                    .padding(padding)
+                    // 🟢 CAPTURA TOQUES EN EL FONDO Y OCULTA EL TECLADO
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { focusManager.clearFocus() })
+                    }
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 OutlinedTextField(
                     value = rutina.nombreRutina,
                     onValueChange = { viewModel.actualizarNombreONotas(it, rutina.notasEntrenador) },
                     label = { Text("Nombre del Programa", color = TextoSecundario) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta)
                 )
@@ -156,7 +178,6 @@ fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> U
                 val diasOrdenados = rutina.diasEntrenamiento.sortedBy { it.ordenSecuencia }
 
                 diasOrdenados.forEachIndexed { visualDiaIndex, dia ->
-                    // 🟢 CORREGIDO: Buscamos el índice real del día en la colección desordenada para no mutar el objeto equivocado
                     val realDiaIndex = remember(rutina.diasEntrenamiento, dia) {
                         rutina.diasEntrenamiento.indexOf(dia)
                     }
@@ -196,7 +217,6 @@ fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> U
                                 val ejerciciosOrdenados = dia.ejercicios.sortedBy { it.ordenSecuencia }
 
                                 ejerciciosOrdenados.forEachIndexed { visualEjIndex, ejercicio ->
-                                    // 🟢 CORREGIDO: Buscamos el índice real del ejercicio en el arreglo nativo para evitar desfases al borrar/mover
                                     val realEjIndex = remember(dia.ejercicios, ejercicio) {
                                         dia.ejercicios.indexOf(ejercicio)
                                     }
@@ -250,7 +270,11 @@ fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> U
                                                     value = if (ejercicio.descansoSegundos == 0) "" else ejercicio.descansoSegundos.toString(),
                                                     onValueChange = { nv -> if (nv.all { it.isDigit() }) viewModel.actualizarEjercicio(realDiaIndex, realEjIndex, ejercicio.copy(descansoSegundos = nv.toIntOrNull() ?: 0)) },
                                                     label = { Text("Descanso sugerido (segundos)", color = TextoSecundario) },
-                                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                    keyboardOptions = KeyboardOptions(
+                                                        keyboardType = KeyboardType.Number,
+                                                        imeAction = ImeAction.Done
+                                                    ),
+                                                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                                                     modifier = Modifier.fillMaxWidth(), singleLine = true,
                                                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta)
                                                 )
@@ -318,7 +342,6 @@ fun EditorSeriesPrescritas(
                 TipoSerie.REST_PAUSE -> "Rest-Pause" to Color(0xFFAED581)
             }
 
-            // 🟢 CORREGIDO: Bloque key explícito en base al índice estable. Bloquea la pérdida de foco del teclado al modificar el TextField
             key(index) {
                 Row(modifier = Modifier.fillMaxWidth().background(FondoOscuro.copy(alpha = 0.5f), RoundedCornerShape(12.dp)).border(1.dp, TextoSecundario.copy(alpha = 0.15f), RoundedCornerShape(12.dp)).padding(vertical = 6.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.weight(0.4f).size(24.dp).background(FondoTarjeta, CircleShape).border(1.dp, NaranjaAcento.copy(alpha = 0.5f), CircleShape), contentAlignment = Alignment.Center) {
@@ -328,7 +351,7 @@ fun EditorSeriesPrescritas(
                     Box(modifier = Modifier.weight(1.8f).padding(horizontal = 4.dp)) {
                         Surface(
                             onClick = {
-                                val todosLosEnums = TipoSerie.entries // Usamos .entries en lugar de .values() por optimización moderna KMP
+                                val todosLosEnums = TipoSerie.entries
                                 val siguienteOrdinal = (serie.tipo.ordinal + 1) % todosLosEnums.size
                                 val nuevoTipoEnum = todosLosEnums[siguienteOrdinal]
                                 val nuevaLista = seriesPrescritas.toMutableList()
@@ -342,7 +365,6 @@ fun EditorSeriesPrescritas(
                     }
 
                     Box(modifier = Modifier.weight(0.9f).padding(horizontal = 2.dp)) {
-                        // Dentro de EditorSeriesPrescritas en el OutlinedTextField de repeticiones:
                         OutlinedTextField(
                             value = if (serie.repeticiones == 0) "" else serie.repeticiones.toString(),
                             onValueChange = { valor ->
@@ -353,9 +375,9 @@ fun EditorSeriesPrescritas(
                             },
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Number,
-                                imeAction = ImeAction.Done // 🟢
+                                imeAction = ImeAction.Done
                             ),
-                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }), // 🟢
+                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                             singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 14.sp),
                             colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta),
