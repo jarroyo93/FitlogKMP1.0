@@ -17,6 +17,8 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import platform.Foundation.dateWithTimeIntervalSince1970
+import platform.AudioToolbox.AudioServicesPlaySystemSound
+import platform.AudioToolbox.kSystemSoundID_Vibrate
 
 class IOSPlatform: Platform {
     override val name: String = UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
@@ -198,4 +200,10 @@ actual fun esMismoDiaLocal(timestamp1: Long, timestamp2: Long): Boolean {
     val fecha1 = NSDate.dateWithTimeIntervalSince1970(timestamp1 / 1000.0)
     val fecha2 = NSDate.dateWithTimeIntervalSince1970(timestamp2 / 1000.0)
     return calendario.isDate(fecha1, inSameDayAsDate = fecha2)
+}
+
+actual fun reproducirSonidoFinTiempo() {
+    // 1052 o 1007 son IDs de sonidos del sistema iOS para alertas/temporizadores
+    AudioServicesPlaySystemSound(1052U)
+    AudioServicesPlaySystemSound(kSystemSoundID_Vibrate) // Vibra el dispositivo
 }

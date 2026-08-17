@@ -16,6 +16,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import dev.josearroyo.fitlog.ui.util.ReproductorAudio
+import dev.josearroyo.fitlog.ui.util.vibrarDispositivo
+import dev.josearroyo.fitlog.ui.util.programarNotificacionTimer
+import dev.josearroyo.fitlog.ui.util.cancelarNotificacionTimer
 
 data class EntrenarState(
     val isLoading: Boolean = true,
@@ -24,9 +30,15 @@ data class EntrenarState(
     val sesionEnProgreso: SesionEntrenamiento = SesionEntrenamiento(),
     val isFinished: Boolean = false,
     val error: String? = null,
-    // 🟢 Control de diálogo de edición para el mismo día
     val mostrarDialogoEdicionHoy: Boolean = false,
-    val sesionGuardadaHoy: SesionEntrenamiento? = null
+    val sesionGuardadaHoy: SesionEntrenamiento? = null,
+
+    // ⏱️ ESTADO DEL CRONÓMETRO DE DESCANSO
+    val tiempoRestanteSegundos: Int = 0,
+    val tiempoTotalSegundos: Int = 0,
+    val cronometroActivo: Boolean = false,
+    val cronometroEnPausa: Boolean = false,
+    val estaSonandoAlarma: Boolean = false
 )
 
 @OptIn(ExperimentalUuidApi::class)
@@ -39,6 +51,8 @@ class EntrenarViewModel : ViewModel() {
     val state: StateFlow<EntrenarState> = _state.asStateFlow()
 
     private var currentAtletaId: String = ""
+
+    private var timerJob: Job? = null
 
     fun cargarRutina(authUid: String, rutinaId: String) {
         currentAtletaId = authUid
@@ -95,6 +109,7 @@ class EntrenarViewModel : ViewModel() {
     }
 
     fun cambiarDiaSeleccionado(diaId: String) {
+        detenerCronometro()
         val rutina = _state.value.rutina ?: return
         val nuevoDia = rutina.diasEntrenamiento.find { it.idDia == diaId } ?: return
 
@@ -277,6 +292,7 @@ class EntrenarViewModel : ViewModel() {
     }
 
     fun terminarEntrenamiento(authUid: String) {
+        detenerCronometro()
         if (_state.value.isLoading) return
 
         val currentState = _state.value
@@ -349,5 +365,96 @@ class EntrenarViewModel : ViewModel() {
 
     fun clearError() {
         _state.update { it.copy(error = null) }
+    }
+
+    // ⏱️ INICIAR O REINICIAR CRONÓMETRO
+    fun iniciarCronometro(segundos: Int) {
+        if (segundos <= 0) return
+        ReproductorAudio.detenerSonido()
+        cancelarNotificacionTimer()
+        programarNotificacionTimer(segundos)
+
+        timerJob?.cancel()
+        _state.update {
+            it.copy(
+                tiempoRestanteSegundos = segundos,
+                tiempoTotalSegundos = segundos,
+                cronometroActivo = true,
+                cronometroEnPausa = false,
+                estaSonandoAlarma = false
+            )
+        }
+
+        timerJob = viewModelScope.launch {
+            while (_state.value.tiempoRestanteSegundos > 0) {
+                delay(1000L)
+                if (!_state.value.cronometroEnPausa) {
+                    _state.update { currentState ->
+                        val nuevoTiempo = currentState.tiempoRestanteSegundos - 1
+
+                        if (nuevoTiempo == 0) {
+                            ReproductorAudio.reproducirSonidoFinTiempo()
+                            vibrarDispositivo()
+                            cancelarNotificacionTimer() // 👈 Limpiar notificación pendiente
+                        }
+
+                        currentState.copy(
+                            tiempoRestanteSegundos = nuevoTiempo,
+                            cronometroActivo = true,
+                            estaSonandoAlarma = (nuevoTiempo == 0)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // ⏱️ PAUSAR O REANUDAR
+    fun pausarReanudarCronometro() {
+        val estaEnPausa = !_state.value.cronometroEnPausa
+
+        if (estaEnPausa) {
+            cancelarNotificacionTimer() // 👈 Cancela notificación al pausar
+        } else if (_state.value.tiempoRestanteSegundos > 0) {
+            programarNotificacionTimer(_state.value.tiempoRestanteSegundos) // 👈 Reprograma al reanudar
+        }
+
+        _state.update { it.copy(cronometroEnPausa = estaEnPausa) }
+    }
+
+    // ⏱️ SUMAR O RESTAR TIEMPO (+30s / -10s)
+    fun ajustarTiempoCronometro(segundosAdicionales: Int) {
+        val nuevoTiempo = maxOf(0, _state.value.tiempoRestanteSegundos + segundosAdicionales)
+        if (nuevoTiempo > 0) {
+
+            iniciarCronometro(nuevoTiempo)
+        } else {
+            detenerCronometro()
+        }
+    }
+
+    // ⏱️ CANCELAR CRONÓMETRO
+    fun detenerCronometro() {
+        ReproductorAudio.detenerSonido()
+        cancelarNotificacionTimer() // 👈 Cancelar notificación activa
+        timerJob?.cancel()
+        timerJob = null
+        _state.update {
+            it.copy(
+                tiempoRestanteSegundos = 0,
+                tiempoTotalSegundos = 0,
+                cronometroActivo = false,
+                cronometroEnPausa = false,
+                estaSonandoAlarma = false
+            )
+        }
+    }
+
+    // 3. Al salir o destruir el ViewModel
+    override fun onCleared() {
+        super.onCleared()
+        ReproductorAudio.detenerSonido()
+        cancelarNotificacionTimer() // 👈 Limpieza completa al destruir
+        timerJob?.cancel()
     }
 }
