@@ -6,6 +6,7 @@ import dev.gitlive.firebase.firestore.firestore
 import dev.gitlive.firebase.firestore.where
 import dev.josearroyo.fitlog.data.model.CicloEntrenamiento
 import dev.josearroyo.fitlog.data.model.DiaEntrenamientoAsignado
+import dev.josearroyo.fitlog.data.model.EjercicioRealizado
 import dev.josearroyo.fitlog.data.model.EstadoSesion
 import dev.josearroyo.fitlog.data.model.Pesaje
 import dev.josearroyo.fitlog.data.model.RutinaAsignada
@@ -13,12 +14,82 @@ import dev.josearroyo.fitlog.data.model.SesionEntrenamiento
 import dev.josearroyo.fitlog.data.model.TipoSerie
 import dev.josearroyo.fitlog.getCurrentTimeMillis
 import dev.josearroyo.fitlog.calcularFechaCierreCiclo
+import dev.josearroyo.fitlog.data.model.EjercicioAsignado
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalUuidApi::class)
 class AtletaProgresoRepository {
     private val db = Firebase.firestore
+
+    // ============================================================
+    // CONSULTA HISTÓRICA POR EJERCICIO (NUEVA MEJORA)
+    // ============================================================
+    // 📦 Objeto contenedor con el registro y su fecha de ejecución
+    data class RegistroEjercicioPrevio(
+        val ejercicioLog: EjercicioRealizado = EjercicioRealizado(),
+        val fechaEjecucion: Long = 0L
+    )
+
+    suspend fun obtenerUltimosRegistrosPorEjercicio(
+        atletaId: String,
+        ejercicios: List<EjercicioAsignado>,
+        sesionActualIdExcluir: String? = null
+    ): Map<String, RegistroEjercicioPrevio> {
+        if (ejercicios.isEmpty()) return emptyMap()
+
+        return try {
+            val snapshot = db.collection("users").document(atletaId)
+                .collection("historial_entrenamientos")
+                .orderBy("fechaEjecucion", Direction.DESCENDING)
+                .limit(30)
+                .get()
+
+            val mapaResultado = mutableMapOf<String, RegistroEjercicioPrevio>()
+            val idsBuscar = ejercicios.map { it.ejercicioGlobalId }.filter { it.isNotBlank() }.toSet()
+            val nombresBuscar = ejercicios.associateBy { it.nombre.trim().lowercase() }
+
+            for (doc in snapshot.documents) {
+                if (sesionActualIdExcluir != null && doc.id == sesionActualIdExcluir) continue
+
+                val sesion = doc.data<SesionEntrenamiento>()
+                if (sesion.estado == EstadoSesion.COMPLETADA) {
+                    for (ej in sesion.ejerciciosRealizados) {
+                        val globalId = ej.ejercicioGlobalId
+                        val nombreNorm = ej.nombreEjercicio.trim().lowercase()
+
+                        val coincideId = globalId.isNotBlank() && idsBuscar.contains(globalId)
+                        val coincideNombre = nombresBuscar.containsKey(nombreNorm)
+
+                        if ((coincideId || coincideNombre) &&
+                            !ej.fueSaltado &&
+                            ej.seriesRealizadas.any { it.pesoKg > 0 || it.repeticionesLogradas > 0 }
+                        ) {
+                            val registroObj = RegistroEjercicioPrevio(
+                                ejercicioLog = ej,
+                                fechaEjecucion = sesion.fechaEjecucion
+                            )
+
+                            // Guardar por ID
+                            if (globalId.isNotBlank() && !mapaResultado.containsKey(globalId)) {
+                                mapaResultado[globalId] = registroObj
+                            }
+
+                            // Guardar por Nombre (resguardo)
+                            val ejCoincidente = nombresBuscar[nombreNorm]
+                            if (ejCoincidente != null && !mapaResultado.containsKey(ejCoincidente.nombre)) {
+                                mapaResultado[ejCoincidente.nombre] = registroObj
+                            }
+                        }
+                    }
+                }
+            }
+            mapaResultado
+        } catch (e: Exception) {
+            println("🔥 [AtletaProgresoRepository] Error al obtener historial previo: ${e.message}")
+            emptyMap()
+        }
+    }
 
     // ============================================================
     // PESAJE Y MÉTRICAS
@@ -50,7 +121,6 @@ class AtletaProgresoRepository {
         }
     }
 
-    // 🟢 CONSULTA LA ÚLTIMA SESIÓN REGISTRADA PARA ESTA RUTINA Y DÍA
     suspend fun obtenerUltimaSesion(
         atletaId: String,
         rutinaId: String,
@@ -118,7 +188,6 @@ class AtletaProgresoRepository {
         val sesionIdFinal = sesionProcesada.id.ifBlank { Uuid.random().toString() }
         val sesionRef = db.collection("users").document(atletaId).collection("historial_entrenamientos").document(sesionIdFinal)
 
-        // Marca explícitamente la sesión como COMPLETADA al guardar
         val sesionFinal = sesionProcesada.copy(
             id = sesionIdFinal,
             estado = EstadoSesion.COMPLETADA,
@@ -143,7 +212,6 @@ class AtletaProgresoRepository {
             val esEdicion = sesionExistenteDoc.exists
             val sesionPrevia = if (esEdicion) sesionExistenteDoc.data<SesionEntrenamiento>() else null
 
-            // 🟢 Calcula la diferencia de repeticiones si se trata de una edición del mismo documento
             val deltaRepsLogradas = if (esEdicion && sesionPrevia != null) {
                 sesionFinal.totalRepsEfectivasLogradas - sesionPrevia.totalRepsEfectivasLogradas
             } else {
@@ -197,7 +265,6 @@ class AtletaProgresoRepository {
                     porcentajeVolumenGlobal = porcentajeVol
                 )
             } else {
-                // 🟢 Si es edición, 'sesionesCompletadas' no se incrementa
                 val nuevasSesiones = if (esEdicion) cicloActivo.sesionesCompletadas else cicloActivo.sesionesCompletadas + 1
                 val nuevaMetaReps = cicloActivo.repeticionesMetaTotal
                 val nuevasRepsLogradas = maxOf(0, cicloActivo.repeticionesLogradasTotal + deltaRepsLogradas)

@@ -118,7 +118,7 @@ class AddPlantillaViewModel(
             )
             try {
                 if (plantillaIdActual != null) {
-                    repository.actualizarPlantilla(plantillaIdActual!!, mapOf("nombre" to nuevaPlantilla.nombre, "ejercicios" to nuevaPlantilla.ejercicios))
+                    repository.actualizarPlantilla(nuevaPlantilla.copy(id = plantillaIdActual!!))
                 } else {
                     repository.guardarPlantillaRutina(nuevaPlantilla)
                 }

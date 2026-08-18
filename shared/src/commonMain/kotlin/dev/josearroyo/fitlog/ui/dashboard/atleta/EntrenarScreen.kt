@@ -1,5 +1,6 @@
 package dev.josearroyo.fitlog.ui.dashboard.atleta
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -26,8 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.*
+import dev.josearroyo.fitlog.repository.AtletaProgresoRepository
 import dev.josearroyo.fitlog.viewmodel.atleta.EntrenarViewModel
-import androidx.compose.foundation.BorderStroke
+import dev.josearroyo.fitlog.formatearFechaCorto
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -70,7 +72,7 @@ fun EntrenarScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = {
-                            viewModel.detenerCronometro() // 👈 Detiene timer y audio antes de salir
+                            viewModel.detenerCronometro()
                             onBack()
                         }
                     ) {
@@ -89,13 +91,12 @@ fun EntrenarScreen(
                             .fillMaxWidth()
                             .windowInsetsPadding(WindowInsets.navigationBars)
                     ) {
-                        // ⏱️ MOSTRAR CRONÓMETRO SI ESTÁ ACTIVO
                         if (state.cronometroActivo) {
                             CronometroFlotanteWidget(
                                 tiempoRestanteSegundos = state.tiempoRestanteSegundos,
                                 tiempoTotalSegundos = state.tiempoTotalSegundos,
                                 estaEnPausa = state.cronometroEnPausa,
-                                estaSonandoAlarma = state.estaSonandoAlarma, // 👈 Pasar nueva propiedad
+                                estaSonandoAlarma = state.estaSonandoAlarma,
                                 onPausarReanudar = { viewModel.pausarReanudarCronometro() },
                                 onAjustarTiempo = { viewModel.ajustarTiempoCronometro(it) },
                                 onCerrar = { viewModel.detenerCronometro() }
@@ -144,28 +145,49 @@ fun EntrenarScreen(
                     CircularProgressIndicator(color = NaranjaAcento)
                 }
             } else {
+                // 🔒 MODAL: ENTRENAMIENTO YA COMPLETADO HOY (Obligatorio escoger opción, sin opción de duplicar)
                 if (state.mostrarDialogoEdicionHoy) {
                     AlertDialog(
+                        properties = androidx.compose.ui.window.DialogProperties(
+                            dismissOnBackPress = false,
+                            dismissOnClickOutside = false
+                        ),
                         containerColor = FondoTarjeta,
-                        onDismissRequest = { viewModel.rechazarEdicionSesionHoy() },
-                        title = { Text("Entrenamiento Ya Completado", fontWeight = FontWeight.Bold, color = Color.White) },
+                        onDismissRequest = { /* Bloqueado */ },
+                        title = {
+                            Text(
+                                text = "Entrenamiento Ya Completado",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
                         text = {
                             Text(
-                                "Ya registraste y finalizaste este entrenamiento el día de hoy. ¿Deseas modificar tus datos guardados o iniciar un nuevo registro?",
+                                text = "Ya has completado la sesión de este día hoy. ¿Deseas editar el registro existente o cancelar?",
                                 color = TextoSecundario
                             )
                         },
                         confirmButton = {
                             Button(
-                                colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
-                                onClick = { viewModel.confirmarEdicionSesionHoy() }
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = NaranjaAcento,
+                                    contentColor = FondoOscuro
+                                ),
+                                onClick = {
+                                    viewModel.confirmarEdicionSesionHoy()
+                                }
                             ) {
                                 Text("Editar sesión de hoy", fontWeight = FontWeight.Bold)
                             }
                         },
                         dismissButton = {
-                            TextButton(onClick = { viewModel.rechazarEdicionSesionHoy() }) {
-                                Text("Crear nuevo registro", color = NaranjaAcento)
+                            TextButton(
+                                onClick = {
+                                    viewModel.cancelarEdicionSesionHoy()
+                                    onBack()
+                                }
+                            ) {
+                                Text("Cancelar", color = Color(0xFFE57373))
                             }
                         }
                     )
@@ -231,7 +253,7 @@ fun EntrenarScreen(
                             if (rutina.notasEntrenador.isNotBlank()) {
                                 Card(
                                     colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.3f))
+                                    border = BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.3f))
                                 ) {
                                     Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.Info, contentDescription = null, tint = NaranjaAcento)
@@ -287,18 +309,20 @@ fun EntrenarScreen(
 
                             val realizado = sesion.ejerciciosRealizados.getOrNull(realIndex)
                             if (realizado != null) {
+                                val registroPrevioObj = state.historialPrevioEjercicios[asignado.ejercicioGlobalId]
+                                    ?: state.historialPrevioEjercicios[asignado.nombre]
+
                                 EjercicioInteractivoCard(
                                     ejercicioAsignado = asignado,
                                     ejercicioRealizado = realizado,
+                                    registroPrevioObj = registroPrevioObj,
                                     onActualizarSerie = { serieIndex, peso, reps ->
                                         viewModel.actualizarSerie(realIndex, serieIndex, peso, reps)
-                                        // Opcional: si deseas auto-iniciar el descanso al registrar una serie con reps > 0:
-                                        // if (reps > 0 && asignado.descansoSegundos > 0) viewModel.iniciarCronometro(asignado.descansoSegundos)
                                     },
                                     onActualizarRpe = { serieIndex, rpe -> viewModel.actualizarRpe(realIndex, serieIndex, rpe) },
                                     onActualizarNota = { nota -> viewModel.actualizarNotaAtleta(realIndex, nota) },
                                     onToggleSaltar = { fue, just -> viewModel.toggleSaltarEjercicio(realIndex, fue, just) },
-                                    onIniciarDescanso = { segundos -> viewModel.iniciarCronometro(segundos) } // 👈 AÑADIDO
+                                    onIniciarDescanso = { segundos -> viewModel.iniciarCronometro(segundos) }
                                 )
                             }
                         }
@@ -314,17 +338,22 @@ fun EntrenarScreen(
 fun EjercicioInteractivoCard(
     ejercicioAsignado: EjercicioAsignado,
     ejercicioRealizado: EjercicioRealizado,
+    registroPrevioObj: AtletaProgresoRepository.RegistroEjercicioPrevio? = null,
     onActualizarSerie: (Int, Double, Int) -> Unit,
     onActualizarRpe: (Int, Int) -> Unit,
     onActualizarNota: (String) -> Unit,
     onToggleSaltar: (Boolean, String) -> Unit,
-    onIniciarDescanso: (Int) -> Unit // ⏱️ Parámetro para activar el cronómetro
+    onIniciarDescanso: (Int) -> Unit
 ) {
     var mostrarInfoEntrenador by remember { mutableStateOf(false) }
     var mostrarRpeSheet by remember { mutableStateOf(false) }
+    var mostrarBottomSheetHistorial by remember { mutableStateOf(false) }
     var serieSeleccionadaParaRpe by remember { mutableStateOf(-1) }
     var rpeActualSeleccionado by remember { mutableStateOf(8) }
     val focusManager = LocalFocusManager.current
+
+    val registroPrevio = registroPrevioObj?.ejercicioLog
+    val fechaEjecucionMs = registroPrevioObj?.fechaEjecucion ?: 0L
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -349,10 +378,57 @@ fun EjercicioInteractivoCard(
                 }
             }
 
-            // 🟢 VISUALIZACIÓN DE SERIES Y BOTÓN INTERACTIVO DE DESCANSO
+            val serieEfectivaPrevia = registroPrevio?.seriesRealizadas?.firstOrNull { it.pesoKg > 0 || it.repeticionesLogradas > 0 }
+
+            if (serieEfectivaPrevia != null) {
+                val pesoFormateado = if (serieEfectivaPrevia.pesoKg % 1.0 == 0.0) {
+                    serieEfectivaPrevia.pesoKg.toInt().toString()
+                } else serieEfectivaPrevia.pesoKg.toString()
+
+                val fechaTexto = if (fechaEjecucionMs > 0L) formatearFechaCorto(fechaEjecucionMs) else ""
+                val textoChip = if (fechaTexto.isNotBlank()) {
+                    "Anterior ($fechaTexto): ${pesoFormateado}kg × ${serieEfectivaPrevia.repeticionesLogradas} reps"
+                } else {
+                    "Anterior: ${pesoFormateado}kg × ${serieEfectivaPrevia.repeticionesLogradas} reps"
+                }
+
+                SuggestionChip(
+                    onClick = { mostrarBottomSheetHistorial = true },
+                    label = {
+                        Text(
+                            text = textoChip,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White
+                        )
+                    },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = "Ver Historial Detallado",
+                            tint = NaranjaAcento,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = FondoOscuro.copy(alpha = 0.6f)
+                    ),
+                    border = BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.35f)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.padding(vertical = 2.dp)
+                )
+            } else {
+                Text(
+                    text = "✨ Primer registro para este ejercicio",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NaranjaAcento.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 4.dp)
             ) {
                 Text(
                     "Objetivo: ${ejercicioAsignado.seriesPrescritas.size} series",
@@ -363,7 +439,6 @@ fun EjercicioInteractivoCard(
                 if (ejercicioAsignado.descansoSegundos > 0) {
                     Text("•", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
 
-                    // ⏱️ Chip interactivo que inicia el cronómetro al tocarlo
                     SuggestionChip(
                         onClick = { onIniciarDescanso(ejercicioAsignado.descansoSegundos) },
                         label = {
@@ -465,6 +540,7 @@ fun EjercicioInteractivoCard(
 
                             SeriePesoInput(
                                 pesoKg = serie.pesoKg,
+                                pesoTarget = serie.pesoTarget,
                                 onPesoChange = { nuevoPeso ->
                                     onActualizarSerie(sIndex, nuevoPeso, serie.repeticionesLogradas)
                                 },
@@ -478,6 +554,13 @@ fun EjercicioInteractivoCard(
                                         val repsVal = newValue.toIntOrNull() ?: 0
                                         onActualizarSerie(sIndex, serie.pesoKg, repsVal)
                                     }
+                                },
+                                placeholder = {
+                                    Text(
+                                        text = if (serie.repsTarget > 0) "${serie.repsTarget}" else "0",
+                                        color = TextoSecundario.copy(alpha = 0.4f),
+                                        style = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
+                                    )
                                 },
                                 modifier = Modifier.weight(0.8f).padding(horizontal = 2.dp).heightIn(min = 56.dp),
                                 keyboardOptions = KeyboardOptions(
@@ -536,6 +619,78 @@ fun EjercicioInteractivoCard(
         }
     }
 
+    if (mostrarBottomSheetHistorial) {
+        ModalBottomSheet(
+            onDismissRequest = { mostrarBottomSheetHistorial = false },
+            containerColor = FondoTarjeta
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.History, contentDescription = null, tint = NaranjaAcento)
+                    Text(
+                        text = "Historial: ${ejercicioAsignado.nombre}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (registroPrevio != null && registroPrevio.seriesRealizadas.any { it.pesoKg > 0 || it.repeticionesLogradas > 0 }) {
+                    val fechaTexto = if (fechaEjecucionMs > 0L) " (${formatearFechaCorto(fechaEjecucionMs)})" else ""
+                    Text(
+                        text = "Última sesión registrada$fechaTexto:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = TextoSecundario
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    registroPrevio.seriesRealizadas.forEach { serie ->
+                        if (serie.pesoKg > 0 || serie.repeticionesLogradas > 0) {
+                            val pesoStr = if (serie.pesoKg % 1.0 == 0.0) serie.pesoKg.toInt().toString() else serie.pesoKg.toString()
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .background(FondoOscuro, RoundedCornerShape(8.dp))
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Serie ${serie.numeroSerie}", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text("${pesoStr} kg  ×  ${serie.repeticionesLogradas} reps", color = NaranjaAcento, fontWeight = FontWeight.Bold)
+                                if (serie.rpe != null) {
+                                    Text("RPE ${serie.rpe}", color = TextoSecundario)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text("No hay registros previos para este ejercicio.", color = TextoSecundario)
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = { mostrarBottomSheetHistorial = false },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro)
+                ) {
+                    Text("Entendido", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+
     if (mostrarInfoEntrenador) {
         AlertDialog(
             containerColor = FondoTarjeta,
@@ -580,10 +735,10 @@ fun EjercicioInteractivoCard(
     }
 }
 
-// 🟢 COMPONENTE REUTILIZABLE PARA ENTRADA DE PESO DECIMAL (FLUIDO EN ANDROID E IOS)
 @Composable
 fun SeriePesoInput(
     pesoKg: Double,
+    pesoTarget: Double = 0.0,
     onPesoChange: (Double) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -595,7 +750,6 @@ fun SeriePesoInput(
         )
     }
 
-    // Sincroniza el texto únicamente si el valor externo cambia (evita borrar el separador mientras se escribe)
     LaunchedEffect(pesoKg) {
         val parsedCurrent = textValue.replace(",", ".").toDoubleOrNull() ?: 0.0
         if (parsedCurrent != pesoKg) {
@@ -603,6 +757,13 @@ fun SeriePesoInput(
             else if (pesoKg % 1.0 == 0.0) pesoKg.toInt().toString()
             else pesoKg.toString()
         }
+    }
+
+    val placeholderTexto = remember(pesoTarget) {
+        if (pesoTarget > 0.0) {
+            val pStr = if (pesoTarget % 1.0 == 0.0) pesoTarget.toInt().toString() else pesoTarget.toString()
+            "$pStr kg"
+        } else "0"
     }
 
     OutlinedTextField(
@@ -614,6 +775,13 @@ fun SeriePesoInput(
                 val parsed = sanitized.toDoubleOrNull() ?: 0.0
                 onPesoChange(parsed)
             }
+        },
+        placeholder = {
+            Text(
+                text = placeholderTexto,
+                color = TextoSecundario.copy(alpha = 0.4f),
+                style = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
+            )
         },
         modifier = modifier,
         keyboardOptions = KeyboardOptions(
@@ -748,7 +916,6 @@ fun CronometroFlotanteWidget(
                 }
 
                 if (estaSonandoAlarma) {
-                    // 🔔 BOTÓN PROMINENTE PARA SILENCIAR Y CONTINUAR EL ENTRENAMIENTO
                     Button(
                         onClick = onCerrar,
                         colors = ButtonDefaults.buttonColors(
@@ -767,7 +934,6 @@ fun CronometroFlotanteWidget(
                         Text("Listo", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
                 } else {
-                    // CONTROLES NORMALES DEL CRONÓMETRO EN CONTEO
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)

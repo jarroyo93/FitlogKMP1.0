@@ -28,6 +28,7 @@ data class EntrenarState(
     val rutina: RutinaAsignada? = null,
     val diaActual: DiaEntrenamientoAsignado? = null,
     val sesionEnProgreso: SesionEntrenamiento = SesionEntrenamiento(),
+    val historialPrevioEjercicios: Map<String, AtletaProgresoRepository.RegistroEjercicioPrevio> = emptyMap(),
     val isFinished: Boolean = false,
     val error: String? = null,
     val mostrarDialogoEdicionHoy: Boolean = false,
@@ -51,7 +52,6 @@ class EntrenarViewModel : ViewModel() {
     val state: StateFlow<EntrenarState> = _state.asStateFlow()
 
     private var currentAtletaId: String = ""
-
     private var timerJob: Job? = null
 
     fun cargarRutina(authUid: String, rutinaId: String) {
@@ -92,16 +92,23 @@ class EntrenarViewModel : ViewModel() {
             val diaCorrespondiente = rutina.diasEntrenamiento.find { it.idDia == borradorLocal.diaEntrenamientoId }
                 ?: rutina.diasEntrenamiento.first()
 
+            val historialPrevio = cargarHistorialPrevio(atletaId, diaCorrespondiente)
+
+            // 🟢 Sincronizar el borrador con los cambios hechos en la rutina (ej. ejercicios nuevos)
+            val sesionSincronizada = sincronizarBorradorConRutina(borradorLocal, diaCorrespondiente, historialPrevio)
+            BorradorLocalManager.guardarBorradorLocal(sesionSincronizada)
+
             _state.update { it.copy(
                 isLoading = false,
                 rutina = rutina,
                 diaActual = diaCorrespondiente,
-                sesionEnProgreso = borradorLocal
+                sesionEnProgreso = sesionSincronizada,
+                historialPrevioEjercicios = historialPrevio
             ) }
             return
         }
 
-        // 2. Si no hay borrador local, determinar qué día le corresponde por rotación
+        // 2. Determinar qué día le corresponde por rotación
         val diaToca = rutina.diasEntrenamiento.minByOrNull { it.ultimaVezEjecutada ?: 0L }
             ?: rutina.diasEntrenamiento.first()
 
@@ -123,6 +130,18 @@ class EntrenarViewModel : ViewModel() {
         }
     }
 
+    private suspend fun cargarHistorialPrevio(
+        atletaId: String,
+        dia: DiaEntrenamientoAsignado,
+        sesionActualIdExcluir: String? = null
+    ): Map<String, AtletaProgresoRepository.RegistroEjercicioPrevio> {
+        return atletaProgresoRepository.obtenerUltimosRegistrosPorEjercicio(
+            atletaId = atletaId,
+            ejercicios = dia.ejercicios,
+            sesionActualIdExcluir = sesionActualIdExcluir
+        )
+    }
+
     private suspend fun prepararOCargarSesionDiaEspecifico(
         atletaId: String,
         rutina: RutinaAsignada,
@@ -130,26 +149,32 @@ class EntrenarViewModel : ViewModel() {
     ) {
         val borradorLocal = BorradorLocalManager.obtenerBorradorLocal()
         val ahoraMs = getCurrentTimeMillis()
+        val historialPrevio = cargarHistorialPrevio(atletaId, dia)
 
-        // 1. Verificar si hay un borrador en progreso guardado localmente para este día específico
+        // 1. Borrador local
         if (borradorLocal != null &&
             borradorLocal.rutinaAsignadaId == rutina.id &&
             borradorLocal.diaEntrenamientoId == dia.idDia &&
             borradorLocal.estado == EstadoSesion.EN_PROGRESO
         ) {
+            // 🟢 Sincronizar el borrador local con la rutina específica
+            val sesionSincronizada = sincronizarBorradorConRutina(borradorLocal, dia, historialPrevio)
+            BorradorLocalManager.guardarBorradorLocal(sesionSincronizada)
+
             _state.update { it.copy(
                 isLoading = false,
                 rutina = rutina,
                 diaActual = dia,
-                sesionEnProgreso = borradorLocal
+                sesionEnProgreso = sesionSincronizada,
+                historialPrevioEjercicios = historialPrevio
             ) }
             return
         }
 
-        // 2. Buscar la última sesión en Firestore para este día
+        // 2. Buscar última sesión en Firestore
         val ultimaSesion = atletaProgresoRepository.obtenerUltimaSesion(atletaId, rutina.id, dia.idDia)
 
-        // 🟢 3. Si existe una sesión COMPLETADA hoy (según zona horaria local), se intercepta para confirmar edición
+        // 3. Confirmación de edición si fue realizada hoy
         if (ultimaSesion != null &&
             ultimaSesion.estado == EstadoSesion.COMPLETADA &&
             esMismoDiaLocal(ahoraMs, ultimaSesion.fechaEjecucion)
@@ -159,15 +184,15 @@ class EntrenarViewModel : ViewModel() {
                 rutina = rutina,
                 diaActual = dia,
                 mostrarDialogoEdicionHoy = true,
-                sesionGuardadaHoy = ultimaSesion
+                sesionGuardadaHoy = ultimaSesion,
+                historialPrevioEjercicios = historialPrevio
             ) }
         } else {
-            // 4. Si es de otro día o no existe, genera una nueva plantilla con un UUID fresco
-            generarCuadernoParaElDia(rutina, dia)
+            // 4. Nueva plantilla con pesoTarget alimentado del historial previo
+            generarCuadernoParaElDia(rutina, dia, historialPrevio)
         }
     }
 
-    // 🟢 El usuario acepta editar la sesión guardada hoy: Reutiliza el UUID original
     fun confirmarEdicionSesionHoy() {
         val sesionHoy = _state.value.sesionGuardadaHoy ?: return
         _state.update { it.copy(
@@ -178,23 +203,29 @@ class EntrenarViewModel : ViewModel() {
         BorradorLocalManager.guardarBorradorLocal(sesionHoy)
     }
 
-    // 🔴 El usuario rechaza la edición: Crea una plantilla nueva con un nuevo UUID
-    fun rechazarEdicionSesionHoy() {
-        val rutina = _state.value.rutina ?: return
-        val dia = _state.value.diaActual ?: return
+    fun cancelarEdicionSesionHoy() {
         _state.update { it.copy(mostrarDialogoEdicionHoy = false, sesionGuardadaHoy = null) }
-        generarCuadernoParaElDia(rutina, dia)
     }
 
-    private fun generarCuadernoParaElDia(rutina: RutinaAsignada, dia: DiaEntrenamientoAsignado) {
+    private fun generarCuadernoParaElDia(
+        rutina: RutinaAsignada,
+        dia: DiaEntrenamientoAsignado,
+        historialPrevio: Map<String, AtletaProgresoRepository.RegistroEjercicioPrevio>
+    ) {
         val ejerciciosParaLlenar = dia.ejercicios.sortedBy { it.ordenSecuencia }.map { ejAsignado ->
+            val registroPrevioObj = historialPrevio[ejAsignado.ejercicioGlobalId] ?: historialPrevio[ejAsignado.nombre]
+            val registroPrevio = registroPrevioObj?.ejercicioLog
+
             val listaSeries = ejAsignado.seriesPrescritas.mapIndexed { index, prescrita ->
+                val seriePrevia = registroPrevio?.seriesRealizadas?.getOrNull(index)
+                val pesoReferencia = seriePrevia?.pesoKg ?: 0.0
+
                 SerieRealizada(
                     numeroSerie = index + 1,
                     tipoSerie = prescrita.tipo,
                     pesoKg = 0.0,
                     repeticionesLogradas = 0,
-                    pesoTarget = 0.0,
+                    pesoTarget = pesoReferencia,
                     repsTarget = prescrita.repeticiones
                 )
             }
@@ -221,7 +252,8 @@ class EntrenarViewModel : ViewModel() {
             isLoading = false,
             rutina = rutina,
             diaActual = dia,
-            sesionEnProgreso = nuevaSesion
+            sesionEnProgreso = nuevaSesion,
+            historialPrevioEjercicios = historialPrevio
         ) }
 
         BorradorLocalManager.guardarBorradorLocal(nuevaSesion)
@@ -367,7 +399,7 @@ class EntrenarViewModel : ViewModel() {
         _state.update { it.copy(error = null) }
     }
 
-    // ⏱️ INICIAR O REINICIAR CRONÓMETRO
+    // ⏱️ CRONÓMETRO DE DESCANSO
     fun iniciarCronometro(segundos: Int) {
         if (segundos <= 0) return
         ReproductorAudio.detenerSonido()
@@ -395,7 +427,7 @@ class EntrenarViewModel : ViewModel() {
                         if (nuevoTiempo == 0) {
                             ReproductorAudio.reproducirSonidoFinTiempo()
                             vibrarDispositivo()
-                            cancelarNotificacionTimer() // 👈 Limpiar notificación pendiente
+                            cancelarNotificacionTimer()
                         }
 
                         currentState.copy(
@@ -409,34 +441,30 @@ class EntrenarViewModel : ViewModel() {
         }
     }
 
-    // ⏱️ PAUSAR O REANUDAR
     fun pausarReanudarCronometro() {
         val estaEnPausa = !_state.value.cronometroEnPausa
 
         if (estaEnPausa) {
-            cancelarNotificacionTimer() // 👈 Cancela notificación al pausar
+            cancelarNotificacionTimer()
         } else if (_state.value.tiempoRestanteSegundos > 0) {
-            programarNotificacionTimer(_state.value.tiempoRestanteSegundos) // 👈 Reprograma al reanudar
+            programarNotificacionTimer(_state.value.tiempoRestanteSegundos)
         }
 
         _state.update { it.copy(cronometroEnPausa = estaEnPausa) }
     }
 
-    // ⏱️ SUMAR O RESTAR TIEMPO (+30s / -10s)
     fun ajustarTiempoCronometro(segundosAdicionales: Int) {
         val nuevoTiempo = maxOf(0, _state.value.tiempoRestanteSegundos + segundosAdicionales)
         if (nuevoTiempo > 0) {
-
             iniciarCronometro(nuevoTiempo)
         } else {
             detenerCronometro()
         }
     }
 
-    // ⏱️ CANCELAR CRONÓMETRO
     fun detenerCronometro() {
         ReproductorAudio.detenerSonido()
-        cancelarNotificacionTimer() // 👈 Cancelar notificación activa
+        cancelarNotificacionTimer()
         timerJob?.cancel()
         timerJob = null
         _state.update {
@@ -450,11 +478,61 @@ class EntrenarViewModel : ViewModel() {
         }
     }
 
-    // 3. Al salir o destruir el ViewModel
     override fun onCleared() {
         super.onCleared()
         ReproductorAudio.detenerSonido()
-        cancelarNotificacionTimer() // 👈 Limpieza completa al destruir
+        cancelarNotificacionTimer()
         timerJob?.cancel()
+    }
+
+    private fun sincronizarBorradorConRutina(
+        borrador: SesionEntrenamiento,
+        dia: DiaEntrenamientoAsignado,
+        historialPrevio: Map<String, AtletaProgresoRepository.RegistroEjercicioPrevio>
+    ): SesionEntrenamiento {
+        val ejerciciosBorradorMap = borrador.ejerciciosRealizados.associateBy {
+            if (it.ejercicioGlobalId.isNotBlank()) it.ejercicioGlobalId else it.nombreEjercicio.trim().lowercase()
+        }
+
+        val nuevosEjerciciosRealizados = dia.ejercicios.sortedBy { it.ordenSecuencia }.map { ejAsignado ->
+            val claveId = ejAsignado.ejercicioGlobalId
+            val claveNombre = ejAsignado.nombre.trim().lowercase()
+
+            val existente = ejerciciosBorradorMap[claveId] ?: ejerciciosBorradorMap[claveNombre]
+
+            if (existente != null) {
+                existente.copy(
+                    ordenSecuencia = ejAsignado.ordenSecuencia,
+                    nombreEjercicio = ejAsignado.nombre,
+                    ejercicioGlobalId = ejAsignado.ejercicioGlobalId
+                )
+            } else {
+                val registroPrevioObj = historialPrevio[ejAsignado.ejercicioGlobalId] ?: historialPrevio[ejAsignado.nombre]
+                val registroPrevio = registroPrevioObj?.ejercicioLog
+
+                val listaSeries = ejAsignado.seriesPrescritas.mapIndexed { index, prescrita ->
+                    val seriePrevia = registroPrevio?.seriesRealizadas?.getOrNull(index)
+                    val pesoReferencia = seriePrevia?.pesoKg ?: 0.0
+
+                    SerieRealizada(
+                        numeroSerie = index + 1,
+                        tipoSerie = prescrita.tipo,
+                        pesoKg = 0.0,
+                        repeticionesLogradas = 0,
+                        pesoTarget = pesoReferencia,
+                        repsTarget = prescrita.repeticiones
+                    )
+                }
+
+                EjercicioRealizado(
+                    ejercicioGlobalId = ejAsignado.ejercicioGlobalId,
+                    nombreEjercicio = ejAsignado.nombre,
+                    ordenSecuencia = ejAsignado.ordenSecuencia,
+                    seriesRealizadas = listaSeries
+                )
+            }
+        }
+
+        return borrador.copy(ejerciciosRealizados = nuevosEjerciciosRealizados)
     }
 }

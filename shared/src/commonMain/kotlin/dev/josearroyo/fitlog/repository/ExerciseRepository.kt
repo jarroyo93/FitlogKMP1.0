@@ -76,11 +76,13 @@ class ExerciseRepository {
         false
     }
 
-    suspend fun actualizarPlantilla(plantillaId: String, datos: Map<String, Any?>): Boolean = try {
-        val pairs = datos.map { it.key to it.value }.toTypedArray()
-        templatesRef.document(plantillaId).update(*pairs)
+    suspend fun actualizarPlantilla(plantilla: PlantillaRutina): Boolean = try {
+        templatesRef.document(plantilla.id).set(plantilla)
         true
-    } catch (e: Exception) { false }
+    } catch (e: Exception) {
+        println("🔥 [ExerciseRepository] Error al actualizar plantilla: ${e.message}")
+        false
+    }
 
     suspend fun eliminarPlantillaFisica(id: String): Boolean = try {
         templatesRef.document(id).delete()
