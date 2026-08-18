@@ -71,10 +71,27 @@ actual fun programarNotificacionTimer(segundos: Int) {
 
     val triggerAtMillis = System.currentTimeMillis() + (segundos * 1000L)
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-    } else {
-        alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // 🟢 Validar si Android permite alarmas exactas en este dispositivo
+            if (alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+            } else {
+                // 🛡️ Plan B: Usar alarma tolerante si no hay permiso exacto concedido
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+        } else {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+        }
+    } catch (e: SecurityException) {
+        // 🛑 Capturar cualquier excepción imprevista de permisos para evitar el cierre de la app
+        e.printStackTrace()
+        try {
+            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+        } catch (ignored: Exception) {
+        }
     }
 }
 
