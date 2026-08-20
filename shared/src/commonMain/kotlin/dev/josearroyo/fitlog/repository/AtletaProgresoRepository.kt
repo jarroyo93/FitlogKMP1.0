@@ -230,7 +230,7 @@ class AtletaProgresoRepository {
                     dia.ejercicios.forEach { ejercicio ->
                         ejercicio.seriesPrescritas.forEach { serie ->
                             if (serie.tipo != TipoSerie.APROXIMACION) {
-                                totalRepsGlobales += serie.repeticiones
+                                totalRepsGlobales += serie.maxReps
                             }
                         }
                     }

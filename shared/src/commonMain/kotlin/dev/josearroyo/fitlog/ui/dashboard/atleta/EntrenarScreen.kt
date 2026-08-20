@@ -556,8 +556,13 @@ fun EjercicioInteractivoCard(
                                     }
                                 },
                                 placeholder = {
+                                    val targetTexto = when {
+                                        serie.minTarget > 0 && serie.maxTarget > 0 && serie.minTarget != serie.maxTarget -> "${serie.minTarget}-${serie.maxTarget}"
+                                        serie.maxTarget > 0 -> "${serie.maxTarget}"
+                                        else -> "0"
+                                    }
                                     Text(
-                                        text = if (serie.repsTarget > 0) "${serie.repsTarget}" else "0",
+                                        text = targetTexto,
                                         color = TextoSecundario.copy(alpha = 0.4f),
                                         style = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
                                     )
@@ -714,7 +719,17 @@ fun EjercicioInteractivoCard(
                             TipoSerie.FALLO -> "Al Fallo"
                             TipoSerie.REST_PAUSE -> "Rest-Pause"
                         }
-                        Text("• Serie ${serie.numeroSerie}: $etiquetaTipo - ${serie.repeticiones} reps meta", color = Color.White)
+
+                        val minR = serie.minReps
+                        val maxR = serie.maxReps
+                        val textoRango = when {
+                            minR > 0 && maxR > 0 && minR != maxR -> "$minR-$maxR"
+                            maxR > 0 -> "$maxR"
+                            minR > 0 -> "$minR"
+                            else -> "${serie.repeticiones}"
+                        }
+
+                        Text("• Serie ${serie.numeroSerie}: $etiquetaTipo - $textoRango reps meta", color = Color.White)
                     }
                     if (ejercicioAsignado.notasEspecificas.isNotBlank()) {
                         HorizontalDivider(color = FondoOscuro, modifier = Modifier.padding(vertical = 4.dp))

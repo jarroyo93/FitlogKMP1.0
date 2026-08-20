@@ -143,7 +143,7 @@ class EditRutinaAsignadaViewModel : ViewModel() {
                 idInterno = Uuid.random().toString(),
                 ejercicioGlobalId = ejercicioGlobal.id,
                 nombre = ejercicioGlobal.nombre,
-                seriesPrescritas = listOf(PrescripcionSerie(numeroSerie = 1, repeticiones = 10, tipo = TipoSerie.EFECTIVA)),
+                seriesPrescritas = listOf(PrescripcionSerie(numeroSerie = 1, repsMin = 8, repsMax = 12, tipo = TipoSerie.EFECTIVA)),
                 descansoSegundos = 60,
                 ordenSecuencia = dia.ejercicios.size + 1
             )
@@ -171,7 +171,7 @@ class EditRutinaAsignadaViewModel : ViewModel() {
                     dia.ejercicios.forEach { ejercicio ->
                         ejercicio.seriesPrescritas.forEach { serie ->
                             if (serie.tipo != TipoSerie.APROXIMACION) {
-                                nuevasRepsMetaTotal += serie.repeticiones
+                                nuevasRepsMetaTotal += serie.maxReps // 👈 Usa maxReps
                             }
                         }
                     }

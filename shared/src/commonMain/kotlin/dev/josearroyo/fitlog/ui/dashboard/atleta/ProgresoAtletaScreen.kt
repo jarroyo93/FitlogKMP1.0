@@ -752,17 +752,25 @@ fun DetalleSesionDialog(sesion: SesionEntrenamiento, onDismiss: () -> Unit) {
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 ej.seriesRealizadas.forEach { serie ->
-                                    val repTarget = serie.repsTarget
+                                    val minT = serie.minTarget
+                                    val maxT = serie.maxTarget
                                     val repLogradas = serie.repeticionesLogradas
                                     val pesoTarget = serie.pesoTarget
                                     val pesoLogrado = serie.pesoKg
 
-                                    // Comparativa matemática entre Pauta y Logrado
-                                    val (colorMarcador, textoComparativa) = remember(repLogradas, repTarget, pesoLogrado, pesoTarget) {
+                                    val (colorMarcador, textoComparativa) = remember(repLogradas, minT, maxT, pesoLogrado, pesoTarget) {
+                                        val textoPautaReps = when {
+                                            minT > 0 && maxT > 0 && minT != maxT -> "$minT-$maxT reps"
+                                            maxT > 0 -> "$maxT reps"
+                                            else -> "Reps libres"
+                                        }
+                                        val textoPeso = if (pesoTarget > 0) "${pesoTarget}kg x " else ""
+
                                         when {
-                                            repTarget > 0 && repLogradas < repTarget -> RojoIncompleto to "Pauta: ${if(pesoTarget > 0) "${pesoTarget}kg x " else ""}$repTarget reps (Faltaron ${repTarget - repLogradas})"
-                                            repTarget > 0 && repLogradas > repTarget -> VerdeExito to "Pauta: ${if(pesoTarget > 0) "${pesoTarget}kg x " else ""}$repTarget reps (+${repLogradas - repTarget} ¡Superado!)"
-                                            else -> AzulCumplido to "Pauta: ${if(pesoTarget > 0) "${pesoTarget}kg x " else ""}${if(repTarget > 0) "$repTarget reps" else "Completado"}"
+                                            minT > 0 && repLogradas < minT -> RojoIncompleto to "Pauta: $textoPeso$textoPautaReps (Faltaron ${minT - repLogradas})"
+                                            maxT > 0 && repLogradas > maxT -> VerdeExito to "Pauta: $textoPeso$textoPautaReps (+${repLogradas - maxT} sobre rango)"
+                                            minT > 0 && repLogradas in minT..maxT -> VerdeExito to "Pauta: $textoPeso$textoPautaReps (¡En rango! ✔️)"
+                                            else -> AzulCumplido to "Pauta: $textoPeso$textoPautaReps"
                                         }
                                     }
 

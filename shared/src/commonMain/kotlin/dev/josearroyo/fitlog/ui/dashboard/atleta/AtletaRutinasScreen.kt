@@ -112,13 +112,23 @@ fun RutinaExpandableCard(rutina: RutinaAsignada, onComenzar: () -> Unit) {
                             dia.ejercicios.sortedBy { it.ordenSecuencia }.forEachIndexed { index, ej ->
 
                                 val totalSeries = ej.seriesPrescritas.size
-                                val listaRepeticiones = ej.seriesPrescritas.map { it.repeticiones }
-                                val sonRepeticionesUniforme = listaRepeticiones.distinct().size == 1
+
+                                val listaTextosReps = ej.seriesPrescritas.map { serie ->
+                                    val minR = serie.minReps
+                                    val maxR = serie.maxReps
+                                    when {
+                                        minR > 0 && maxR > 0 && minR != maxR -> "$minR-$maxR"
+                                        maxR > 0 -> "$maxR"
+                                        minR > 0 -> "$minR"
+                                        else -> "${serie.repeticiones}"
+                                    }
+                                }
+                                val sonRepeticionesUniforme = listaTextosReps.distinct().size == 1
 
                                 val textoDosificacion = when {
                                     totalSeries == 0 -> "Sin series"
-                                    sonRepeticionesUniforme -> "${totalSeries}s x ${listaRepeticiones.first()} reps"
-                                    else -> "${totalSeries}s x ${listaRepeticiones.joinToString("/")}"
+                                    sonRepeticionesUniforme -> "${totalSeries}s x ${listaTextosReps.first()} reps"
+                                    else -> "${totalSeries}s x ${listaTextosReps.joinToString("/")}"
                                 }
 
                                 Row(

@@ -226,7 +226,8 @@ class EntrenarViewModel : ViewModel() {
                     pesoKg = 0.0,
                     repeticionesLogradas = 0,
                     pesoTarget = pesoReferencia,
-                    repsTarget = prescrita.repeticiones
+                    repsMinTarget = prescrita.minReps, // 👈 Se guardan min y max
+                    repsMaxTarget = prescrita.maxReps
                 )
             }
 
@@ -520,7 +521,8 @@ class EntrenarViewModel : ViewModel() {
                         pesoKg = 0.0,
                         repeticionesLogradas = 0,
                         pesoTarget = pesoReferencia,
-                        repsTarget = prescrita.repeticiones
+                        repsMinTarget = prescrita.minReps, // 👈 Se guardan min y max
+                        repsMaxTarget = prescrita.maxReps
                     )
                 }
 

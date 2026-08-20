@@ -70,7 +70,14 @@ class AddPlantillaViewModel(
         val nuevo = ElementoRutina(
             ejercicioId = ejercicio.id,
             nombreEjercicio = ejercicio.nombre,
-            seriesPrescritas = listOf(PrescripcionSerie(numeroSerie = 1, repeticiones = 10, tipo = TipoSerie.EFECTIVA)),
+            seriesPrescritas = listOf(
+                PrescripcionSerie(
+                    numeroSerie = 1,
+                    repsMin = 8,
+                    repsMax = 12,
+                    tipo = TipoSerie.EFECTIVA
+                )
+            ),
             descansoSegundos = 60
         )
         _state.update { it.copy(ejerciciosEnCarrito = it.ejerciciosEnCarrito + nuevo) }

@@ -49,8 +49,13 @@ data class SerieRealizada(
     val repeticionesLogradas: Int = 0,
     val rpe: Int? = null,
     val pesoTarget: Double = 0.0,
-    val repsTarget: Int = 0
-)
+    val repsMinTarget: Int = 0,
+    val repsMaxTarget: Int = 0,
+    val repsTarget: Int = 0 // Retrocompatibilidad
+) {
+    val minTarget: Int get() = if (repsMinTarget > 0) repsMinTarget else if (repsTarget > 0) repsTarget else 0
+    val maxTarget: Int get() = if (repsMaxTarget > 0) repsMaxTarget else if (repsTarget > 0) repsTarget else minTarget
+}
 
 fun SesionEntrenamiento.calcularMetricas(): SesionEntrenamiento {
     var metaTotal = 0
@@ -59,7 +64,8 @@ fun SesionEntrenamiento.calcularMetricas(): SesionEntrenamiento {
     this.ejerciciosRealizados.forEach { ejercicio ->
         ejercicio.seriesRealizadas.forEach { serie ->
             if (serie.tipoSerie != TipoSerie.APROXIMACION) {
-                metaTotal += serie.repsTarget
+                // Tomamos el techo del rango (maxTarget) como objetivo nominal de repeticiones efectivas
+                metaTotal += serie.maxTarget
                 if (!ejercicio.fueSaltado) {
                     logradasTotal += serie.repeticionesLogradas
                 }
