@@ -5,13 +5,13 @@ import androidx.lifecycle.viewModelScope
 import dev.josearroyo.fitlog.data.model.RolUsuario
 import dev.josearroyo.fitlog.repository.AuthRepository
 import dev.josearroyo.fitlog.repository.UserRepository
+import dev.josearroyo.fitlog.ui.util.UserPreferencesManager // 👈 IMPORTANTE
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// Estado de Login actualizado con la bandera de primer ingreso 🟢
 sealed class AuthState {
     data object Idle : AuthState()
     data object Loading : AuthState()
@@ -23,7 +23,6 @@ sealed class AuthState {
     data class Error(val message: String) : AuthState()
 }
 
-// Estado separado para la pantalla de Activación / Primer Ingreso
 data class ActivationState(
     val isLoading: Boolean = false,
     val isSuccess: Boolean = false,
@@ -35,17 +34,17 @@ class AuthViewModel(
     private val userRepository: UserRepository = UserRepository()
 ) : ViewModel() {
 
-    // --- Flujo de Login ---
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
-    // --- Flujo de Activación ---
     private val _activationState = MutableStateFlow(ActivationState())
     val activationState: StateFlow<ActivationState> = _activationState.asStateFlow()
 
-    // ==========================================
-    // LÓGICA DE LOGIN MULTIPLATAFORMA
-    // ==========================================
+    // 🟢 Carga el último correo guardado al iniciar la pantalla
+    fun obtenerUltimoCorreo(): String {
+        return UserPreferencesManager.obtenerUltimoCorreo()
+    }
+
     fun login(email: String, clave: String) {
         if (email.isBlank() || clave.isBlank()) {
             _authState.update { AuthState.Error("El correo y la contraseña son obligatorios") }
@@ -59,6 +58,9 @@ class AuthViewModel(
                 val usuario = userRepository.obtenerUsuario(uid)
 
                 if (usuario != null) {
+                    // 🟢 Guardar correo en preferencias locales del SO al hacer login exitoso
+                    UserPreferencesManager.guardarUltimoCorreo(email)
+
                     _authState.update {
                         AuthState.Success(
                             uid = uid,
@@ -79,16 +81,12 @@ class AuthViewModel(
         _authState.update { AuthState.Idle }
     }
 
-    // ==========================================
-    // LÓGICA DE PRIMER INGRESO (CAMBIO DE CONTRASEÑA)
-    // ==========================================
     fun actualizarContrasenaPrimeraVez(uid: String, contrasena: String) {
         viewModelScope.launch {
             _activationState.update { it.copy(isLoading = true, error = null) }
 
             authRepository.cambiarContrasenaPrimeraVez(uid, contrasena)
                 .onSuccess {
-                    // Actualizamos en Firestore para que no vuelva a pedir el cambio en futuros logins 🟢
                     userRepository.actualizarPerfilUsuario(uid, mapOf("requiereCambioContrasena" to false))
                     _activationState.update { it.copy(isLoading = false, isSuccess = true) }
                 }

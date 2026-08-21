@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import com.google.firebase.FirebaseApp
 import dev.josearroyo.fitlog.ui.util.BorradorLocalManager
 import dev.josearroyo.fitlog.ui.util.ReproductorAudio
+import dev.josearroyo.fitlog.ui.util.UserPreferencesManager
 import dev.josearroyo.fitlog.ui.util.inicializarNotificador
 
 class MainActivity : ComponentActivity() {
@@ -28,7 +29,7 @@ class MainActivity : ComponentActivity() {
 
         // Inicializamos el contexto en Android antes de renderizar la UI
         BorradorLocalManager.initialize(this)
-
+        UserPreferencesManager.initialize(this)
         setContent {
             App()
         }

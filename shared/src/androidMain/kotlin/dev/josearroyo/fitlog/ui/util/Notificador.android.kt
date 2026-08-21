@@ -7,6 +7,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -17,15 +19,23 @@ private var appContext: Context? = null
 fun inicializarNotificador(context: Context) {
     appContext = context.applicationContext
 
-    // 🟢 Crear canal de notificaciones para Android 8.0+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val audioAttributes = AudioAttributes.Builder()
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .build()
+
+        // 🟢 CANAL V2: Forzamos a Android a recrear el canal con soporte de Banner/Heads-Up
         val channel = NotificationChannel(
-            "descanso_timer_channel",
+            "descanso_timer_channel_v2",
             "Temporizador de Descanso",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "Notificaciones de fin de descanso en FitLog"
             enableVibration(true)
+            vibrationPattern = longArrayOf(0, 500, 250, 500)
+            setSound(soundUri, audioAttributes)
         }
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
@@ -72,33 +82,20 @@ actual fun programarNotificacionTimer(segundos: Int) {
     val triggerAtMillis = System.currentTimeMillis() + (segundos * 1000L)
 
     try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // 🟢 Validar si Android permite alarmas exactas en este dispositivo
-            if (alarmManager.canScheduleExactAlarms()) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-            } else {
-                // 🛡️ Plan B: Usar alarma tolerante si no hay permiso exacto concedido
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-            }
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
         } else {
             alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
         }
     } catch (e: SecurityException) {
-        // 🛑 Capturar cualquier excepción imprevista de permisos para evitar el cierre de la app
         e.printStackTrace()
-        try {
-            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-        } catch (ignored: Exception) {
-        }
+        alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
     }
 }
 
 actual fun cancelarNotificacionTimer() {
     val context = appContext ?: return
 
-    // Cancelar alarma pendiente
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     val intent = Intent(context, TimerReceiver::class.java)
     val pendingIntent = PendingIntent.getBroadcast(
@@ -113,7 +110,6 @@ actual fun cancelarNotificacionTimer() {
         pendingIntent.cancel()
     }
 
-    // Limpiar banner activo
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     notificationManager.cancel(1001)
 }

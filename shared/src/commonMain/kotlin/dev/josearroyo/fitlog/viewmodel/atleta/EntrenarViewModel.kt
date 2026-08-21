@@ -54,6 +54,9 @@ class EntrenarViewModel : ViewModel() {
     private var currentAtletaId: String = ""
     private var timerJob: Job? = null
 
+    // 🟢 MARCA DE TIEMPO REAL PARA SINCRONIZACIÓN CON PANTALLA BLOQUEADA
+    private var targetEndTimeMs: Long = 0L
+
     fun cargarRutina(authUid: String, rutinaId: String) {
         currentAtletaId = authUid
         viewModelScope.launch {
@@ -84,7 +87,6 @@ class EntrenarViewModel : ViewModel() {
     ) {
         val borradorLocal = BorradorLocalManager.obtenerBorradorLocal()
 
-        // 1. Prioridad: Borrador local no finalizado para esta rutina
         if (borradorLocal != null &&
             borradorLocal.rutinaAsignadaId == rutina.id &&
             borradorLocal.estado == EstadoSesion.EN_PROGRESO
@@ -94,7 +96,6 @@ class EntrenarViewModel : ViewModel() {
 
             val historialPrevio = cargarHistorialPrevio(atletaId, diaCorrespondiente)
 
-            // 🟢 Sincronizar el borrador con los cambios hechos en la rutina (ej. ejercicios nuevos)
             val sesionSincronizada = sincronizarBorradorConRutina(borradorLocal, diaCorrespondiente, historialPrevio)
             BorradorLocalManager.guardarBorradorLocal(sesionSincronizada)
 
@@ -108,7 +109,6 @@ class EntrenarViewModel : ViewModel() {
             return
         }
 
-        // 2. Determinar qué día le corresponde por rotación
         val diaToca = rutina.diasEntrenamiento.minByOrNull { it.ultimaVezEjecutada ?: 0L }
             ?: rutina.diasEntrenamiento.first()
 
@@ -151,13 +151,11 @@ class EntrenarViewModel : ViewModel() {
         val ahoraMs = getCurrentTimeMillis()
         val historialPrevio = cargarHistorialPrevio(atletaId, dia)
 
-        // 1. Borrador local
         if (borradorLocal != null &&
             borradorLocal.rutinaAsignadaId == rutina.id &&
             borradorLocal.diaEntrenamientoId == dia.idDia &&
             borradorLocal.estado == EstadoSesion.EN_PROGRESO
         ) {
-            // 🟢 Sincronizar el borrador local con la rutina específica
             val sesionSincronizada = sincronizarBorradorConRutina(borradorLocal, dia, historialPrevio)
             BorradorLocalManager.guardarBorradorLocal(sesionSincronizada)
 
@@ -171,10 +169,8 @@ class EntrenarViewModel : ViewModel() {
             return
         }
 
-        // 2. Buscar última sesión en Firestore
         val ultimaSesion = atletaProgresoRepository.obtenerUltimaSesion(atletaId, rutina.id, dia.idDia)
 
-        // 3. Confirmación de edición si fue realizada hoy
         if (ultimaSesion != null &&
             ultimaSesion.estado == EstadoSesion.COMPLETADA &&
             esMismoDiaLocal(ahoraMs, ultimaSesion.fechaEjecucion)
@@ -188,7 +184,6 @@ class EntrenarViewModel : ViewModel() {
                 historialPrevioEjercicios = historialPrevio
             ) }
         } else {
-            // 4. Nueva plantilla con pesoTarget alimentado del historial previo
             generarCuadernoParaElDia(rutina, dia, historialPrevio)
         }
     }
@@ -226,7 +221,7 @@ class EntrenarViewModel : ViewModel() {
                     pesoKg = 0.0,
                     repeticionesLogradas = 0,
                     pesoTarget = pesoReferencia,
-                    repsMinTarget = prescrita.minReps, // 👈 Se guardan min y max
+                    repsMinTarget = prescrita.minReps,
                     repsMaxTarget = prescrita.maxReps
                 )
             }
@@ -400,12 +395,15 @@ class EntrenarViewModel : ViewModel() {
         _state.update { it.copy(error = null) }
     }
 
-    // ⏱️ CRONÓMETRO DE DESCANSO
+    // ⏱️ CRONÓMETRO DE DESCANSO (Sincronización basada en reloj real)
     fun iniciarCronometro(segundos: Int) {
         if (segundos <= 0) return
         ReproductorAudio.detenerSonido()
         cancelarNotificacionTimer()
         programarNotificacionTimer(segundos)
+
+        val ahoraMs = getCurrentTimeMillis()
+        targetEndTimeMs = ahoraMs + (segundos * 1000L)
 
         timerJob?.cancel()
         _state.update {
@@ -419,23 +417,34 @@ class EntrenarViewModel : ViewModel() {
         }
 
         timerJob = viewModelScope.launch {
-            while (_state.value.tiempoRestanteSegundos > 0) {
-                delay(1000L)
+            while (_state.value.cronometroActivo) {
+                delay(200L) // Polling rápido para respuesta instantánea al reanudar la app
                 if (!_state.value.cronometroEnPausa) {
-                    _state.update { currentState ->
-                        val nuevoTiempo = currentState.tiempoRestanteSegundos - 1
+                    val ahora = getCurrentTimeMillis()
+                    val diferenciaMs = targetEndTimeMs - ahora
+                    val segundosRestantesCalculados = maxOf(0, (diferenciaMs / 1000L).toInt())
 
-                        if (nuevoTiempo == 0) {
+                    if (segundosRestantesCalculados == 0) {
+                        if (!_state.value.estaSonandoAlarma) {
                             ReproductorAudio.reproducirSonidoFinTiempo()
                             vibrarDispositivo()
-                            cancelarNotificacionTimer()
                         }
-
-                        currentState.copy(
-                            tiempoRestanteSegundos = nuevoTiempo,
-                            cronometroActivo = true,
-                            estaSonandoAlarma = (nuevoTiempo == 0)
-                        )
+                        _state.update {
+                            it.copy(
+                                tiempoRestanteSegundos = 0,
+                                cronometroActivo = true,
+                                estaSonandoAlarma = true
+                            )
+                        }
+                        break // Finaliza el bucle una vez llegada la meta
+                    } else {
+                        _state.update {
+                            it.copy(
+                                tiempoRestanteSegundos = segundosRestantesCalculados,
+                                cronometroActivo = true,
+                                estaSonandoAlarma = false
+                            )
+                        }
                     }
                 }
             }
@@ -447,8 +456,12 @@ class EntrenarViewModel : ViewModel() {
 
         if (estaEnPausa) {
             cancelarNotificacionTimer()
-        } else if (_state.value.tiempoRestanteSegundos > 0) {
-            programarNotificacionTimer(_state.value.tiempoRestanteSegundos)
+        } else {
+            val restantes = _state.value.tiempoRestanteSegundos
+            if (restantes > 0) {
+                targetEndTimeMs = getCurrentTimeMillis() + (restantes * 1000L)
+                programarNotificacionTimer(restantes)
+            }
         }
 
         _state.update { it.copy(cronometroEnPausa = estaEnPausa) }
@@ -457,7 +470,9 @@ class EntrenarViewModel : ViewModel() {
     fun ajustarTiempoCronometro(segundosAdicionales: Int) {
         val nuevoTiempo = maxOf(0, _state.value.tiempoRestanteSegundos + segundosAdicionales)
         if (nuevoTiempo > 0) {
+            val totalAnterior = _state.value.tiempoTotalSegundos
             iniciarCronometro(nuevoTiempo)
+            _state.update { it.copy(tiempoTotalSegundos = maxOf(totalAnterior + segundosAdicionales, nuevoTiempo)) }
         } else {
             detenerCronometro()
         }
@@ -468,6 +483,7 @@ class EntrenarViewModel : ViewModel() {
         cancelarNotificacionTimer()
         timerJob?.cancel()
         timerJob = null
+        targetEndTimeMs = 0L
         _state.update {
             it.copy(
                 tiempoRestanteSegundos = 0,
@@ -521,7 +537,7 @@ class EntrenarViewModel : ViewModel() {
                         pesoKg = 0.0,
                         repeticionesLogradas = 0,
                         pesoTarget = pesoReferencia,
-                        repsMinTarget = prescrita.minReps, // 👈 Se guardan min y max
+                        repsMinTarget = prescrita.minReps,
                         repsMaxTarget = prescrita.maxReps
                     )
                 }

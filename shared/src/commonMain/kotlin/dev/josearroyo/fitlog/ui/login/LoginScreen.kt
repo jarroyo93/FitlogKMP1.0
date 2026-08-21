@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -43,9 +44,9 @@ fun LoginScreen(
     onLoginSuccess: (uid: String, rol: RolUsuario, requiereCambioContrasena: Boolean) -> Unit
 ) {
     val authState by authViewModel.authState.collectAsState()
-    val focusManager = LocalFocusManager.current // 🟢 Administrador de foco
+    val focusManager = LocalFocusManager.current
 
-    var email by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf(authViewModel.obtenerUltimoCorreo()) }
     var password by remember { mutableStateOf("") }
 
     val isLoginEnable = email.isNotBlank() && password.isNotBlank() && authState !is AuthState.Loading
@@ -63,7 +64,7 @@ fun LoginScreen(
             .fillMaxSize()
             .background(color = FondoOscuro)
             .pointerInput(Unit) {
-                detectTapGestures(onTap = { focusManager.clearFocus() }) // 🟢 Cierra el teclado al tocar el fondo
+                detectTapGestures(onTap = { focusManager.clearFocus() })
             }
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
@@ -96,7 +97,7 @@ fun LoginScreen(
             BotonLogin(
                 isLoginEnable = isLoginEnable,
                 onLoginClicked = {
-                    focusManager.clearFocus() // 🟢 Cierra teclado al presionar el botón
+                    focusManager.clearFocus()
                     authViewModel.login(email.trim(), password)
                 }
             )
@@ -156,8 +157,8 @@ fun EmailField(
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
         keyboardOptions = KeyboardOptions(
-            autoCorrectEnabled = false,
-            keyboardType = KeyboardType.Email,
+            autoCorrect = false, // 🟢 Nombre correcto del parámetro
+            keyboardType = KeyboardType.Email, // 🟢 Activa teclado y sugerencias de correo en iOS/Android
             imeAction = ImeAction.Next
         ),
         colors = TextFieldDefaults.colors(
@@ -176,7 +177,7 @@ fun EmailField(
 fun Password(
     password: String,
     onTextChange: (String) -> Unit,
-    onDone: () -> Unit // 🟢 Recibe el callback de acción Hecho/Done
+    onDone: () -> Unit
 ) {
     var passwordVisibility by remember { mutableStateOf(false) }
 
@@ -188,11 +189,11 @@ fun Password(
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
         keyboardOptions = KeyboardOptions(
-            keyboardType = KeyboardType.Password,
+            keyboardType = KeyboardType.Password, // 🟢 Dispara el llavero de contraseñas de iOS/Android
             imeAction = ImeAction.Done
         ),
         keyboardActions = KeyboardActions(
-            onDone = { onDone() } // 🟢 Ejecuta el login desde la tecla Hecho/Done del teclado
+            onDone = { onDone() }
         ),
         colors = TextFieldDefaults.colors(
             focusedTextColor = NaranjaAcento,
@@ -216,7 +217,6 @@ fun Password(
         visualTransformation = if (passwordVisibility) VisualTransformation.None else PasswordVisualTransformation(),
     )
 }
-
 @Composable
 fun ImagenLogo() {
     Image(
