@@ -24,8 +24,10 @@ import dev.josearroyo.fitlog.data.model.ElementoRutina
 import dev.josearroyo.fitlog.ui.dashboard.EditorSeriesPrescritas
 import dev.josearroyo.fitlog.viewmodel.entrenador.AddPlantillaViewModel
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -123,6 +125,7 @@ fun AddPlantillaScreen(
         }
     }
 
+    // Reemplazar la sección del ModalBottomSheet en AddPlantillaScreen.kt
     if (showBottomSheet) {
         var searchQuery by rememberSaveable { mutableStateOf("") }
         val ejerciciosFiltrados = state.bibliotecaDisponible.filter { it.nombre.contains(searchQuery, ignoreCase = true) }
@@ -133,18 +136,41 @@ fun AddPlantillaScreen(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     label = { Text("Buscar ejercicio...", color = TextoSecundario) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = NaranjaAcento) },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoOscuro, unfocusedContainerColor = FondoOscuro)
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = NaranjaAcento,
+                        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+                        focusedContainerColor = FondoOscuro,
+                        unfocusedContainerColor = FondoOscuro
+                    )
                 )
                 Spacer(Modifier.height(16.dp))
 
-                LazyColumn {
-                    items(ejerciciosFiltrados, key = { it.nombre }) { ejercicio ->
-                        ListItem(
-                            headlineContent = { Text(ejercicio.nombre, color = Color.White, fontWeight = FontWeight.Medium) },
-                            modifier = Modifier.clickable { viewModel.agregarEjercicioAlCarrito(ejercicio); showBottomSheet = false },
-                            colors = ListItemDefaults.colors(containerColor = FondoTarjeta)
-                        )
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.heightIn(max = 320.dp)
+                ) {
+                    itemsIndexed(ejerciciosFiltrados, key = { index, item -> "${item.id}_$index" }) { _, ejercicio ->
+                        Surface(
+                            onClick = {
+                                focusManager.clearFocus()
+                                viewModel.agregarEjercicioAlCarrito(ejercicio)
+                                showBottomSheet = false
+                            },
+                            color = FondoTarjeta,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(modifier = Modifier.padding(16.dp)) {
+                                Text(ejercicio.nombre, color = Color.White, fontWeight = FontWeight.Medium)
+                            }
+                        }
                     }
                 }
             }

@@ -138,7 +138,22 @@ class EditRutinaAsignadaViewModel : ViewModel() {
         _state.update { state ->
             val actual = state.rutina ?: return@update state
             val dias = actual.diasEntrenamiento.sortedBy { it.ordenSecuencia }.toMutableList()
+            if (diaIndex !in dias.indices) return@update state
+
             val dia = dias[diaIndex]
+
+            val yaExiste = dia.ejercicios.any { ej ->
+                (ej.ejercicioGlobalId.isNotBlank() && ej.ejercicioGlobalId == ejercicioGlobal.id) ||
+                        ej.nombre.trim().equals(ejercicioGlobal.nombre.trim(), ignoreCase = true)
+            }
+
+            if (yaExiste) {
+                // Devuelve el estado con el mensaje de error para notificar a la UI
+                return@update state.copy(
+                    error = "El ejercicio '${ejercicioGlobal.nombre}' ya está incluido en este día."
+                )
+            }
+
             val nuevoEjercicio = EjercicioAsignado(
                 idInterno = Uuid.random().toString(),
                 ejercicioGlobalId = ejercicioGlobal.id,
@@ -147,8 +162,10 @@ class EditRutinaAsignadaViewModel : ViewModel() {
                 descansoSegundos = 60,
                 ordenSecuencia = dia.ejercicios.size + 1
             )
+
             dias[diaIndex] = dia.copy(ejercicios = dia.ejercicios + nuevoEjercicio)
-            state.copy(rutina = actual.copy(diasEntrenamiento = dias))
+            // Limpiamos cualquier error previo al agregar exitosamente
+            state.copy(rutina = actual.copy(diasEntrenamiento = dias), error = null)
         }
     }
 
@@ -223,5 +240,9 @@ class EditRutinaAsignadaViewModel : ViewModel() {
             diasActuales.add(nuevoDia)
             state.copy(rutina = actual.copy(diasEntrenamiento = diasActuales))
         }
+    }
+
+    fun clearError() {
+        _state.update { it.copy(error = null) }
     }
 }

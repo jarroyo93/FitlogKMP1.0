@@ -58,6 +58,21 @@ fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> U
     LaunchedEffect(rutinaId) { viewModel.cargarRutinaYBiblioteca(atletaId, rutinaId, currentEntrenadorId) }
     LaunchedEffect(state.isSaved, state.isDeleted) { if (state.isSaved || state.isDeleted) onBack() }
 
+    // 🚀 DIÁLOGO DE ERROR (DUPLICADOS / ADVERTENCIAS)
+    if (state.error != null) {
+        AlertDialog(
+            containerColor = FondoTarjeta,
+            onDismissRequest = { viewModel.clearError() },
+            title = { Text("Atención", fontWeight = FontWeight.Bold, color = Color.White) },
+            text = { Text(state.error!!, color = TextoSecundario) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearError() }) {
+                    Text("Entendido", color = NaranjaAcento, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
     if (showDialogBorrar) {
         AlertDialog(
             containerColor = FondoTarjeta,
@@ -80,30 +95,61 @@ fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> U
         var searchQuery by remember { mutableStateOf("") }
         val ejerciciosFiltrados = state.bibliotecaEjercicios.filter { it.nombre.contains(searchQuery, ignoreCase = true) }
 
-        ModalBottomSheet(onDismissRequest = { showBottomSheetEjercicios = false }, sheetState = sheetState, containerColor = FondoTarjeta) {
+        ModalBottomSheet(
+            onDismissRequest = { showBottomSheetEjercicios = false },
+            sheetState = sheetState,
+            containerColor = FondoTarjeta
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) }
                     .padding(16.dp)
                     .padding(bottom = 32.dp)
             ) {
                 Text("Seleccionar Ejercicio", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
                 Spacer(Modifier.height(16.dp))
+
                 OutlinedTextField(
-                    value = searchQuery, onValueChange = { searchQuery = it },
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
                     label = { Text("Buscar ejercicio...", color = TextoSecundario) },
                     leadingIcon = { Icon(Icons.Default.Search, null, tint = NaranjaAcento) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                    modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoOscuro, unfocusedContainerColor = FondoOscuro)
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = NaranjaAcento,
+                        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+                        focusedContainerColor = FondoOscuro,
+                        unfocusedContainerColor = FondoOscuro
+                    )
                 )
                 Spacer(Modifier.height(16.dp))
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 300.dp)) {
-                    items(ejerciciosFiltrados) { ej ->
-                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = FondoOscuro), onClick = { viewModel.agregarEjercicioDesdeBiblioteca(diaSeleccionadoParaEjercicio, ej); showBottomSheetEjercicios = false }) {
-                            Row(Modifier.padding(16.dp)) { Text(ej.nombre, fontWeight = FontWeight.SemiBold, color = Color.White) }
+
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.heightIn(max = 300.dp)
+                ) {
+                    items(ejerciciosFiltrados, key = { it.id.ifBlank { it.nombre } }) { ej ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = FondoOscuro),
+                            onClick = {
+                                focusManager.clearFocus()
+                                viewModel.agregarEjercicioDesdeBiblioteca(diaSeleccionadoParaEjercicio, ej)
+
+                                // 🚀 SOLO SE CIERRA SI NO HUBO ERROR DE DUPLICADO
+                                if (viewModel.state.value.error == null) {
+                                    showBottomSheetEjercicios = false
+                                }
+                            }
+                        ) {
+                            Row(Modifier.padding(16.dp)) {
+                                Text(ej.nombre, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            }
                         }
                     }
                 }
@@ -359,11 +405,11 @@ fun EditorSeriesPrescritas(
                 .padding(vertical = 8.dp, horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("#", color = NaranjaAcento, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.4f), textAlign = TextAlign.Center, fontSize = 12.sp)
-            Text("TIPO SERIE", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f), fontSize = 12.sp)
-            Text("MIN", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.7f), textAlign = TextAlign.Center, fontSize = 12.sp)
-            Text("MAX", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.7f), textAlign = TextAlign.Center, fontSize = 12.sp)
-            Text("", modifier = Modifier.weight(0.5f))
+            Text("#", color = NaranjaAcento, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.3f), textAlign = TextAlign.Center, fontSize = 12.sp)
+            Text("TIPO SERIE", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.2f), fontSize = 12.sp)
+            Text("MIN", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.0f), textAlign = TextAlign.Center, fontSize = 12.sp)
+            Text("MAX", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.0f), textAlign = TextAlign.Center, fontSize = 12.sp)
+            Text("", modifier = Modifier.weight(0.4f))
         }
 
         seriesPrescritas.forEachIndexed { index, serie ->
@@ -396,11 +442,11 @@ fun EditorSeriesPrescritas(
                         .padding(vertical = 6.dp, horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(modifier = Modifier.weight(0.4f).size(24.dp).background(FondoTarjeta, CircleShape).border(1.dp, NaranjaAcento.copy(alpha = 0.5f), CircleShape), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.weight(0.3f).size(24.dp).background(FondoTarjeta, CircleShape).border(1.dp, NaranjaAcento.copy(alpha = 0.5f), CircleShape), contentAlignment = Alignment.Center) {
                         Text("${index + 1}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
 
-                    Box(modifier = Modifier.weight(1.5f).padding(horizontal = 2.dp)) {
+                    Box(modifier = Modifier.weight(1.2f).padding(horizontal = 2.dp)) {
                         Surface(
                             onClick = {
                                 val todosLosEnums = TipoSerie.entries
@@ -414,12 +460,12 @@ fun EditorSeriesPrescritas(
                             color = colorClave.copy(alpha = 0.15f),
                             border = androidx.compose.foundation.BorderStroke(1.dp, colorClave)
                         ) {
-                            Text(text = etiquetaUi, color = colorClave, fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp), textAlign = TextAlign.Center)
+                            Text(text = etiquetaUi, color = colorClave, fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp), textAlign = TextAlign.Center)
                         }
                     }
 
-                    // Input Min Reps
-                    Box(modifier = Modifier.weight(0.7f).padding(horizontal = 2.dp)) {
+                    // Input Min Reps (Mayor peso asignado)
+                    Box(modifier = Modifier.weight(1.0f).padding(horizontal = 2.dp)) {
                         OutlinedTextField(
                             value = valorMinTexto,
                             onValueChange = { valor ->
@@ -436,14 +482,14 @@ fun EditorSeriesPrescritas(
                             },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
                             singleLine = true,
-                            textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 13.sp),
+                            textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 12.sp),
                             colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta),
                             modifier = Modifier.fillMaxWidth().height(46.dp)
                         )
                     }
 
-                    // Input Max Reps
-                    Box(modifier = Modifier.weight(0.7f).padding(horizontal = 2.dp)) {
+                    // Input Max Reps (Mayor peso asignado)
+                    Box(modifier = Modifier.weight(1.0f).padding(horizontal = 2.dp)) {
                         OutlinedTextField(
                             value = valorMaxTexto,
                             onValueChange = { valor ->
@@ -461,13 +507,13 @@ fun EditorSeriesPrescritas(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                             singleLine = true,
-                            textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 13.sp),
+                            textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 12.sp),
                             colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta),
                             modifier = Modifier.fillMaxWidth().height(46.dp)
                         )
                     }
 
-                    Box(modifier = Modifier.weight(0.5f), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.weight(0.4f), contentAlignment = Alignment.Center) {
                         IconButton(onClick = { val nuevaLista = seriesPrescritas.toMutableList(); nuevaLista.removeAt(index); onSeriesUpdate(nuevaLista) }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Delete, null, tint = Color(0xFFE57373).copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
                         }

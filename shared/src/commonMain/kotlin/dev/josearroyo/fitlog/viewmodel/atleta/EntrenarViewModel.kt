@@ -190,12 +190,21 @@ class EntrenarViewModel : ViewModel() {
 
     fun confirmarEdicionSesionHoy() {
         val sesionHoy = _state.value.sesionGuardadaHoy ?: return
+        val diaActual = _state.value.diaActual ?: return
+        val historialPrevio = _state.value.historialPrevioEjercicios
+
+        val sesionSincronizada = sincronizarBorradorConRutina(
+            borrador = sesionHoy,
+            dia = diaActual,
+            historialPrevio = historialPrevio
+        ).copy(estado = EstadoSesion.EN_PROGRESO)
+
         _state.update { it.copy(
             mostrarDialogoEdicionHoy = false,
-            sesionEnProgreso = sesionHoy.copy(estado = EstadoSesion.EN_PROGRESO),
+            sesionEnProgreso = sesionSincronizada,
             sesionGuardadaHoy = null
         ) }
-        BorradorLocalManager.guardarBorradorLocal(sesionHoy)
+        BorradorLocalManager.guardarBorradorLocal(sesionSincronizada)
     }
 
     fun cancelarEdicionSesionHoy() {
