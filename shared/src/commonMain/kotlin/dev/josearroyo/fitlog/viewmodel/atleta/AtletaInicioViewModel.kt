@@ -40,13 +40,15 @@ class AtletaInicioViewModel : ViewModel() {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             try {
-                val usuario = userRepository.obtenerUsuario(authUid)
+                var usuario = userRepository.obtenerUsuario(authUid)
                 if (usuario == null) {
                     _state.update { it.copy(isLoading = false, error = "Usuario no encontrado en BD.") }
                     return@launch
                 }
                 currentAtletaId = usuario.id
 
+                // 🟢 EVALUACIÓN AUTOMÁTICA Y UNIFICADA DE SUSCRIPCIÓN
+                usuario = userRepository.evaluarYActualizarEstadoSuscripcion(usuario)
 
                 kotlinx.coroutines.supervisorScope {
                     val rutinasDeferred = async { atletaRepository.obtenerRutinasActivas(usuario.id) }
@@ -57,10 +59,11 @@ class AtletaInicioViewModel : ViewModel() {
                     val pesajes = pesajesDeferred.await()
                     val ciclo = cicloDeferred.await()
 
+                    val finalUsuario = usuario
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            usuario = usuario,
+                            usuario = finalUsuario,
                             rutinasSugeridas = rutinas,
                             ultimosPesajes = pesajes,
                             cicloActivo = ciclo

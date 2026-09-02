@@ -5,6 +5,7 @@ import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.firestore
 import dev.gitlive.firebase.firestore.where
 import dev.josearroyo.fitlog.data.model.*
+import dev.josearroyo.fitlog.esMismoDia
 import dev.josearroyo.fitlog.getCurrentTimeMillis
 import kotlin.uuid.Uuid
 
@@ -154,7 +155,6 @@ class UserRepository {
         true
     } catch (e: Exception) { false }
 
-    // 🟢 OPTIMIZADO: Eliminada línea huérfana innecesaria de ordenamiento que no ejecutaba nada.
     suspend fun obtenerPeriodosDeAtleta(atletaId: String): List<PeriodoFacturable> = try {
         val query = usersCollection.document(atletaId)
             .collection("periodos_facturables")
@@ -179,54 +179,101 @@ class UserRepository {
         }
     }
 
+    // 🟢 NUEVO: Obtiene la fecha fin más lejana considerando el plan activo Y todos los diferidos en cola
+    suspend fun obtenerUltimaFechaFinCadena(atletaId: String): Long = try {
+        val userRef = usersCollection.document(atletaId)
+        val userSnap = userRef.get()
+        val vencimientoRaiz = userSnap.get<Long>("vencimientoSuscripcion") ?: 0L
+        val ahora = getCurrentTimeMillis()
+
+        val periodosSnapshot = userRef.collection("periodos_facturables")
+            .where { "estado" inArray listOf(EstadoPeriodo.ACTIVO.name, EstadoPeriodo.DIFERIDO.name) }
+            .get()
+
+        val maxFechaFinDiferidos = periodosSnapshot.documents
+            .mapNotNull { it.get<Long>("fechaFin") }
+            .maxOrNull() ?: 0L
+
+        maxOf(vencimientoRaiz, maxFechaFinDiferidos, ahora)
+    } catch (e: Exception) {
+        getCurrentTimeMillis()
+    }
+
+    // 🟢 NUEVO: Valida si un rango de fechas manual colisiona con periodos activos o diferidos
+    suspend fun existeSolapamientoPeriodo(atletaId: String, fechaInicio: Long, fechaFin: Long): Boolean = try {
+        val periodosSnapshot = usersCollection.document(atletaId)
+            .collection("periodos_facturables")
+            .where { "estado" inArray listOf(EstadoPeriodo.ACTIVO.name, EstadoPeriodo.DIFERIDO.name) }
+            .get()
+
+        periodosSnapshot.documents.any { doc ->
+            val pInicio = doc.get<Long>("fechaInicio") ?: 0L
+            val pFin = doc.get<Long>("fechaFin") ?: 0L
+            maxOf(fechaInicio, pInicio) < minOf(fechaFin, pFin)
+        }
+    } catch (e: Exception) {
+        false
+    }
+
+    // 🟢 CORREGIDO: Evita sobreescribir la raíz del usuario cuando se compra un plan DIFERIDO para un atleta ACTIVO
     suspend fun renovarSuscripcion(
-        atletaId: String, entrenadorId: String, planActivo: String, fechaInicio: Long, fechaFin: Long, estadoPeriodo: EstadoPeriodo
+        atletaId: String,
+        entrenadorId: String,
+        planActivo: String,
+        fechaInicio: Long,
+        fechaFin: Long,
+        estadoPeriodo: EstadoPeriodo
     ): Boolean = try {
         val userRef = usersCollection.document(atletaId)
-
-        // 🟢 MEJORADO: Cambiada generación manual de String por Uuid universal nativo KMP
         val idUnicoCompartido = Uuid.random().toString()
-
         val periodoRef = userRef.collection("periodos_facturables").document(idUnicoCompartido)
         val registroContableRef = db.collection("historial_facturacion_general").document(idUnicoCompartido)
 
         val userSnapshot = userRef.get()
         val estadoActual = userSnapshot.get<String>("estadoSuscripcion")
-        val vencimientoActual = userSnapshot.get<Long>("vencimientoSuscripcion")
         val ahora = getCurrentTimeMillis()
-
         val nombres = userSnapshot.get<String>("nombres") ?: "Atleta"
         val apellidos = userSnapshot.get<String>("apellidos") ?: ""
-        val nombreAtletaCompleto = "$nombres $apellidos"
-
-        val tienePlanActivoCorriendo = estadoActual == EstadoSuscripcion.ACTIVO.name && vencimientoActual > ahora
+        val nombreAtletaCompleto = "$nombres $apellidos".trim()
 
         val batch = db.batch()
 
-        if (tienePlanActivoCorriendo) {
-            batch.update(userRef, "vencimientoSuscripcion" to fechaFin, "saldoMilisegundosRestantes" to null, "motivoPausa" to null)
-        } else {
+        // 🛡️ REGLA DE ORO: Solo actualizamos la raíz si el nuevo periodo se ACTIVA de una vez o si el usuario no estaba ACTIVO.
+        if (estadoPeriodo == EstadoPeriodo.ACTIVO || estadoActual != EstadoSuscripcion.ACTIVO.name) {
             batch.update(
                 userRef,
                 "planActivo" to planActivo,
-                "fechaInicioSuscripcion" to fechaInicio,
                 "vencimientoSuscripcion" to fechaFin,
-                "estadoSuscripcion" to EstadoSuscripcion.ACTIVO.name,
+                "fechaInicioSuscripcion" to fechaInicio,
+                "estadoSuscripcion" to if (estadoPeriodo == EstadoPeriodo.ACTIVO) EstadoSuscripcion.ACTIVO.name else EstadoSuscripcion.DIFERIDO.name,
                 "saldoMilisegundosRestantes" to null,
                 "motivoPausa" to null
             )
         }
 
         val periodo = PeriodoFacturable(
-            id = idUnicoCompartido, entrenadorId = entrenadorId, atletaId = atletaId, tipoPlan = planActivo,
-            fechaInicio = fechaInicio, fechaFin = fechaFin, fechaCreacion = ahora, estado = estadoPeriodo, diasRestantesAlCongelar = 0L
+            id = idUnicoCompartido,
+            entrenadorId = entrenadorId,
+            atletaId = atletaId,
+            tipoPlan = planActivo,
+            fechaInicio = fechaInicio,
+            fechaFin = fechaFin,
+            fechaCreacion = ahora,
+            estado = estadoPeriodo,
+            diasRestantesAlCongelar = 0L
         )
         batch.set(periodoRef, periodo)
 
         val reciboContable = mapOf(
-            "id" to idUnicoCompartido, "entrenadorId" to entrenadorId, "atletaId" to atletaId,
-            "atletaNombreSnapshot" to nombreAtletaCompleto.trim(), "tipoPlan" to planActivo,
-            "fechaInicio" to fechaInicio, "fechaFin" to fechaFin, "fechaRegistroTransaccion" to ahora, "estado" to estadoPeriodo.name
+            "id" to idUnicoCompartido,
+            "entrenadorId" to entrenadorId,
+            "atletaId" to atletaId,
+            "atletaNombreSnapshot" to nombreAtletaCompleto,
+            "tipoPlan" to planActivo,
+            "fechaInicio" to fechaInicio,
+            "fechaFin" to fechaFin,
+            "fechaRegistroTransaccion" to ahora,
+            "estado" to estadoPeriodo.name
         )
         batch.set(registroContableRef, reciboContable)
 
@@ -266,6 +313,7 @@ class UserRepository {
         false
     }
 
+    // 🟢 CORREGIDO: Reorganiza y desplaza en cadena (efecto dominó) todos los periodos DIFERIDOS al despausar
     suspend fun reactivarAtleta(atletaId: String, nuevaFechaFin: Long): Boolean = try {
         val ahora = getCurrentTimeMillis()
         val userRef = usersCollection.document(atletaId)
@@ -290,6 +338,28 @@ class UserRepository {
         }
 
         batch.commit()
+
+        // ⚡ EFECTO DOMINÓ: Re-encadenar periodos diferidos para evitar solapamientos tras la pausa
+        val periodosDiferidos = userRef.collection("periodos_facturables")
+            .where("estado", equalTo = EstadoPeriodo.DIFERIDO.name)
+            .get().documents
+            .map { doc -> doc.data<PeriodoFacturable>().copy(id = doc.id) }
+            .sortedBy { it.fechaInicio }
+
+        if (periodosDiferidos.isNotEmpty()) {
+            val batchDiferidos = db.batch()
+            var proximoInicio = nuevaFechaFin + 1000L
+
+            for (p in periodosDiferidos) {
+                val duracion = (p.fechaFin ?: 0L) - p.fechaInicio
+                val nuevoFin = proximoInicio + duracion
+                val refP = userRef.collection("periodos_facturables").document(p.id)
+                batchDiferidos.update(refP, "fechaInicio" to proximoInicio, "fechaFin" to nuevoFin)
+                proximoInicio = nuevoFin + 1000L
+            }
+            batchDiferidos.commit()
+        }
+
         true
     } catch (e: Exception) {
         println("🔥 Error en reactivarAtleta: ${e.message}")
@@ -303,10 +373,10 @@ class UserRepository {
 
         val snapshotPeriodo = periodoAtletaRef.get()
         val estadoActual = snapshotPeriodo.get<String>("estado")
-        val fechaCreacionMilis = snapshotPeriodo.get<Long>("fechaCreacion")
-
+        val fechaCreacionMilis = snapshotPeriodo.get<Long>("fechaCreacion") ?: 0L
         val ahora = getCurrentTimeMillis()
-        val esCreadoHoy = (ahora / 86400000) == (fechaCreacionMilis / 86400000)
+
+        val esCreadoHoy = esMismoDia(ahora, fechaCreacionMilis)
 
         if (estadoActual == EstadoPeriodo.ACTIVO.name && !esCreadoHoy) {
             false
@@ -316,25 +386,85 @@ class UserRepository {
             batch.update(registroGlobalRef, "estado" to EstadoPeriodo.CANCELADO.name)
             batch.commit()
 
-            val periodosVivosSnapshot = userRef.collection("periodos_facturables")
-                .where { "estado" inArray listOf(EstadoPeriodo.ACTIVO.name, EstadoPeriodo.DIFERIDO.name) }
-                .get()
-                .documents.map { it.data<PeriodoFacturable>() }
-
-            val nuevoVencimientoRaiz = periodosVivosSnapshot.maxOfOrNull { it.fechaFin ?: 0L } ?: 0L
-
-            if (nuevoVencimientoRaiz > 0L) {
-                userRef.update(
-                    "vencimientoSuscripcion" to nuevoVencimientoRaiz,
-                    "estadoSuscripcion" to if (nuevoVencimientoRaiz > ahora) EstadoSuscripcion.ACTIVO.name else EstadoSuscripcion.VENCIDO.name
-                )
-            } else {
-                userRef.update("vencimientoSuscripcion" to 0L, "planActivo" to "Ninguno", "estadoSuscripcion" to EstadoSuscripcion.VENCIDO.name)
+            val userRaw = obtenerUsuario(atletaId)
+            if (userRaw != null) {
+                evaluarYActualizarEstadoSuscripcion(userRaw)
             }
             true
         }
     } catch (e: Exception) {
         println("🔥 Error en cancelarPeriodo: ${e.message}")
         false
+    }
+
+    suspend fun evaluarYActualizarEstadoSuscripcion(usuario: Usuario): Usuario {
+        val ahora = getCurrentTimeMillis()
+        val userRef = usersCollection.document(usuario.id)
+
+        if (usuario.estadoSuscripcion == EstadoSuscripcion.HUERFANO ||
+            usuario.estadoSuscripcion == EstadoSuscripcion.SUSPENDIDO) {
+            return usuario
+        }
+
+        val vencimiento = usuario.vencimientoSuscripcion ?: 0L
+        val fechaInicio = usuario.fechaInicioSuscripcion ?: 0L
+
+        val estaVencido = usuario.estadoSuscripcion == EstadoSuscripcion.ACTIVO && vencimiento in 1..<ahora
+        val debeActivarDiferido = usuario.estadoSuscripcion == EstadoSuscripcion.DIFERIDO && fechaInicio in 1..ahora
+
+        if (!estaVencido && !debeActivarDiferido && usuario.estadoSuscripcion == EstadoSuscripcion.ACTIVO) {
+            return usuario
+        }
+
+        return try {
+            val periodosSnapshot = userRef.collection("periodos_facturables")
+                .where { "estado" inArray listOf(EstadoPeriodo.ACTIVO.name, EstadoPeriodo.DIFERIDO.name) }
+                .get()
+                .documents.map { it.data<PeriodoFacturable>().copy(id = it.id) }
+
+            periodosSnapshot.filter { it.estado == EstadoPeriodo.ACTIVO && (it.fechaFin ?: 0L) < ahora }.forEach { p ->
+                userRef.collection("periodos_facturables").document(p.id).update("estado" to EstadoPeriodo.COMPLETADO.name)
+            }
+
+            val proximoDiferido = periodosSnapshot
+                .filter { it.estado == EstadoPeriodo.DIFERIDO && it.fechaInicio <= ahora }
+                .minByOrNull { it.fechaInicio }
+
+            if (proximoDiferido != null) {
+                userRef.collection("periodos_facturables").document(proximoDiferido.id)
+                    .update("estado" to EstadoPeriodo.ACTIVO.name)
+
+                val updates = mapOf(
+                    "estadoSuscripcion" to EstadoSuscripcion.ACTIVO.name,
+                    "planActivo" to proximoDiferido.tipoPlan,
+                    "fechaInicioSuscripcion" to proximoDiferido.fechaInicio,
+                    "vencimientoSuscripcion" to (proximoDiferido.fechaFin ?: 0L)
+                )
+                userRef.update(updates)
+                usuario.copy(
+                    estadoSuscripcion = EstadoSuscripcion.ACTIVO,
+                    planActivo = proximoDiferido.tipoPlan,
+                    fechaInicioSuscripcion = proximoDiferido.fechaInicio,
+                    vencimientoSuscripcion = proximoDiferido.fechaFin
+                )
+            } else if (estaVencido) {
+                val updates = mapOf(
+                    "estadoSuscripcion" to EstadoSuscripcion.VENCIDO.name,
+                    "planActivo" to "Ninguno",
+                    "vencimientoSuscripcion" to 0L
+                )
+                userRef.update(updates)
+                usuario.copy(
+                    estadoSuscripcion = EstadoSuscripcion.VENCIDO,
+                    planActivo = "Ninguno",
+                    vencimientoSuscripcion = 0L
+                )
+            } else {
+                usuario
+            }
+        } catch (e: Exception) {
+            println("🔥 Error en evaluarYActualizarEstadoSuscripcion: ${e.message}")
+            usuario
+        }
     }
 }

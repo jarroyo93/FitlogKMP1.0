@@ -3,12 +3,14 @@ package dev.josearroyo.fitlog.ui.dashboard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -18,7 +20,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,12 +37,6 @@ import dev.josearroyo.fitlog.formatearFechaHistorial
 import dev.josearroyo.fitlog.getCurrentTimeMillis
 import dev.josearroyo.fitlog.viewmodel.FacturacionViewModel
 import dev.josearroyo.fitlog.viewmodel.FiltroFacturacion
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.input.ImeAction
-
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -53,8 +52,8 @@ fun FacturacionScreen(
     viewModel: FacturacionViewModel = viewModel { FacturacionViewModel() }
 ) {
     val state by viewModel.state.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() } // 🟢 1. Estado para el Snackbar
 
-    // 🟢 CORREGIDO: rememberSaveable para evitar cierre de diálogos al rotar/recomponer
     var atletaSeleccionadoParaRenovar by rememberSaveable { mutableStateOf<Usuario?>(null) }
     var atletaSeleccionadoParaPausar by rememberSaveable { mutableStateOf<Usuario?>(null) }
 
@@ -62,7 +61,19 @@ fun FacturacionScreen(
         viewModel.cargarAtletas(entrenadorId)
     }
 
+    // 🟢 2. Escuchar errores del ViewModel y mostrarlos en pantalla
+    LaunchedEffect(state.error) {
+        state.error?.let { mensaje ->
+            snackbarHostState.showSnackbar(
+                message = mensaje,
+                duration = SnackbarDuration.Short
+            )
+            viewModel.limpiarError()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }, // 🟢 3. Conexión del SnackbarHost
         topBar = {
             TopAppBar(
                 title = { Text("Facturación & Suscripciones", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 20.sp) },
@@ -105,8 +116,10 @@ fun FacturacionScreen(
                     singleLine = true
                 )
 
-                LazyRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // 🟢 CORREGIDO: Uso de .entries en lugar de .values()
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     items(FiltroFacturacion.entries) { filtro ->
                         val esSeleccionado = state.filtroActual == filtro
                         FilterChip(
@@ -133,8 +146,11 @@ fun FacturacionScreen(
                         Text("No se encontraron atletas.", color = TextoSecundario, textAlign = TextAlign.Center)
                     }
                 } else {
-                    LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        // 🟢 CORREGIDO: Key estable para optimizar la lista
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         items(items = state.atletasFiltrados, key = { it.id }) { atleta ->
                             AtletaFacturacionItem(
                                 atleta = atleta,
@@ -181,6 +197,7 @@ fun FacturacionScreen(
 fun EstadisticasRapidas(atletas: List<Usuario>) {
     val total = atletas.size
     val activos = atletas.count { it.estadoSuscripcion == EstadoSuscripcion.ACTIVO }
+    val diferidos = atletas.count { it.estadoSuscripcion == EstadoSuscripcion.DIFERIDO }
     val vencidos = atletas.count { it.estadoSuscripcion == EstadoSuscripcion.VENCIDO }
     val pausados = atletas.count { it.estadoSuscripcion == EstadoSuscripcion.SUSPENDIDO }
 
@@ -204,6 +221,10 @@ fun EstadisticasRapidas(atletas: List<Usuario>) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Activos", color = TextoSecundario, fontSize = 11.sp)
                 Text("$activos", color = Color(0xFF81C784), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Programados", color = TextoSecundario, fontSize = 11.sp)
+                Text("$diferidos", color = Color(0xFF64B5F6), fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Vencidos", color = TextoSecundario, fontSize = 11.sp)
@@ -230,6 +251,7 @@ fun AtletaFacturacionItem(
         EstadoSuscripcion.SUSPENDIDO -> Color(0xFFFFB74D)
         EstadoSuscripcion.VENCIDO -> Color(0xFFE57373)
         EstadoSuscripcion.HUERFANO -> TextoSecundario
+        EstadoSuscripcion.DIFERIDO -> Color(0xFF64B5F6)
     }
 
     Card(
@@ -341,6 +363,18 @@ fun AtletaFacturacionItem(
                                 Text("Renovar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
+                        EstadoSuscripcion.DIFERIDO -> {
+                            Button(
+                                onClick = onRenew,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF64B5F6), contentColor = FondoOscuro),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Agregar Plan", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                         EstadoSuscripcion.SUSPENDIDO -> {
                             Button(
                                 onClick = onResume,
@@ -373,9 +407,8 @@ fun AtletaFacturacionItem(
 }
 
 // ============================================================
-// MODAL DE CONFIGURACIÓN DE RENOVACIÓN DE PLAN (REFACTORIZADO)
+// MODAL DE CONFIGURACIÓN DE RENOVACIÓN DE PLAN
 // ============================================================
-// 1. Definimos la lista fuera del Composable para no recrearla en cada frame
 private val Offsets = listOf(
     0 to "Hoy",
     1 to "Mañana",
@@ -415,7 +448,6 @@ fun DialogoRenovacion(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    // 🟢 Captura toques fuera del campo de texto dentro del modal
                     .pointerInput(Unit) {
                         detectTapGestures(onTap = { focusManager.clearFocus() })
                     },
@@ -478,7 +510,6 @@ fun DialogoRenovacion(
                             if (input.all { it.isDigit() }) diasPersonalizadosInput = input
                         },
                         label = { Text("Duración del plan (Días)", color = TextoSecundario) },
-                        // 🟢 Se añade ImeAction.Done y la acción para ocultar teclado al presionar Aceptar
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Number,
                             imeAction = ImeAction.Done
@@ -610,7 +641,6 @@ fun DialogoPausar(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    // 🟢 Captura toques fuera del campo de texto dentro del modal
                     .pointerInput(Unit) {
                         detectTapGestures(onTap = { focusManager.clearFocus() })
                     },
@@ -632,7 +662,6 @@ fun DialogoPausar(
                     onValueChange = { motivoInput = it },
                     label = { Text("Motivo de la pausa", color = TextoSecundario) },
                     placeholder = { Text("Ej: Lesión médica, vacaciones...", color = TextoSecundario.copy(alpha = 0.5f)) },
-                    // 🟢 Se añade ImeAction.Done y la acción para ocultar teclado al presionar Aceptar
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Text,
                         imeAction = ImeAction.Done

@@ -80,10 +80,16 @@ fun AtletaMainScreen(
     val currentRoute = navBackStackEntry?.destination?.route
     val esPantallaEntrenar = currentRoute?.startsWith("entrenar") == true
 
+    // 🟢 CORRECCIÓN 1: Evaluar y actualizar en Firestore al cargar/recargar
     val recargarEstado = {
         scope.launch {
             isLoading = true
-            usuario = userRepository.obtenerUsuario(uid)
+            val uRaw = userRepository.obtenerUsuario(uid)
+            if (uRaw != null) {
+                usuario = userRepository.evaluarYActualizarEstadoSuscripcion(uRaw)
+            } else {
+                usuario = null
+            }
             isLoading = false
         }
     }
@@ -98,22 +104,12 @@ fun AtletaMainScreen(
         recargarEstado()
     }
 
+    // 🟢 CORRECCIÓN 2: Simplificado para leer el estado ya verificado por el repositorio
     val estadoReal = remember(usuario, isLoading) {
         if (isLoading || usuario == null) {
             EstadoSuscripcion.ACTIVO
         } else {
-            val u = usuario!!
-            val ahora = getCurrentTimeMillis()
-            val vencimiento = u.vencimientoSuscripcion ?: 0L
-            val fechaInicio = u.fechaInicioSuscripcion ?: 0L
-
-            when {
-                u.estadoSuscripcion == EstadoSuscripcion.HUERFANO -> EstadoSuscripcion.HUERFANO
-                u.estadoSuscripcion == EstadoSuscripcion.SUSPENDIDO -> EstadoSuscripcion.SUSPENDIDO
-                u.estadoSuscripcion == EstadoSuscripcion.VENCIDO || (vencimiento in 1..<ahora) -> EstadoSuscripcion.VENCIDO
-                fechaInicio > ahora -> EstadoSuscripcion.VENCIDO
-                else -> EstadoSuscripcion.ACTIVO
-            }
+            usuario!!.estadoSuscripcion
         }
     }
 
@@ -189,6 +185,22 @@ fun AtletaMainScreen(
                         PantallaRestringida(
                             titulo = "Plan Vencido",
                             mensaje = "Tu ciclo ha terminado. Solicita la renovación a tu entrenador.",
+                            textoBotonPrincipal = "Actualizar Estado",
+                            isActionLoading = isActionLoading,
+                            onAccionPrincipal = { recargarEstado() },
+                            onDesvincularClick = { showDesvincularDialog = true },
+                            onLogout = {
+                                scope.launch {
+                                    authRepository.logout()
+                                    onLogout()
+                                }
+                            }
+                        )
+                    }
+                    EstadoSuscripcion.DIFERIDO -> {
+                        PantallaRestringida(
+                            titulo = "Plan Programado",
+                            mensaje = "Tu plan está agendado para iniciar próximamente. Vuelve a consultar cuando llegue la fecha de inicio.",
                             textoBotonPrincipal = "Actualizar Estado",
                             isActionLoading = isActionLoading,
                             onAccionPrincipal = { recargarEstado() },
@@ -487,7 +499,7 @@ fun PantallaHuerfano(
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Email,
                     imeAction = ImeAction.Next
-                ), // 🟢
+                ),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -506,13 +518,13 @@ fun PantallaHuerfano(
                 value = codigoEntrenador,
                 onValueChange = { codigoEntrenador = it; errorVinculacion = false },
                 label = { Text("Código de Vinculación", color = TextoSecundario) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done), // 🟢
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
                     focusManager.clearFocus()
                     if (correoEntrenador.isNotBlank() && codigoEntrenador.isNotBlank()) {
                         onIngresarCodigo(correoEntrenador, codigoEntrenador)
                     }
-                }), // 🟢
+                }),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = errorVinculacion,

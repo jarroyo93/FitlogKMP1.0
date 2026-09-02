@@ -148,13 +148,20 @@ class AddAtletaViewModel(
                     currentState.planSeleccionado.dias
                 }
 
-                val unDiaMilis = 24 * 60 * 60 * 1000L
-                val fechaFinLong = fechaInicioLong + (diasPlan * unDiaMilis)
+                // 🟢 1. Usar la función estandarizada platform/helper para calcular la fecha fin
+                val fechaFinLong = dev.josearroyo.fitlog.calcularFechaFinSuscripcion(fechaInicioLong, diasPlan)
 
                 val estadoPeriodoInicial = if (currentState.iniciarPeriodoEnseguida) {
                     EstadoPeriodo.ACTIVO
                 } else {
                     EstadoPeriodo.DIFERIDO
+                }
+
+                // 🟢 2. CORRECCIÓN DEL BUG: Asignar DIFERIDO en lugar de VENCIDO
+                val estadoSuscripcionInicial = if (currentState.iniciarPeriodoEnseguida) {
+                    EstadoSuscripcion.ACTIVO
+                } else {
+                    EstadoSuscripcion.DIFERIDO
                 }
 
                 val primerPeriodo = PeriodoFacturable(
@@ -169,7 +176,7 @@ class AddAtletaViewModel(
                     entrenadorId = entrenadorId,
                     planActivo = currentState.planSeleccionado.name,
                     fechaInicioSuscripcion = fechaInicioLong,
-                    estadoSuscripcion = if (currentState.iniciarPeriodoEnseguida) EstadoSuscripcion.ACTIVO else EstadoSuscripcion.VENCIDO,
+                    estadoSuscripcion = estadoSuscripcionInicial, // 👈 Corrección aplicada aquí
                     vencimientoSuscripcion = fechaFinLong,
                     requiereCambioContrasena = true,
                     fechaCreacion = ahoraMilis

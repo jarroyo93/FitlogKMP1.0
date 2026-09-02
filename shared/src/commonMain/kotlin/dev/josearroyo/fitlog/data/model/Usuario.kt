@@ -10,7 +10,7 @@ enum class Sexo(val etiqueta: String) {
     OTRO("Otro")
 }
 @Serializable
-enum class EstadoSuscripcion { ACTIVO, SUSPENDIDO, VENCIDO, HUERFANO }
+enum class EstadoSuscripcion { ACTIVO, SUSPENDIDO, VENCIDO, HUERFANO, DIFERIDO }
 
 @Serializable
 enum class RolUsuario { SUPERADMIN, ENTRENADOR, ATLETA }

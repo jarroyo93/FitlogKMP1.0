@@ -243,6 +243,15 @@ fun EntrenadorDashboardScreen(
 @Composable
 fun AtletaCardItem(atleta: Usuario, onClick: () -> Unit) {
     val esCumpleanos = esCumpleanosHoy(atleta.fechaNacimiento)
+
+    // 🟢 Asignación de color y texto dinámico según el estado de la suscripción
+    val (colorEstado, textoEstado) = when (atleta.estadoSuscripcion) {
+        EstadoSuscripcion.ACTIVO -> Color(0xFF81C784) to "ACTIVO"
+        EstadoSuscripcion.DIFERIDO -> Color(0xFF4FC3F7) to "DIFERIDO"
+        EstadoSuscripcion.VENCIDO -> Color(0xFFE57373) to "VENCIDO"
+        else -> Color(0xFFB3AEC6) to atleta.estadoSuscripcion.name
+    }
+
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -265,9 +274,16 @@ fun AtletaCardItem(atleta: Usuario, onClick: () -> Unit) {
                     Text("Plan: ${atleta.planActivo}", color = TextoSecundario, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            val colorEstado = if (atleta.estadoSuscripcion == EstadoSuscripcion.ACTIVO) Color(0xFF81C784) else Color(0xFFE57373)
-            Surface(color = colorEstado.copy(alpha = 0.1f), shape = RoundedCornerShape(6.dp)) {
-                Text(text = atleta.estadoSuscripcion.name, color = colorEstado, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+
+            // 🟢 Insignia visual adaptada al color correspondiente
+            Surface(color = colorEstado.copy(alpha = 0.15f), shape = RoundedCornerShape(6.dp)) {
+                Text(
+                    text = textoEstado,
+                    color = colorEstado,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

@@ -19,6 +19,7 @@ enum class FiltroFacturacion(val etiqueta: String) {
     TODOS("Todos"),
     ACTIVOS("Activos"),
     PROXIMOS_A_VENCER("Próximos (3 días)"),
+    DIFERIDOS("Programados"),
     PAUSADOS("Pausados"),
     VENCIDOS("Vencidos"),
     SIN_PLAN("Sin Plan")
@@ -62,6 +63,10 @@ class FacturacionViewModel : ViewModel() {
         aplicarFiltros()
     }
 
+    fun limpiarError() {
+        _state.update { it.copy(error = null) }
+    }
+
     private fun aplicarFiltros() {
         val query = _state.value.searchQuery.lowercase()
         val filtro = _state.value.filtroActual
@@ -81,6 +86,7 @@ class FacturacionViewModel : ViewModel() {
                     atleta.estadoSuscripcion == EstadoSuscripcion.ACTIVO &&
                             (vencimiento - ahora) in 0..tresDiasEnMillis
                 }
+                FiltroFacturacion.DIFERIDOS -> atleta.estadoSuscripcion == EstadoSuscripcion.DIFERIDO
                 FiltroFacturacion.PAUSADOS -> atleta.estadoSuscripcion == EstadoSuscripcion.SUSPENDIDO && atleta.saldoMilisegundosRestantes != null
                 FiltroFacturacion.VENCIDOS -> atleta.estadoSuscripcion == EstadoSuscripcion.VENCIDO
                 FiltroFacturacion.SIN_PLAN -> atleta.estadoSuscripcion == EstadoSuscripcion.HUERFANO || atleta.planActivo == "Ninguno"
@@ -102,28 +108,46 @@ class FacturacionViewModel : ViewModel() {
         viewModelScope.launch {
             val atleta = _state.value.atletas.find { it.id == atletaId } ?: return@launch
             val ahora = getCurrentTimeMillis()
+            _state.update { it.copy(isLoading = true, error = null) }
 
-            val fechaInicioLong = if (iniciarEnseguida) {
-                val vencimientoBase = atleta.vencimientoSuscripcion ?: 0L
-                if (vencimientoBase > ahora) vencimientoBase + 1000L else ahora
-            } else {
-                fechaInicioSeleccionada
-            }
-
-            val diasDelPlan = if (tipoPlan == TipoPlanSuscripcion.PERSONALIZADO) {
-                diasPersonalizados
-            } else {
-                tipoPlan.dias
-            }
-
-            val fechaFinLong = calcularFechaFinSuscripcion(fechaInicioLong, diasDelPlan)
-
-            val tienePlanActivoCorriendo = atleta.estadoSuscripcion == EstadoSuscripcion.ACTIVO &&
-                    (atleta.vencimientoSuscripcion ?: 0L) > ahora
-            val estadoPeriodoCalculado = if (tienePlanActivoCorriendo) EstadoPeriodo.DIFERIDO else EstadoPeriodo.ACTIVO
-
-            _state.update { it.copy(isLoading = true) }
             try {
+                val diasDelPlan = if (tipoPlan == TipoPlanSuscripcion.PERSONALIZADO) {
+                    diasPersonalizados
+                } else {
+                    tipoPlan.dias
+                }
+
+                val fechaInicioLong: Long
+                if (iniciarEnseguida) {
+                    // 🟢 FIX COLA DE ESPERA: Busca el último plan de la cadena
+                    val ultimaFechaFin = userRepository.obtenerUltimaFechaFinCadena(atletaId)
+                    fechaInicioLong = if (ultimaFechaFin > ahora) ultimaFechaFin + 1000L else ahora
+                } else {
+                    fechaInicioLong = fechaInicioSeleccionada
+                }
+
+                val fechaFinLong = calcularFechaFinSuscripcion(fechaInicioLong, diasDelPlan)
+
+                // 🟢 FIX COLISIÓN DE FECHAS: Rechazar rangos manuales cruzados
+                if (!iniciarEnseguida) {
+                    val hayColision = userRepository.existeSolapamientoPeriodo(atletaId, fechaInicioLong, fechaFinLong)
+                    if (hayColision) {
+                        _state.update {
+                            it.copy(isLoading = false, error = "Las fechas seleccionadas se cruzan con un plan existente del atleta.")
+                        }
+                        return@launch
+                    }
+                }
+
+                val tienePlanActivoCorriendo = atleta.estadoSuscripcion == EstadoSuscripcion.ACTIVO &&
+                        (atleta.vencimientoSuscripcion ?: 0L) > ahora
+
+                val estadoPeriodoCalculado = if (tienePlanActivoCorriendo || fechaInicioLong > ahora) {
+                    EstadoPeriodo.DIFERIDO
+                } else {
+                    EstadoPeriodo.ACTIVO
+                }
+
                 val exito = userRepository.renovarSuscripcion(
                     atletaId = atletaId,
                     entrenadorId = entrenadorId,
@@ -132,6 +156,7 @@ class FacturacionViewModel : ViewModel() {
                     fechaFin = fechaFinLong,
                     estadoPeriodo = estadoPeriodoCalculado
                 )
+
                 if (exito) {
                     cargarAtletas(entrenadorId)
                 } else {
@@ -152,7 +177,6 @@ class FacturacionViewModel : ViewModel() {
 
             val saldoMilis = if (vencimiento > ahora) vencimiento - ahora else 0L
 
-            // 🛡️ Validación de saldo disponible antes de congelar
             if (saldoMilis <= 0L) {
                 _state.update { it.copy(error = "No se puede pausar una suscripción vencida o sin tiempo restante.") }
                 return@launch
@@ -178,7 +202,6 @@ class FacturacionViewModel : ViewModel() {
             val saldoMilis = atleta.saldoMilisegundosRestantes ?: 0L
             val ahora = getCurrentTimeMillis()
 
-            // 🛡️ Validación de saldo acumulado antes de recalcular fecha fin
             if (saldoMilis <= 0L) {
                 _state.update { it.copy(error = "El atleta no tiene saldo acumulado para reactivar.") }
                 return@launch

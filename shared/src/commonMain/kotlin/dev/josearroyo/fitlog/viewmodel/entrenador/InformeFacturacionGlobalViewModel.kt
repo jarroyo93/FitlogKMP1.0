@@ -12,8 +12,10 @@ import kotlinx.coroutines.launch
 data class InformeGlobalState(
     val isLoading: Boolean = true,
     val registros: List<RegistroContable> = emptyList(),
-    val planesActivosContador: Int = 0,
-    val planesCanceladosContador: Int = 0,
+    val planesActivosContador: Int = 0,      // 🟢 En curso actualmente
+    val planesDiferidosContador: Int = 0,    // 🟢 Encolados / Futuros
+    val planesCompletadosContador: Int = 0,  // 🟢 Ya finalizados
+    val planesCanceladosContador: Int = 0,   // 🟢 Anulados
     val error: String? = null
 )
 
@@ -28,13 +30,18 @@ class InformeFacturacionGlobalViewModel : ViewModel() {
             try {
                 val lista = userRepository.obtenerInformeFacturacionEntrenador(entrenadorId)
 
-                val activos = lista.count { it.estado == "ACTIVO" || it.estado == "DIFERIDO" }
+                // Desglose preciso según el estado real de cada PeriodoFacturable
+                val activos = lista.count { it.estado == "ACTIVO" }
+                val diferidos = lista.count { it.estado == "DIFERIDO" }
+                val completados = lista.count { it.estado == "COMPLETADO" }
                 val cancelados = lista.count { it.estado == "CANCELADO" }
 
                 _state.update { it.copy(
                     isLoading = false,
                     registros = lista,
                     planesActivosContador = activos,
+                    planesDiferidosContador = diferidos,
+                    planesCompletadosContador = completados,
                     planesCanceladosContador = cancelados
                 ) }
             } catch (e: Exception) {
