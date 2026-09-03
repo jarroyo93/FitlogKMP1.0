@@ -1,5 +1,7 @@
 package dev.josearroyo.fitlog
 
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
@@ -8,8 +10,6 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
-import android.media.AudioManager
-import android.media.ToneGenerator
 
 class AndroidPlatform : Platform {
     override val name: String = "Android ${Build.VERSION.SDK_INT}"
@@ -20,7 +20,7 @@ actual fun getPlatform(): Platform = AndroidPlatform()
 actual fun getCurrentTimeMillis(): Long = System.currentTimeMillis()
 
 actual fun calcularFechaCierreCiclo(inicioMilis: Long): Long {
-    val calendar = Calendar.getInstance().apply {
+    val calendar = Calendar.getInstance(TimeZone.getDefault()).apply {
         timeInMillis = inicioMilis
         add(Calendar.DAY_OF_YEAR, 7)
         set(Calendar.HOUR_OF_DAY, 23)
@@ -32,9 +32,11 @@ actual fun calcularFechaCierreCiclo(inicioMilis: Long): Long {
 }
 
 actual fun calcularFechaFinSuscripcion(inicioMilis: Long, dias: Int): Long {
-    val calendar = Calendar.getInstance().apply {
+    val calendar = Calendar.getInstance(TimeZone.getDefault()).apply {
         timeInMillis = inicioMilis
-        add(Calendar.DAY_OF_YEAR, dias)
+        // 🟢 Conteo inclusivo: restamos 1 para que el día de inicio cuente como el Día 1
+        val diasAAgregar = (dias - 1).coerceAtLeast(0)
+        add(Calendar.DAY_OF_YEAR, diasAAgregar)
         set(Calendar.HOUR_OF_DAY, 23)
         set(Calendar.MINUTE, 59)
         set(Calendar.SECOND, 59)
@@ -44,8 +46,8 @@ actual fun calcularFechaFinSuscripcion(inicioMilis: Long, dias: Int): Long {
 }
 
 actual fun esMismoDia(timestamp1: Long, timestamp2: Long): Boolean {
-    val cal1 = Calendar.getInstance().apply { timeInMillis = timestamp1 }
-    val cal2 = Calendar.getInstance().apply { timeInMillis = timestamp2 }
+    val cal1 = Calendar.getInstance(TimeZone.getDefault()).apply { timeInMillis = timestamp1 }
+    val cal2 = Calendar.getInstance(TimeZone.getDefault()).apply { timeInMillis = timestamp2 }
     return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
             cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
 }
@@ -60,26 +62,26 @@ actual fun formatearFechaHora(timestamp: Long): String {
     return SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale("es", "ES")).format(date)
 }
 
-// 🟢 CORRECCIÓN: Usar zona horaria UTC para fechas puras provenientes de DatePicker
 actual fun formatearFechaCorto(timestamp: Long): String {
     val date = java.util.Date(timestamp)
     val sdf = SimpleDateFormat("dd/MM/yyyy", Locale("es", "ES")).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
+        timeZone = TimeZone.getDefault()
     }
     return sdf.format(date)
 }
 
-// 🟢 CORRECCIÓN: Evaluar fecha de nacimiento considerando zona horaria UTC
 actual fun esCumpleanosHoy(fechaNacimiento: Long): Boolean {
-    val calHoy = Calendar.getInstance()
-    val calNac = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = fechaNacimiento }
+    val calHoy = Calendar.getInstance(TimeZone.getDefault())
+    val calNac = Calendar.getInstance(TimeZone.getDefault()).apply { timeInMillis = fechaNacimiento }
     return calHoy.get(Calendar.MONTH) == calNac.get(Calendar.MONTH) &&
             calHoy.get(Calendar.DAY_OF_MONTH) == calNac.get(Calendar.DAY_OF_MONTH)
 }
 
 actual fun formatearFechaHistorial(timestamp: Long): String {
     val date = java.util.Date(timestamp)
-    val sdf = SimpleDateFormat("dd 'de' MMMM, yyyy", Locale("es", "ES"))
+    val sdf = SimpleDateFormat("dd 'de' MMMM, yyyy", Locale("es", "ES")).apply {
+        timeZone = TimeZone.getDefault()
+    }
     return sdf.format(date)
 }
 
@@ -91,7 +93,9 @@ actual fun formatearFechaDiario(timestamp: Long): String {
 
 actual fun formatearFechaMesCorto(timestamp: Long): String {
     val date = java.util.Date(timestamp)
-    val sdf = SimpleDateFormat("dd MMM yyyy", Locale("es", "ES"))
+    val sdf = SimpleDateFormat("dd MMM yyyy", Locale("es", "ES")).apply {
+        timeZone = TimeZone.getDefault()
+    }
     return sdf.format(date)
 }
 
@@ -102,8 +106,8 @@ actual fun obtenerLetraDiaSemana(timestamp: Long): String {
 }
 
 actual fun esMesActual(timestamp: Long): Boolean {
-    val calSesion = Calendar.getInstance().apply { timeInMillis = timestamp }
-    val calHoy = Calendar.getInstance()
+    val calSesion = Calendar.getInstance(TimeZone.getDefault()).apply { timeInMillis = timestamp }
+    val calHoy = Calendar.getInstance(TimeZone.getDefault())
     return calSesion.get(Calendar.YEAR) == calHoy.get(Calendar.YEAR) &&
             calSesion.get(Calendar.MONTH) == calHoy.get(Calendar.MONTH)
 }
@@ -111,7 +115,7 @@ actual fun esMesActual(timestamp: Long): Boolean {
 actual fun obtenerUltimos7DiasTimestamps(): List<Long> {
     val list = mutableListOf<Long>()
     for (i in 6 downTo 0) {
-        val cal = Calendar.getInstance().apply {
+        val cal = Calendar.getInstance(TimeZone.getDefault()).apply {
             add(Calendar.DAY_OF_YEAR, -i)
             set(Calendar.HOUR_OF_DAY, 12)
             set(Calendar.MINUTE, 0)
@@ -139,20 +143,18 @@ actual suspend fun crearCuentaEnInstanciaSecundaria(correo: String, contrasena: 
     }
 }
 
-
-actual fun esMismoDiaLocal(timestamp1: Long, timestamp2: Long): Boolean {
-    val cal1 = Calendar.getInstance(TimeZone.getDefault()).apply { timeInMillis = timestamp1 }
-    val cal2 = Calendar.getInstance(TimeZone.getDefault()).apply { timeInMillis = timestamp2 }
-
-    return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
-            cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
-}
+actual fun esMismoDiaLocal(timestamp1: Long, timestamp2: Long): Boolean = esMismoDia(timestamp1, timestamp2)
 
 actual fun reproducirSonidoFinTiempo() {
     try {
         val toneGen = ToneGenerator(AudioManager.STREAM_ALARM, 100)
-        toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 300) // Pitido de 300ms
+        toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 300)
     } catch (e: Exception) {
         e.printStackTrace()
     }
+}
+
+actual fun normalizarFechaDatePicker(utcMillis: Long): Long {
+    val timeZoneOffset = java.util.TimeZone.getDefault().getOffset(utcMillis)
+    return utcMillis - timeZoneOffset
 }

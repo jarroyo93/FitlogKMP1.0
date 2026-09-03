@@ -36,6 +36,8 @@ import dev.josearroyo.fitlog.formatearFechaCorto
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import dev.josearroyo.fitlog.calcularFechaFinSuscripcion
+import dev.josearroyo.fitlog.getCurrentTimeMillis
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -607,51 +609,135 @@ private fun calcularHorasSuenoMatematico(horaDormir: String, horaDespertar: Stri
 
 @Composable
 fun FormularioSuscripcion(state: AddAtletaState, viewModel: AddAtletaViewModel) {
-    Card(colors = CardDefaults.cardColors(containerColor = FondoTarjeta)) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Asignación de Membresía Inicial", style = MaterialTheme.typography.titleMedium, color = NaranjaAcento, fontWeight = FontWeight.Bold)
+    val ahora = remember { getCurrentTimeMillis() }
 
+    // Días a asignar según selección
+    val diasEfectivos = remember(state.planSeleccionado, state.diasPersonalizados) {
+        if (state.planSeleccionado == TipoPlanSuscripcion.PERSONALIZADO) {
+            state.diasPersonalizados.coerceAtLeast(1)
+        } else {
+            state.planSeleccionado.dias
+        }
+    }
+
+    // Fecha de inicio efectiva (hoy si es inmediato, o la seleccionada)
+    val fechaInicioEfectiva = remember(state.iniciarPeriodoEnseguida, state.fechaInicioPlan) {
+        if (state.iniciarPeriodoEnseguida) ahora else state.fechaInicioPlan
+    }
+
+    // Proyección de vencimiento en tiempo real
+    val fechaFinEstimada = remember(fechaInicioEfectiva, diasEfectivos) {
+        calcularFechaFinSuscripcion(fechaInicioEfectiva, diasEfectivos)
+    }
+
+    Card(colors = CardDefaults.cardColors(containerColor = FondoTarjeta)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                text = "Asignación de Membresía Inicial",
+                style = MaterialTheme.typography.titleMedium,
+                color = NaranjaAcento,
+                fontWeight = FontWeight.Bold
+            )
+
+            // 1. Selector de Tipo de Plan
             AtletaDropdown(
                 selectedOption = state.planSeleccionado.etiqueta,
                 onOptionSelected = { etiqueta ->
-                    val plan = TipoPlanSuscripcion.entries.find { it.etiqueta == etiqueta } ?: TipoPlanSuscripcion.MENSUAL
+                    val plan = TipoPlanSuscripcion.entries.find { it.etiqueta == etiqueta }
+                        ?: TipoPlanSuscripcion.MENSUAL
                     viewModel.onEvent(AddAtletaEvent.UpdatePlan(plan))
                 },
                 options = TipoPlanSuscripcion.entries.map { it.etiqueta },
                 label = "Membresía / Suscripción"
             )
 
+            // 2. Duración para plan personalizado
             AnimatedVisibility(visible = state.planSeleccionado == TipoPlanSuscripcion.PERSONALIZADO) {
-                IntField(state.diasPersonalizados, { viewModel.onEvent(AddAtletaEvent.UpdateDiasPersonalizados(it)) }, "Duración en Días")
+                IntField(
+                    value = state.diasPersonalizados,
+                    onValueChange = { cantidad ->
+                        viewModel.onEvent(AddAtletaEvent.UpdateDiasPersonalizados(cantidad))
+                    },
+                    label = "Duración en Días"
+                )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+            // 3. Switch de Activación Inmediata vs. Diferida
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) {
                 Switch(
                     checked = state.iniciarPeriodoEnseguida,
                     onCheckedChange = { viewModel.onEvent(AddAtletaEvent.UpdateIniciarPeriodo(it)) },
-                    colors = SwitchDefaults.colors(checkedThumbColor = NaranjaAcento, checkedTrackColor = NaranjaAcento.copy(alpha = 0.4f))
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = NaranjaAcento,
+                        checkedTrackColor = NaranjaAcento.copy(alpha = 0.4f)
+                    )
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text("Activar Periodo de Inmediato", color = TextoPrincipal, fontSize = 14.sp)
                     Text(
-                        if (state.iniciarPeriodoEnseguida) "Comienza a facturar hoy mismo" else "Quedará diferido para activación futura",
+                        text = if (state.iniciarPeriodoEnseguida) "Comienza hoy mismo (${formatearFechaCorto(ahora)})"
+                        else "Quedará programado para activación futura",
                         color = TextoSecundario,
                         fontSize = 12.sp
                     )
                 }
             }
 
+            // 4. Selector de Fecha si es Diferido
             AnimatedVisibility(visible = !state.iniciarPeriodoEnseguida) {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Establecer Fecha de Activación Diferida", color = TextoPrincipal, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Establecer Fecha de Activación Diferida",
+                        color = TextoPrincipal,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                     AtletaDatePickerFieldKmp(
                         value = state.fechaInicioPlan,
                         onDateSelected = { viewModel.onEvent(AddAtletaEvent.UpdateFechaInicioPlan(it)) },
-                        label = "Fecha de Inicio del Periodo"
+                        label = "Fecha de Inicio del Periodo",
+                        permitirFechasPasadas = false
+                    )
+                }
+            }
+
+            // 5. Resumen de Vigencia Estimada
+            Surface(
+                color = FondoOscuro.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Fecha de Vencimiento Estimada:", fontSize = 11.sp, color = TextoSecundario)
+                        Text(
+                            text = formatearFechaCorto(fechaFinEstimada),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextoPrincipal
+                        )
+                    }
+                    Text(
+                        text = "$diasEfectivos días",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        color = NaranjaAcento
                     )
                 }
             }
@@ -853,9 +939,10 @@ fun AtletaDatePickerFieldKmp(
     value: Long,
     onDateSelected: (Long) -> Unit,
     label: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    permitirFechasPasadas: Boolean = true
 ) {
-    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
     Box(modifier = modifier) {
         OutlinedTextField(
@@ -865,7 +952,7 @@ fun AtletaDatePickerFieldKmp(
             label = { Text(label, color = TextoSecundario, fontSize = 13.sp) },
             trailingIcon = {
                 Icon(
-                    imageVector = Icons.Default.DateRange,
+                    imageVector = androidx.compose.material.icons.Icons.Default.DateRange,
                     contentDescription = "Seleccionar fecha",
                     tint = NaranjaAcento
                 )
@@ -873,7 +960,7 @@ fun AtletaDatePickerFieldKmp(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+                focusedBorderColor = NaranjaAcento,
                 unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
                 focusedContainerColor = FondoOscuro,
                 unfocusedContainerColor = FondoOscuro,
@@ -891,7 +978,8 @@ fun AtletaDatePickerFieldKmp(
     if (showDatePicker) {
         KmpDatePickerDialog(
             onDismiss = { showDatePicker = false },
-            onDateSelected = onDateSelected
+            onDateSelected = onDateSelected,
+            permitirFechasPasadas = permitirFechasPasadas
         )
     }
 }
@@ -937,23 +1025,65 @@ fun AtletaTimePickerFieldKmp(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KmpDatePickerDialog(
     onDismiss: () -> Unit,
-    onDateSelected: (Long) -> Unit
+    onDateSelected: (Long) -> Unit,
+    permitirFechasPasadas: Boolean = true
 ) {
-    val datePickerState = rememberDatePickerState()
+    val ahora = getCurrentTimeMillis()
+
+    val selectableDates = remember(permitirFechasPasadas) {
+        object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                return if (permitirFechasPasadas) {
+                    true
+                } else {
+                    utcTimeMillis >= (ahora - 86_400_000L)
+                }
+            }
+        }
+    }
+
+    val datePickerState = rememberDatePickerState(
+        selectableDates = selectableDates
+    )
+
+    // 🟢 Paleta oscura completa alineada con AsignarPlanDialog
+    val datePickerCustomColors = DatePickerDefaults.colors(
+        containerColor = FondoTarjeta,
+        titleContentColor = TextoPrincipal,
+        headlineContentColor = NaranjaAcento,
+        weekdayContentColor = TextoSecundario,
+        subheadContentColor = TextoSecundario,
+        yearContentColor = TextoPrincipal,
+        currentYearContentColor = NaranjaAcento,
+        selectedYearContentColor = FondoOscuro,
+        selectedYearContainerColor = NaranjaAcento,
+        dayContentColor = TextoPrincipal,
+        disabledDayContentColor = TextoSecundario.copy(alpha = 0.3f),
+        selectedDayContentColor = FondoOscuro,
+        selectedDayContainerColor = NaranjaAcento,
+        todayContentColor = NaranjaAcento,
+        todayDateBorderColor = NaranjaAcento,
+        navigationContentColor = TextoPrincipal,
+        dividerColor = FondoOscuro
+    )
+
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = {
-                datePickerState.selectedDateMillis?.let { utcMillis ->
-                    val mediodiaUtcMillis = utcMillis + (12 * 60 * 60 * 1000L)
-                    onDateSelected(mediodiaUtcMillis)
-                }
-                onDismiss()
-            }) {
-                Text("Confirmar", color = NaranjaAcento)
+            TextButton(
+                onClick = {
+                    datePickerState.selectedDateMillis?.let { utcMillis ->
+                        onDateSelected(dev.josearroyo.fitlog.normalizarFechaDatePicker(utcMillis))
+                    }
+                    onDismiss()
+                },
+                enabled = datePickerState.selectedDateMillis != null
+            ) {
+                Text("Confirmar", color = NaranjaAcento, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -965,13 +1095,7 @@ fun KmpDatePickerDialog(
     ) {
         DatePicker(
             state = datePickerState,
-            colors = DatePickerDefaults.colors(
-                titleContentColor = TextoPrincipal,
-                headlineContentColor = TextoPrincipal,
-                selectedDayContainerColor = NaranjaAcento,
-                selectedDayContentColor = Color.White,
-                todayContentColor = NaranjaAcento
-            )
+            colors = datePickerCustomColors
         )
     }
 }

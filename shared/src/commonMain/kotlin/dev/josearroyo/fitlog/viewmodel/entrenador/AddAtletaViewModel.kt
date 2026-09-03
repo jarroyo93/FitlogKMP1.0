@@ -9,6 +9,7 @@ import dev.josearroyo.fitlog.data.model.PeriodoFacturable
 import dev.josearroyo.fitlog.data.model.TipoPlanSuscripcion
 import dev.josearroyo.fitlog.data.model.Usuario
 import dev.josearroyo.fitlog.data.model.ValoracionFisica
+import dev.josearroyo.fitlog.esMismoDia
 import dev.josearroyo.fitlog.repository.AtletaRepository
 import dev.josearroyo.fitlog.repository.AuthRepository
 import dev.josearroyo.fitlog.repository.UserRepository
@@ -148,17 +149,21 @@ class AddAtletaViewModel(
                     currentState.planSeleccionado.dias
                 }
 
-                // 🟢 1. Usar la función estandarizada platform/helper para calcular la fecha fin
                 val fechaFinLong = dev.josearroyo.fitlog.calcularFechaFinSuscripcion(fechaInicioLong, diasPlan)
 
-                val estadoPeriodoInicial = if (currentState.iniciarPeriodoEnseguida) {
+                // 🟢 CORRECCIÓN DE ESTADO INICIAL:
+                // Si 'iniciarPeriodoEnseguida' es true O si la fecha seleccionada es hoy o pasada,
+                // el atleta arranca como ACTIVO inmediatamente sin pasar por DIFERIDO.
+                val esHoyOPasado = fechaInicioLong <= ahoraMilis || esMismoDia(fechaInicioLong, ahoraMilis)
+                val esActivoDesdeInicio = currentState.iniciarPeriodoEnseguida || esHoyOPasado
+
+                val estadoPeriodoInicial = if (esActivoDesdeInicio) {
                     EstadoPeriodo.ACTIVO
                 } else {
                     EstadoPeriodo.DIFERIDO
                 }
 
-                // 🟢 2. CORRECCIÓN DEL BUG: Asignar DIFERIDO en lugar de VENCIDO
-                val estadoSuscripcionInicial = if (currentState.iniciarPeriodoEnseguida) {
+                val estadoSuscripcionInicial = if (esActivoDesdeInicio) {
                     EstadoSuscripcion.ACTIVO
                 } else {
                     EstadoSuscripcion.DIFERIDO
@@ -176,7 +181,7 @@ class AddAtletaViewModel(
                     entrenadorId = entrenadorId,
                     planActivo = currentState.planSeleccionado.name,
                     fechaInicioSuscripcion = fechaInicioLong,
-                    estadoSuscripcion = estadoSuscripcionInicial, // 👈 Corrección aplicada aquí
+                    estadoSuscripcion = estadoSuscripcionInicial,
                     vencimientoSuscripcion = fechaFinLong,
                     requiereCambioContrasena = true,
                     fechaCreacion = ahoraMilis

@@ -8,6 +8,7 @@ import dev.josearroyo.fitlog.data.model.Usuario
 import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
 import dev.josearroyo.fitlog.data.model.TipoPlanSuscripcion
 import dev.josearroyo.fitlog.data.model.EstadoPeriodo
+import dev.josearroyo.fitlog.esMismoDia
 import dev.josearroyo.fitlog.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -108,41 +109,62 @@ class FacturacionViewModel : ViewModel() {
         viewModelScope.launch {
             val atleta = _state.value.atletas.find { it.id == atletaId } ?: return@launch
             val ahora = getCurrentTimeMillis()
+
+            // 🛡️ REGLA 1: No permitir renovar si la membresía está pausada/congelada
+            if (atleta.estadoSuscripcion == EstadoSuscripcion.SUSPENDIDO) {
+                _state.update {
+                    it.copy(error = "El atleta está en pausa. Debe reactivar su membresía antes de asignar un nuevo plan.")
+                }
+                return@launch
+            }
+
+            // 🛡️ REGLA 2: Validar cantidad de días mínima
+            val diasDelPlan = if (tipoPlan == TipoPlanSuscripcion.PERSONALIZADO) {
+                diasPersonalizados
+            } else {
+                tipoPlan.dias
+            }
+
+            if (diasDelPlan <= 0) {
+                _state.update { it.copy(error = "La duración del plan debe ser de al menos 1 día.") }
+                return@launch
+            }
+
             _state.update { it.copy(isLoading = true, error = null) }
 
             try {
-                val diasDelPlan = if (tipoPlan == TipoPlanSuscripcion.PERSONALIZADO) {
-                    diasPersonalizados
-                } else {
-                    tipoPlan.dias
-                }
+                val ultimaFechaFinCadena = userRepository.obtenerUltimaFechaFinCadena(atletaId)
 
-                val fechaInicioLong: Long
-                if (iniciarEnseguida) {
-                    // 🟢 FIX COLA DE ESPERA: Busca el último plan de la cadena
-                    val ultimaFechaFin = userRepository.obtenerUltimaFechaFinCadena(atletaId)
-                    fechaInicioLong = if (ultimaFechaFin > ahora) ultimaFechaFin + 1000L else ahora
+                // 🟢 REGLA 3: Evaluar si realmente tiene un plan activo corriendo en el futuro
+                val tienePlanActivoCorriendo = atleta.estadoSuscripcion == EstadoSuscripcion.ACTIVO &&
+                        (atleta.vencimientoSuscripcion ?: 0L) > (ahora + 60_000L)
+
+                // 🟢 REGLA 4: Determinar fecha de inicio real (+1 ms para iniciar a las 00:00:00.000 del día siguiente)
+                val fechaInicioLong = if (iniciarEnseguida && tienePlanActivoCorriendo) {
+                    ultimaFechaFinCadena + 1L
+                } else if (iniciarEnseguida) {
+                    ahora
                 } else {
-                    fechaInicioLong = fechaInicioSeleccionada
+                    fechaInicioSeleccionada
                 }
 
                 val fechaFinLong = calcularFechaFinSuscripcion(fechaInicioLong, diasDelPlan)
 
-                // 🟢 FIX COLISIÓN DE FECHAS: Rechazar rangos manuales cruzados
-                if (!iniciarEnseguida) {
-                    val hayColision = userRepository.existeSolapamientoPeriodo(atletaId, fechaInicioLong, fechaFinLong)
-                    if (hayColision) {
-                        _state.update {
-                            it.copy(isLoading = false, error = "Las fechas seleccionadas se cruzan con un plan existente del atleta.")
-                        }
-                        return@launch
+                // 🛡️ REGLA 5: Verificar solapamiento antes de persistir
+                if (userRepository.existeSolapamientoPeriodo(atletaId, fechaInicioLong, fechaFinLong)) {
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            error = "La fecha seleccionada genera un conflicto o solapamiento con un plan existente."
+                        )
                     }
+                    return@launch
                 }
 
-                val tienePlanActivoCorriendo = atleta.estadoSuscripcion == EstadoSuscripcion.ACTIVO &&
-                        (atleta.vencimientoSuscripcion ?: 0L) > ahora
-
-                val estadoPeriodoCalculado = if (tienePlanActivoCorriendo || fechaInicioLong > ahora) {
+                // 🟢 REGLA 6: Clasificar el estado del nuevo período
+                // Un plan es ACTIVO solo si el atleta no tiene plan corriendo Y la fecha es hoy o pasada.
+                val esHoyOPasado = fechaInicioLong <= ahora || esMismoDia(fechaInicioLong, ahora)
+                val estadoPeriodoCalculado = if (tienePlanActivoCorriendo || !esHoyOPasado) {
                     EstadoPeriodo.DIFERIDO
                 } else {
                     EstadoPeriodo.ACTIVO
@@ -160,11 +182,14 @@ class FacturacionViewModel : ViewModel() {
                 if (exito) {
                     cargarAtletas(entrenadorId)
                 } else {
-                    _state.update { it.copy(isLoading = false, error = "No se pudo renovar la suscripción en el servidor.") }
+                    _state.update {
+                        it.copy(isLoading = false, error = "No se pudo renovar la suscripción. Intente nuevamente.")
+                    }
                 }
             } catch (e: Exception) {
-                println("🔥 [FacturacionViewModel] Error en renovación: ${e.message}")
-                _state.update { it.copy(isLoading = false, error = e.message ?: "Ocurrió un error inesperado al renovar") }
+                _state.update {
+                    it.copy(isLoading = false, error = e.message ?: "Error inesperado al renovar la membresía.")
+                }
             }
         }
     }

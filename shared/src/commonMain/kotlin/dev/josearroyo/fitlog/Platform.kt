@@ -25,3 +25,4 @@ expect fun obtenerUltimos7DiasTimestamps(): List<Long>
 expect fun esMismoDiaLocal(timestamp1: Long, timestamp2: Long): Boolean
 expect suspend fun crearCuentaEnInstanciaSecundaria(correo: String, contrasena: String): String
 expect fun reproducirSonidoFinTiempo()
+expect fun normalizarFechaDatePicker(utcMillis: Long): Long

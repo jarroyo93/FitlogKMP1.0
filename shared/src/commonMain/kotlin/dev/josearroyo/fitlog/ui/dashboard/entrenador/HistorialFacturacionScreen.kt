@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,18 +18,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.EstadoPeriodo
 import dev.josearroyo.fitlog.data.model.PeriodoFacturable
+import dev.josearroyo.fitlog.esMismoDia
+import dev.josearroyo.fitlog.formatearFechaCorto
+import dev.josearroyo.fitlog.getCurrentTimeMillis
+import dev.josearroyo.fitlog.ui.dashboard.entrenador.util.AsignarPlanDialog
 import dev.josearroyo.fitlog.viewmodel.entrenador.HistorialFacturacionViewModel
-import dev.josearroyo.fitlog.formatearFechaCorto // 🟢 Tu función del platform
-import dev.josearroyo.fitlog.esMismoDia            // 🟢 Tu función del platform
-import dev.josearroyo.fitlog.getCurrentTimeMillis   // 🟢 Tu función del platform
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
 private val FondoTarjeta = Color(0xFF2F254E)
 private val TextoSecundario = Color(0xFFB3AEC6)
+private val RojoEliminar = Color(0xFFEF5350)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,27 +44,91 @@ fun HistorialFacturacionScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var mostrarDialogAnadir by remember { mutableStateOf(false) }
+    var periodoAEliminar by remember { mutableStateOf<PeriodoFacturable?>(null) }
 
     LaunchedEffect(atletaId) {
         viewModel.cargarHistorial(atletaId)
     }
 
+    // 🟢 DIÁLOGO UNIFICADO DE ASIGNACIÓN DE PLAN
     if (mostrarDialogAnadir) {
-        RenovarSuscripcionDialog(
-            atletaNombre = state.atleta?.nombres ?: "Atleta",
+        val ultimaFechaCadena = remember(state.periodos) {
+            state.periodos
+                .filter { it.estado == EstadoPeriodo.ACTIVO || it.estado == EstadoPeriodo.DIFERIDO }
+                .mapNotNull { it.fechaFin }
+                .maxOrNull() ?: getCurrentTimeMillis()
+        }
+
+        AsignarPlanDialog(
+            atletaNombre = state.atleta?.let { "${it.nombres} ${it.apellidos}".trim() } ?: "Atleta",
+            ultimaFechaFinCadena = ultimaFechaCadena,
             onDismiss = { mostrarDialogAnadir = false },
-            onRenovar = { plan, dias, iniciarInmediato, fechaSeleccionadaMilis ->
-                // 🟢 CORRECCIÓN: Quitamos el '.time' porque 'fechaSeleccionadaMilis' ya es un Long puro
+            onConfirm = { planEnum, dias, iniciarInmediato, fechaSeleccionadaMilis ->
                 viewModel.anadirPlanAHistorial(
                     atletaId = atletaId,
                     entrenadorId = entrenadorId,
-                    plan = plan,
+                    plan = planEnum,
                     diasPersonalizados = dias,
                     iniciarEnseguida = iniciarInmediato,
                     fechaInicioSeleccionadaMilis = fechaSeleccionadaMilis
                 )
                 mostrarDialogAnadir = false
             }
+        )
+    }
+
+    // 🟢 DIÁLOGO DE CONFIRMACIÓN PARA ELIMINAR / CANCELAR PLAN
+    periodoAEliminar?.let { periodo ->
+        AlertDialog(
+            onDismissRequest = { periodoAEliminar = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = RojoEliminar,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Cancelar Periodo de Plan",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "¿Estás seguro de que deseas eliminar este plan ${periodo.tipoPlan.lowercase()} (Ref: ${periodo.id.take(8).uppercase()})? Esta acción cambiará el estado del periodo a cancelado.",
+                    color = TextoSecundario,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.eliminarPeriodoDiferido(atletaId, periodo.id)
+                        periodoAEliminar = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = RojoEliminar,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Sí, Eliminar", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { periodoAEliminar = null },
+                    colors = ButtonDefaults.textButtonColors(contentColor = TextoSecundario)
+                ) {
+                    Text("Cancelar")
+                }
+            },
+            containerColor = FondoTarjeta,
+            shape = RoundedCornerShape(16.dp)
         )
     }
 
@@ -122,6 +190,21 @@ fun HistorialFacturacionScreen(
                     modifier = Modifier.align(Alignment.Center)
                 )
             } else {
+                // 🟢 ORDEN DE PRIORIDAD PERSONALIZADO POR ESTADO
+                val periodosOrdenados = remember(state.periodos) {
+                    state.periodos.sortedWith(
+                        compareBy<PeriodoFacturable> { periodo ->
+                            when (periodo.estado) {
+                                EstadoPeriodo.ACTIVO -> 1      // 1° En Ejecución
+                                EstadoPeriodo.DIFERIDO -> 2    // 2° En Cola (Futuro)
+                                EstadoPeriodo.CONGELADO -> 3   // 3° Pausado
+                                EstadoPeriodo.COMPLETADO -> 4  // 4° Histórico
+                                EstadoPeriodo.CANCELADO -> 5   // 5° Cancelado
+                            }
+                        }.thenByDescending { it.fechaInicio }   // Criterio secundario: más reciente primero
+                    )
+                }
+
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
@@ -129,11 +212,11 @@ fun HistorialFacturacionScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
                 ) {
-                    items(state.periodos.sortedByDescending { it.fechaInicio }) { periodo ->
+                    items(items = periodosOrdenados, key = { it.id }) { periodo ->
                         ItemPeriodoHistorial(
                             periodo = periodo,
                             onEliminarClick = {
-                                viewModel.eliminarPeriodoDiferido(atletaId, periodo.id)
+                                periodoAEliminar = periodo
                             }
                         )
                     }
@@ -156,7 +239,6 @@ fun ItemPeriodoHistorial(
         EstadoPeriodo.COMPLETADO -> TextoSecundario to "Histórico"
     }
 
-    // 🟢 CORRECCIÓN KMP: Validamos si fue creado hoy usando tu función 'esMismoDia' del platform
     val esCreadoHoy = esMismoDia(getCurrentTimeMillis(), periodo.fechaCreacion)
 
     Card(
@@ -206,7 +288,7 @@ fun ItemPeriodoHistorial(
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Eliminar periodo",
-                                tint = Color(0xFFEF5350)
+                                tint = RojoEliminar
                             )
                         }
                     }
@@ -221,12 +303,10 @@ fun ItemPeriodoHistorial(
             ) {
                 Column {
                     Text("Fecha de Inicio", style = MaterialTheme.typography.labelSmall, color = TextoSecundario)
-                    // 🟢 Usamos tu formateador corto multiplataforma
                     Text(formatearFechaCorto(periodo.fechaInicio), style = MaterialTheme.typography.bodyMedium, color = Color.White)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text("Fecha de Cierre", style = MaterialTheme.typography.labelSmall, color = TextoSecundario)
-                    // 🟢 Usamos tu formateador corto multiplataforma
                     Text(
                         text = periodo.fechaFin?.let { formatearFechaCorto(it) } ?: "No registra",
                         style = MaterialTheme.typography.bodyMedium,

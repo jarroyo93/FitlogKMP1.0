@@ -1,17 +1,18 @@
 package dev.josearroyo.fitlog.ui.dashboard
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -20,8 +21,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -29,12 +30,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
-import dev.josearroyo.fitlog.data.model.TipoPlanSuscripcion
 import dev.josearroyo.fitlog.data.model.Usuario
 import dev.josearroyo.fitlog.formatearFechaHistorial
 import dev.josearroyo.fitlog.getCurrentTimeMillis
+import dev.josearroyo.fitlog.ui.dashboard.entrenador.util.AsignarPlanDialog
 import dev.josearroyo.fitlog.viewmodel.FacturacionViewModel
 import dev.josearroyo.fitlog.viewmodel.FiltroFacturacion
 
@@ -52,7 +54,7 @@ fun FacturacionScreen(
     viewModel: FacturacionViewModel = viewModel { FacturacionViewModel() }
 ) {
     val state by viewModel.state.collectAsState()
-    val snackbarHostState = remember { SnackbarHostState() } // 🟢 1. Estado para el Snackbar
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var atletaSeleccionadoParaRenovar by rememberSaveable { mutableStateOf<Usuario?>(null) }
     var atletaSeleccionadoParaPausar by rememberSaveable { mutableStateOf<Usuario?>(null) }
@@ -61,7 +63,6 @@ fun FacturacionScreen(
         viewModel.cargarAtletas(entrenadorId)
     }
 
-    // 🟢 2. Escuchar errores del ViewModel y mostrarlos en pantalla
     LaunchedEffect(state.error) {
         state.error?.let { mensaje ->
             snackbarHostState.showSnackbar(
@@ -73,7 +74,7 @@ fun FacturacionScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }, // 🟢 3. Conexión del SnackbarHost
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Facturación & Suscripciones", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 20.sp) },
@@ -164,12 +165,32 @@ fun FacturacionScreen(
                 }
             }
 
+            // 🟢 DIÁLOGO UNIFICADO PARA RENOVAR / VENDER PLAN
+            // 🟢 CORRECCIÓN DEFINITIVA: Validar estado antes de pasar la fecha al diálogo
             atletaSeleccionadoParaRenovar?.let { atleta ->
-                DialogoRenovacion(
-                    atletaNombre = "${atleta.nombres} ${atleta.apellidos}",
+                val ahora = getCurrentTimeMillis()
+                val vencimientoActual = remember(atleta) {
+                    val venc = atleta.vencimientoSuscripcion ?: 0L
+                    if ((atleta.estadoSuscripcion == EstadoSuscripcion.ACTIVO || atleta.estadoSuscripcion == EstadoSuscripcion.DIFERIDO) && venc > ahora) {
+                        venc
+                    } else {
+                        ahora // Si está VENCIDO, HUERFANO o con fecha pasada, la fecha base es HOY
+                    }
+                }
+
+                AsignarPlanDialog(
+                    atletaNombre = "${atleta.nombres} ${atleta.apellidos}".trim(),
+                    ultimaFechaFinCadena = vencimientoActual,
                     onDismiss = { atletaSeleccionadoParaRenovar = null },
                     onConfirm = { plan, dias, enseguida, inicioMilis ->
-                        viewModel.renovarAtleta(atleta.id, entrenadorId, plan, dias, enseguida, inicioMilis)
+                        viewModel.renovarAtleta(
+                            atletaId = atleta.id,
+                            entrenadorId = entrenadorId,
+                            tipoPlan = plan,
+                            diasPersonalizados = dias,
+                            iniciarEnseguida = enseguida,
+                            fechaInicioSeleccionada = inicioMilis
+                        )
                         atletaSeleccionadoParaRenovar = null
                     }
                 )
@@ -177,7 +198,7 @@ fun FacturacionScreen(
 
             atletaSeleccionadoParaPausar?.let { atleta ->
                 DialogoPausar(
-                    atletaNombre = "${atleta.nombres} ${atleta.apellidos}",
+                    atletaNombre = "${atleta.nombres} ${atleta.apellidos}".trim(),
                     onDismiss = { atletaSeleccionadoParaPausar = null },
                     onConfirm = { motivo ->
                         viewModel.pausarAtleta(atleta.id, entrenadorId, motivo)
@@ -406,217 +427,7 @@ fun AtletaFacturacionItem(
     }
 }
 
-// ============================================================
-// MODAL DE CONFIGURACIÓN DE RENOVACIÓN DE PLAN
-// ============================================================
-private val Offsets = listOf(
-    0 to "Hoy",
-    1 to "Mañana",
-    2 to "+2 días",
-    7 to "+1 semana",
-    15 to "+15 días",
-    30 to "+1 mes"
-)
-
-@Composable
-fun DialogoRenovacion(
-    atletaNombre: String,
-    onDismiss: () -> Unit,
-    onConfirm: (TipoPlanSuscripcion, Int, Boolean, Long) -> Unit
-) {
-    var planSeleccionado by remember { mutableStateOf(TipoPlanSuscripcion.MENSUAL) }
-    var diasPersonalizadosInput by remember { mutableStateOf("30") }
-    var iniciarEnseguida by remember { mutableStateOf(true) }
-    var diasOffsetSeleccionado by remember { mutableStateOf(0) }
-    val focusManager = LocalFocusManager.current
-
-    val ahora = getCurrentTimeMillis()
-    val fechaInicioCalculada = ahora + (diasOffsetSeleccionado * 86400000L)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = FondoTarjeta,
-        title = {
-            Text(
-                text = "Renovar Plan a:",
-                fontSize = 18.sp,
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = { focusManager.clearFocus() })
-                    },
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    text = atletaNombre,
-                    color = NaranjaAcento,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Text("Selecciona el tipo de plan:", color = TextoSecundario, fontSize = 12.sp)
-
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TipoPlanSuscripcion.entries.forEach { plan ->
-                        val esPlanActual = planSeleccionado == plan
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    if (esPlanActual) NaranjaAcento.copy(alpha = 0.1f) else Color.Transparent,
-                                    RoundedCornerShape(8.dp)
-                                )
-                                .border(
-                                    1.dp,
-                                    if (esPlanActual) NaranjaAcento else FondoOscuro,
-                                    RoundedCornerShape(8.dp)
-                                )
-                                .clickable {
-                                    focusManager.clearFocus()
-                                    planSeleccionado = plan
-                                }
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = esPlanActual,
-                                onClick = {
-                                    focusManager.clearFocus()
-                                    planSeleccionado = plan
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = NaranjaAcento, unselectedColor = TextoSecundario)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = plan.etiqueta,
-                                color = if (esPlanActual) Color.White else TextoSecundario,
-                                fontSize = 14.sp,
-                                fontWeight = if (esPlanActual) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-                    }
-                }
-
-                if (planSeleccionado == TipoPlanSuscripcion.PERSONALIZADO) {
-                    OutlinedTextField(
-                        value = diasPersonalizadosInput,
-                        onValueChange = { input ->
-                            if (input.all { it.isDigit() }) diasPersonalizadosInput = input
-                        },
-                        label = { Text("Duración del plan (Días)", color = TextoSecundario) },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = { focusManager.clearFocus() }
-                        ),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NaranjaAcento,
-                            unfocusedBorderColor = FondoOscuro,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Iniciar inmediatamente", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        Text("Cola inteligente o vigencia inmediata", color = TextoSecundario, fontSize = 11.sp)
-                    }
-                    Switch(
-                        checked = iniciarEnseguida,
-                        onCheckedChange = {
-                            focusManager.clearFocus()
-                            iniciarEnseguida = it
-                        },
-                        colors = SwitchDefaults.colors(checkedThumbColor = NaranjaAcento, checkedTrackColor = NaranjaAcento.copy(alpha = 0.3f))
-                    )
-                }
-
-                if (!iniciarEnseguida) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Configurar fecha diferida de activación:", color = TextoSecundario, fontSize = 12.sp)
-
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(Offsets) { (dias, label) ->
-                                val esOffsetActual = diasOffsetSeleccionado == dias
-                                Box(
-                                    modifier = Modifier
-                                        .background(
-                                            if (esOffsetActual) NaranjaAcento else FondoOscuro,
-                                            RoundedCornerShape(20.dp)
-                                        )
-                                        .clickable {
-                                            focusManager.clearFocus()
-                                            diasOffsetSeleccionado = dias
-                                        }
-                                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                                ) {
-                                    Text(
-                                        text = label,
-                                        color = if (esOffsetActual) FondoOscuro else Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
-                        Text(
-                            text = "Fecha calculada: ${formatearFechaHistorial(fechaInicioCalculada)}",
-                            color = NaranjaAcento,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    focusManager.clearFocus()
-                    val diasPersonalizados = diasPersonalizadosInput.toIntOrNull() ?: 30
-                    onConfirm(planSeleccionado, diasPersonalizados, iniciarEnseguida, fechaInicioCalculada)
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("Confirmar Venta", fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = {
-                    focusManager.clearFocus()
-                    onDismiss()
-                },
-                colors = ButtonDefaults.textButtonColors(contentColor = TextoSecundario)
-            ) {
-                Text("Cancelar")
-            }
-        }
-    )
-}
-
-// ============================================================
-// MODAL DE PAUSA MANUAL DE SUSCRIPCIÓN
-// ============================================================
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DialogoPausar(
     atletaNombre: String,
@@ -625,83 +436,124 @@ fun DialogoPausar(
 ) {
     var motivoInput by rememberSaveable { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val scrollState = rememberScrollState()
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = FondoTarjeta,
-        title = {
-            Text(
-                text = "Pausar Membresía",
-                fontSize = 18.sp,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = { focusManager.clearFocus() })
-                    },
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "¿Deseas pausar temporalmente a $atletaNombre?",
-                    color = Color.White,
-                    fontSize = 14.sp
-                )
-                Text(
-                    text = "El saldo de días vigentes se congelará y podrá ser reactivado posteriormente sin perder su tiempo comprado.",
-                    color = TextoSecundario,
-                    fontSize = 12.sp
-                )
+    val ocultarTeclado = {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+    }
 
-                OutlinedTextField(
-                    value = motivoInput,
-                    onValueChange = { motivoInput = it },
-                    label = { Text("Motivo de la pausa", color = TextoSecundario) },
-                    placeholder = { Text("Ej: Lesión médica, vacaciones...", color = TextoSecundario.copy(alpha = 0.5f)) },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = { focusManager.clearFocus() }
-                    ),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFFFFB74D),
-                        unfocusedBorderColor = FondoOscuro,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-            }
+    BasicAlertDialog(
+        onDismissRequest = {
+            ocultarTeclado()
+            onDismiss()
         },
-        confirmButton = {
-            Button(
-                onClick = {
-                    focusManager.clearFocus()
-                    onConfirm(motivoInput.trim().ifEmpty { "Pausa solicitada por el entrenador" })
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB74D), contentColor = FondoOscuro),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text("Congelar Membresía", fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = {
-                    focusManager.clearFocus()
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    ocultarTeclado()
                     onDismiss()
                 },
-                colors = ButtonDefaults.textButtonColors(contentColor = TextoSecundario)
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        ocultarTeclado()
+                    }
             ) {
-                Text("Cancelar")
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .verticalScroll(scrollState),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "Pausar Membresía",
+                        fontSize = 18.sp,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "¿Deseas pausar temporalmente a $atletaNombre?",
+                        color = Color.White,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = "El saldo de días vigentes se congelará y podrá ser reactivado posteriormente sin perder su tiempo comprado.",
+                        color = TextoSecundario,
+                        fontSize = 12.sp
+                    )
+
+                    OutlinedTextField(
+                        value = motivoInput,
+                        onValueChange = { motivoInput = it },
+                        label = { Text("Motivo de la pausa", color = TextoSecundario) },
+                        placeholder = { Text("Ej: Lesión médica, vacaciones...", color = TextoSecundario.copy(alpha = 0.5f)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { ocultarTeclado() }
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFFB74D),
+                            unfocusedBorderColor = FondoOscuro,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                ocultarTeclado()
+                                onDismiss()
+                            },
+                            colors = ButtonDefaults.textButtonColors(contentColor = TextoSecundario)
+                        ) {
+                            Text("Cancelar")
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                ocultarTeclado()
+                                onConfirm(motivoInput.trim().ifEmpty { "Pausa solicitada por el entrenador" })
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB74D), contentColor = FondoOscuro),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Congelar Membresía", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
-    )
+    }
 }

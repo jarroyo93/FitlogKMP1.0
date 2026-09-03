@@ -12,11 +12,10 @@ import platform.Foundation.NSTimeZone
 import platform.Foundation.dateWithTimeIntervalSince1970
 import platform.Foundation.localeWithLocaleIdentifier
 import platform.Foundation.timeIntervalSince1970
-import platform.Foundation.timeZoneWithName
+import platform.Foundation.defaultTimeZone
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import platform.Foundation.dateWithTimeIntervalSince1970
 import platform.AudioToolbox.AudioServicesPlaySystemSound
 import platform.AudioToolbox.kSystemSoundID_Vibrate
 
@@ -46,25 +45,23 @@ actual fun calcularFechaCierreCiclo(inicioMilis: Long): Long {
 actual fun calcularFechaFinSuscripcion(inicioMilis: Long, dias: Int): Long {
     val calendar = NSCalendar.currentCalendar
     val date = NSDate.dateWithTimeIntervalSince1970(inicioMilis / 1000.0)
+    // 🟢 Conteo inclusivo: restamos 1 para que el día de inicio cuente como el Día 1
+    val diasAAgregar = (dias - 1).coerceAtLeast(0)
     val datePlusDays = calendar.dateByAddingUnit(
         NSCalendarUnitDay,
-        value = dias.toLong(),
+        value = diasAAgregar.toLong(),
         toDate = date,
         options = 0UL
     ) ?: date
     return calendar.dateBySettingHour(23, minute = 59, second = 59, ofDate = datePlusDays, options = 0UL)
-        ?.timeIntervalSince1970?.times(1000)?.toLong() ?: (inicioMilis + (dias * 86400000L))
+        ?.timeIntervalSince1970?.times(1000)?.toLong() ?: (inicioMilis + (diasAAgregar * 86400000L))
 }
 
 actual fun esMismoDia(timestamp1: Long, timestamp2: Long): Boolean {
     val calendar = NSCalendar.currentCalendar
     val date1 = NSDate.dateWithTimeIntervalSince1970(timestamp1 / 1000.0)
     val date2 = NSDate.dateWithTimeIntervalSince1970(timestamp2 / 1000.0)
-
-    val comp1 = calendar.components(NSCalendarUnitYear or NSCalendarUnitMonth or NSCalendarUnitDay, fromDate = date1)
-    val comp2 = calendar.components(NSCalendarUnitYear or NSCalendarUnitMonth or NSCalendarUnitDay, fromDate = date2)
-
-    return comp1.year == comp2.year && comp1.month == comp2.month && comp1.day == comp2.day
+    return calendar.isDate(date1, inSameDayAsDate = date2)
 }
 
 actual fun formatearHora(timestamp: Long): String {
@@ -85,28 +82,23 @@ actual fun formatearFechaHora(timestamp: Long): String {
     return formatter.stringFromDate(date)
 }
 
-// 🟢 CORRECCIÓN: Formatear fechas cortas en UTC para alineación exacta con DatePicker
 actual fun formatearFechaCorto(timestamp: Long): String {
     val date = NSDate.dateWithTimeIntervalSince1970(timestamp / 1000.0)
     val formatter = NSDateFormatter().apply {
         dateFormat = "dd/MM/yyyy"
         locale = NSLocale(localeIdentifier = "es_ES")
-        timeZone = NSTimeZone.timeZoneWithName("UTC")!!
+        timeZone = NSTimeZone.defaultTimeZone
     }
     return formatter.stringFromDate(date)
 }
 
-// 🟢 CORRECCIÓN: Evaluar fecha de cumpleaños en calendario UTC
 actual fun esCumpleanosHoy(fechaNacimiento: Long): Boolean {
     val calendarLocal = NSCalendar.currentCalendar
-    val calendarUtc = NSCalendar.currentCalendar.apply {
-        timeZone = NSTimeZone.timeZoneWithName("UTC")!!
-    }
     val hoy = NSDate()
     val nac = NSDate.dateWithTimeIntervalSince1970(fechaNacimiento / 1000.0)
 
     val compHoy = calendarLocal.components(NSCalendarUnitMonth or NSCalendarUnitDay, fromDate = hoy)
-    val compNac = calendarUtc.components(NSCalendarUnitMonth or NSCalendarUnitDay, fromDate = nac)
+    val compNac = calendarLocal.components(NSCalendarUnitMonth or NSCalendarUnitDay, fromDate = nac)
 
     return compHoy.month == compNac.month && compHoy.day == compNac.day
 }
@@ -116,6 +108,7 @@ actual fun formatearFechaHistorial(timestamp: Long): String {
     val formatter = NSDateFormatter().apply {
         dateFormat = "dd 'de' MMMM, yyyy"
         locale = NSLocale.localeWithLocaleIdentifier("es_ES")
+        timeZone = NSTimeZone.defaultTimeZone
     }
     return formatter.stringFromDate(date)
 }
@@ -133,7 +126,8 @@ actual fun formatearFechaMesCorto(timestamp: Long): String {
     val date = NSDate.dateWithTimeIntervalSince1970(timestamp / 1000.0)
     val formatter = NSDateFormatter().apply {
         dateFormat = "dd MMM yyyy"
-        locale = NSLocale(localeIdentifier = "es_ES")
+        locale = NSLocale.localeWithLocaleIdentifier("es_ES")
+        timeZone = NSTimeZone.defaultTimeZone
     }
     return formatter.stringFromDate(date)
 }
@@ -193,17 +187,15 @@ actual suspend fun crearCuentaEnInstanciaSecundaria(correo: String, contrasena: 
         }
     }
 
-
-
-actual fun esMismoDiaLocal(timestamp1: Long, timestamp2: Long): Boolean {
-    val calendario = NSCalendar.currentCalendar
-    val fecha1 = NSDate.dateWithTimeIntervalSince1970(timestamp1 / 1000.0)
-    val fecha2 = NSDate.dateWithTimeIntervalSince1970(timestamp2 / 1000.0)
-    return calendario.isDate(fecha1, inSameDayAsDate = fecha2)
-}
+actual fun esMismoDiaLocal(timestamp1: Long, timestamp2: Long): Boolean = esMismoDia(timestamp1, timestamp2)
 
 actual fun reproducirSonidoFinTiempo() {
-    // 1052 o 1007 son IDs de sonidos del sistema iOS para alertas/temporizadores
     AudioServicesPlaySystemSound(1052U)
-    AudioServicesPlaySystemSound(kSystemSoundID_Vibrate) // Vibra el dispositivo
+    AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+}
+
+actual fun normalizarFechaDatePicker(utcMillis: Long): Long {
+    val date = NSDate.dateWithTimeIntervalSince1970(utcMillis / 1000.0)
+    val secondsOffset = NSTimeZone.defaultTimeZone.secondsFromGMTForDate(date)
+    return utcMillis - (secondsOffset * 1000L)
 }
