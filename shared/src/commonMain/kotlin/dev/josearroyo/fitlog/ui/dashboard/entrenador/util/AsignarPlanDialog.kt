@@ -2,6 +2,7 @@ package dev.josearroyo.fitlog.ui.dashboard.entrenador.util
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -13,6 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -42,6 +45,8 @@ fun AsignarPlanDialog(
         fechaInicioMilis: Long
     ) -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
+
     var planSeleccionado by remember { mutableStateOf(TipoPlanSuscripcion.MENSUAL) }
     var menuPlanExpandido by remember { mutableStateOf(false) }
     var diasPersonalizadosTexto by remember { mutableStateOf("30") }
@@ -84,7 +89,13 @@ fun AsignarPlanDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
+                .padding(8.dp)
+                // 🟢 Soporte para iOS/Android: Oculta el teclado al presionar en cualquier parte del diálogo
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = {
+                        focusManager.clearFocus()
+                    })
+                },
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = FondoTarjeta)
         ) {
@@ -137,7 +148,10 @@ fun AsignarPlanDialog(
                         Box(
                             modifier = Modifier
                                 .matchParentSize()
-                                .clickable { menuPlanExpandido = true }
+                                .clickable {
+                                    focusManager.clearFocus()
+                                    menuPlanExpandido = true
+                                }
                         )
 
                         DropdownMenu(
@@ -207,7 +221,10 @@ fun AsignarPlanDialog(
                         Box(
                             modifier = Modifier
                                 .matchParentSize()
-                                .clickable { mostrarDatePicker = true }
+                                .clickable {
+                                    focusManager.clearFocus()
+                                    mostrarDatePicker = true
+                                }
                         )
                     }
 
@@ -262,7 +279,10 @@ fun AsignarPlanDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TextButton(
-                        onClick = onDismiss,
+                        onClick = {
+                            focusManager.clearFocus()
+                            onDismiss()
+                        },
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Cancelar", color = TextoSecundario)
@@ -270,6 +290,7 @@ fun AsignarPlanDialog(
 
                     Button(
                         onClick = {
+                            focusManager.clearFocus()
                             val esInmediato = fechaInicioMilis <= (getCurrentTimeMillis() + 60_000L)
                             onConfirm(
                                 planSeleccionado,
