@@ -165,22 +165,23 @@ fun FacturacionScreen(
                 }
             }
 
-            // 🟢 DIÁLOGO UNIFICADO PARA RENOVAR / VENDER PLAN
-            // 🟢 CORRECCIÓN DEFINITIVA: Validar estado antes de pasar la fecha al diálogo
+            // 🟢 DIÁLOGO UNIFICADO PARA RENOVAR / VENDER PLAN CON MAPPING DE PERÍODOS
             atletaSeleccionadoParaRenovar?.let { atleta ->
                 val ahora = getCurrentTimeMillis()
-                val vencimientoActual = remember(atleta) {
+                val periodosExistentes = remember(atleta) {
                     val venc = atleta.vencimientoSuscripcion ?: 0L
-                    if ((atleta.estadoSuscripcion == EstadoSuscripcion.ACTIVO || atleta.estadoSuscripcion == EstadoSuscripcion.DIFERIDO) && venc > ahora) {
-                        venc
+                    val esVigente = (atleta.estadoSuscripcion == EstadoSuscripcion.ACTIVO || atleta.estadoSuscripcion == EstadoSuscripcion.DIFERIDO) && venc > ahora
+                    if (esVigente) {
+                        val inicio = atleta.fechaInicioSuscripcion ?: (venc - (30L * 24 * 60 * 60 * 1000))
+                        listOf(inicio to venc)
                     } else {
-                        ahora // Si está VENCIDO, HUERFANO o con fecha pasada, la fecha base es HOY
+                        emptyList()
                     }
                 }
 
                 AsignarPlanDialog(
                     atletaNombre = "${atleta.nombres} ${atleta.apellidos}".trim(),
-                    ultimaFechaFinCadena = vencimientoActual,
+                    periodosExistentes = periodosExistentes,
                     onDismiss = { atletaSeleccionadoParaRenovar = null },
                     onConfirm = { plan, dias, enseguida, inicioMilis ->
                         viewModel.renovarAtleta(
@@ -209,10 +210,6 @@ fun FacturacionScreen(
         }
     }
 }
-
-// ============================================================
-// COMPOSABLES INTERNOS Y ELEMENTOS DE DISEÑO
-// ============================================================
 
 @Composable
 fun EstadisticasRapidas(atletas: List<Usuario>) {

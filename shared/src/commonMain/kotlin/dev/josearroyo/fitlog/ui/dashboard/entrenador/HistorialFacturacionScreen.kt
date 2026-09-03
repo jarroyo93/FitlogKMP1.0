@@ -50,18 +50,21 @@ fun HistorialFacturacionScreen(
         viewModel.cargarHistorial(atletaId)
     }
 
-    // 🟢 DIÁLOGO UNIFICADO DE ASIGNACIÓN DE PLAN
+    // 🟢 DIÁLOGO UNIFICADO CON LISTA DE PERÍODOS ACTIVOS Y DIFERIDOS DE LA COLA
     if (mostrarDialogAnadir) {
-        val ultimaFechaCadena = remember(state.periodos) {
+        val periodosExistentes = remember(state.periodos) {
             state.periodos
                 .filter { it.estado == EstadoPeriodo.ACTIVO || it.estado == EstadoPeriodo.DIFERIDO }
-                .mapNotNull { it.fechaFin }
-                .maxOrNull() ?: getCurrentTimeMillis()
+                .mapNotNull { periodo ->
+                    periodo.fechaFin?.let { fin ->
+                        periodo.fechaInicio to fin
+                    }
+                }
         }
 
         AsignarPlanDialog(
             atletaNombre = state.atleta?.let { "${it.nombres} ${it.apellidos}".trim() } ?: "Atleta",
-            ultimaFechaFinCadena = ultimaFechaCadena,
+            periodosExistentes = periodosExistentes,
             onDismiss = { mostrarDialogAnadir = false },
             onConfirm = { planEnum, dias, iniciarInmediato, fechaSeleccionadaMilis ->
                 viewModel.anadirPlanAHistorial(
@@ -190,7 +193,6 @@ fun HistorialFacturacionScreen(
                     modifier = Modifier.align(Alignment.Center)
                 )
             } else {
-                // 🟢 ORDEN DE PRIORIDAD PERSONALIZADO POR ESTADO
                 val periodosOrdenados = remember(state.periodos) {
                     state.periodos.sortedWith(
                         compareBy<PeriodoFacturable> { periodo ->
@@ -201,7 +203,7 @@ fun HistorialFacturacionScreen(
                                 EstadoPeriodo.COMPLETADO -> 4  // 4° Histórico
                                 EstadoPeriodo.CANCELADO -> 5   // 5° Cancelado
                             }
-                        }.thenByDescending { it.fechaInicio }   // Criterio secundario: más reciente primero
+                        }.thenByDescending { it.fechaInicio }
                     )
                 }
 

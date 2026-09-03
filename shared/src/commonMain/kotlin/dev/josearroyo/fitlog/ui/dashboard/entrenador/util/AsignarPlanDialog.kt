@@ -2,21 +2,28 @@ package dev.josearroyo.fitlog.ui.dashboard.entrenador.util
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,7 +43,8 @@ private val TextoSecundario = Color(0xFFB3AEC6)
 @Composable
 fun AsignarPlanDialog(
     atletaNombre: String,
-    ultimaFechaFinCadena: Long = getCurrentTimeMillis(),
+    // 🟢 Recibe la lista de pares (fechaInicio, fechaFin) de los planes guardados
+    periodosExistentes: List<Pair<Long, Long>> = emptyList(),
     onDismiss: () -> Unit,
     onConfirm: (
         plan: TipoPlanSuscripcion,
@@ -46,12 +54,26 @@ fun AsignarPlanDialog(
     ) -> Unit
 ) {
     val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusRequester = remember { FocusRequester() }
+
+    fun ocultarTeclado() {
+        try {
+            focusRequester.requestFocus()
+        } catch (_: Exception) {}
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+    }
 
     var planSeleccionado by remember { mutableStateOf(TipoPlanSuscripcion.MENSUAL) }
     var menuPlanExpandido by remember { mutableStateOf(false) }
     var diasPersonalizadosTexto by remember { mutableStateOf("30") }
 
-    // 🟢 CORRECCIÓN: Solo encadena si el vencimiento es superior a hoy con una tolerancia mínima
+    // Obtenemos la última fecha de fin solo para sugerir el inicio por defecto si se desea encadenar al final
+    val ultimaFechaFinCadena = remember(periodosExistentes) {
+        periodosExistentes.maxOfOrNull { it.second } ?: getCurrentTimeMillis()
+    }
+
     val fechaRecomendadaInicio = remember(ultimaFechaFinCadena) {
         val ahora = getCurrentTimeMillis()
         if (ultimaFechaFinCadena > (ahora + 60_000L)) {
@@ -64,7 +86,6 @@ fun AsignarPlanDialog(
     var fechaInicioMilis by remember { mutableStateOf(fechaRecomendadaInicio) }
     var mostrarDatePicker by remember { mutableStateOf(false) }
 
-    // Días a asignar según selección
     val diasEfectivos = remember(planSeleccionado, diasPersonalizadosTexto) {
         if (planSeleccionado == TipoPlanSuscripcion.PERSONALIZADO) {
             diasPersonalizadosTexto.toIntOrNull() ?: 0
@@ -73,7 +94,6 @@ fun AsignarPlanDialog(
         }
     }
 
-    // Fecha final precalculada
     val fechaFinCalculada = remember(fechaInicioMilis, diasEfectivos) {
         if (diasEfectivos > 0) {
             calcularFechaFinSuscripcion(fechaInicioMilis, diasEfectivos)
@@ -82,18 +102,28 @@ fun AsignarPlanDialog(
         }
     }
 
-    // Detección de colisión con planes vigentes/futuros
-    val hayColision = fechaInicioMilis < ultimaFechaFinCadena && ultimaFechaFinCadena > (getCurrentTimeMillis() + 60_000L)
+    // 🟢 CÁLCULO DE COLISIÓN REAL: Verifica traslape directo de rangos [inicio, fin]
+    val hayColision = remember(fechaInicioMilis, fechaFinCalculada, periodosExistentes) {
+        periodosExistentes.any { (inicioExistente, finExistente) ->
+            fechaInicioMilis <= finExistente && fechaFinCalculada >= inicioExistente
+        }
+    }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = {
+            ocultarTeclado()
+            onDismiss()
+        }
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp)
-                // 🟢 Soporte para iOS/Android: Oculta el teclado al presionar en cualquier parte del diálogo
+                .focusRequester(focusRequester)
+                .focusable()
                 .pointerInput(Unit) {
                     detectTapGestures(onTap = {
-                        focusManager.clearFocus()
+                        ocultarTeclado()
                     })
                 },
             shape = RoundedCornerShape(20.dp),
@@ -149,7 +179,7 @@ fun AsignarPlanDialog(
                             modifier = Modifier
                                 .matchParentSize()
                                 .clickable {
-                                    focusManager.clearFocus()
+                                    ocultarTeclado()
                                     menuPlanExpandido = true
                                 }
                         )
@@ -181,7 +211,24 @@ fun AsignarPlanDialog(
                         value = diasPersonalizadosTexto,
                         onValueChange = { if (it.all { char -> char.isDigit() }) diasPersonalizadosTexto = it },
                         label = { Text("Número de días", color = TextoSecundario) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        trailingIcon = {
+                            IconButton(
+                                onClick = { ocultarTeclado() }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Ocultar teclado",
+                                    tint = NaranjaAcento
+                                )
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { ocultarTeclado() }
+                        ),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -222,7 +269,7 @@ fun AsignarPlanDialog(
                             modifier = Modifier
                                 .matchParentSize()
                                 .clickable {
-                                    focusManager.clearFocus()
+                                    ocultarTeclado()
                                     mostrarDatePicker = true
                                 }
                         )
@@ -230,12 +277,12 @@ fun AsignarPlanDialog(
 
                     if (hayColision) {
                         Text(
-                            text = "⚠ Colisión detectada. Se sugiere iniciar después del ${formatearFechaCorto(ultimaFechaFinCadena)}.",
+                            text = "⚠ Colisión detectada con un período existente en esas fechas.",
                             color = Color(0xFFEF5350),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
-                    } else if (ultimaFechaFinCadena > (getCurrentTimeMillis() + 60_000L)) {
+                    } else if (fechaInicioMilis == ultimaFechaFinCadena + 1L) {
                         Text(
                             text = "Se encadenará automáticamente al finalizar el plan actual.",
                             color = NaranjaAcento,
@@ -280,7 +327,7 @@ fun AsignarPlanDialog(
                 ) {
                     TextButton(
                         onClick = {
-                            focusManager.clearFocus()
+                            ocultarTeclado()
                             onDismiss()
                         },
                         modifier = Modifier.weight(1f)
@@ -290,7 +337,7 @@ fun AsignarPlanDialog(
 
                     Button(
                         onClick = {
-                            focusManager.clearFocus()
+                            ocultarTeclado()
                             val esInmediato = fechaInicioMilis <= (getCurrentTimeMillis() + 60_000L)
                             onConfirm(
                                 planSeleccionado,
@@ -314,7 +361,6 @@ fun AsignarPlanDialog(
         }
     }
 
-    // Modal de selección de fecha Material 3 (Estilizado en Modo Oscuro)
     if (mostrarDatePicker) {
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = fechaInicioMilis
@@ -346,7 +392,6 @@ fun AsignarPlanDialog(
                 TextButton(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { dateMillis ->
-                            // 🟢 Convierte las 00:00 UTC del DatePicker a la medianoche local exacta
                             fechaInicioMilis = normalizarFechaDatePicker(dateMillis)
                         }
                         mostrarDatePicker = false
