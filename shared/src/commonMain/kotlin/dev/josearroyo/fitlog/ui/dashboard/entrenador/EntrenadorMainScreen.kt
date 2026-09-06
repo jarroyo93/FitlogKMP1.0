@@ -24,14 +24,16 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
 import dev.josearroyo.fitlog.repository.AuthRepository
 import dev.josearroyo.fitlog.ui.navigation.BottomNavItem
 import dev.josearroyo.fitlog.viewmodel.FacturacionViewModel
 import dev.josearroyo.fitlog.viewmodel.entrenador.PerfilEntrenadorViewModel
 import kotlinx.coroutines.launch
-import androidx.compose.ui.text.style.TextAlign
 import dev.josearroyo.fitlog.ui.dashboard.entrenador.BibliotecaScreen
 import dev.josearroyo.fitlog.ui.dashboard.FacturacionScreen
+import dev.josearroyo.fitlog.ui.dashboard.ProgresoAtletaScreen
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -53,6 +55,20 @@ fun EntrenadorMainScreen(
     onNavigateToInformeGlobalFacturacion: (String) -> Unit
 ) {
     val bottomNavController = rememberNavController()
+
+    // 🟢 VALIDACIÓN DE SEGURIDAD CONTRA FIREBASE AUTH (0 Costo Firestore)
+    LaunchedEffect(uid) {
+        try {
+            val userAuth = Firebase.auth.currentUser
+            userAuth?.reload()
+            if (userAuth == null) {
+                onLogout()
+            }
+        } catch (e: Exception) {
+            Firebase.auth.signOut()
+            onLogout()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -88,13 +104,20 @@ fun EntrenadorMainScreen(
                 composable(BottomNavItem.Atletas.route) {
                     EntrenadorDashboardScreen(
                         entrenadorId = uid,
+                        // 🟢 NAVEGACIÓN DIRECTA A MÉTRICAS / PROGRESO DEL ATLETA
                         onAtletaClick = { atletaId ->
-                            onNavigateToAtletaDetail(atletaId)
+                            bottomNavController.navigate("progreso_atleta/$atletaId")
                         },
                         onAddAtletaClick = {
                             onNavigateToAddAtleta(uid)
                         }
                     )
+                }
+
+                composable(route = "progreso_atleta/{atletaId}") { backStackEntry ->
+                    // 🟢 Forma limpia usando savedStateHandle
+                    val atletaId = backStackEntry.savedStateHandle["atletaId"] ?: ""
+                    ProgresoAtletaScreen(userId = atletaId)
                 }
 
                 composable(BottomNavItem.Biblioteca.route) {
@@ -107,7 +130,6 @@ fun EntrenadorMainScreen(
                     )
                 }
 
-                // 🚀 PESTAÑA 3: Control General de Facturación y Cobros (CORREGIDO PARA KMP)
                 composable(BottomNavItem.Facturacion.route) {
                     val facturacionVM: FacturacionViewModel = viewModel { FacturacionViewModel() }
 

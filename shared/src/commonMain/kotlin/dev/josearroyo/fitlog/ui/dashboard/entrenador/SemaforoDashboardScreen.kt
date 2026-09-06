@@ -1,6 +1,7 @@
 package dev.josearroyo.fitlog.ui.entrenador
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -79,8 +80,9 @@ fun SemaforoDashboardContent(
                     }
                 } else {
                     LazyColumn(
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        // 🟢 MARGEN INFERIOR (100.dp) que evita que el botón (+) o BottomBar tapen la última card
+                        contentPadding = PaddingValues(top = 8.dp, start = 16.dp, end = 16.dp, bottom = 100.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         items(uiState.atletasFiltrados, key = { it.atletaId }) { atleta ->
@@ -221,6 +223,7 @@ fun FiltrosSemaforoRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AtletaSemaforoCard(
     item: AtletaSemaforoItem,
@@ -292,6 +295,39 @@ fun AtletaSemaforoCard(
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFFE57373)
                     )
+                }
+            }
+
+            // 🟢 MOTIVOS DE ALERTA VISIBLES DESDE LA TARJETA EN CHIPS
+            if (item.motivosAlerta.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    item.motivosAlerta.forEach { motivo ->
+                        SuggestionChip(
+                            onClick = { onClick() },
+                            label = { Text(motivo, fontSize = 11.sp, color = Color.White) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = when (item.estado) {
+                                    EstadoSemaforo.ROJO -> Color(0xFFE57373).copy(alpha = 0.2f)
+                                    EstadoSemaforo.AMARILLO -> Color(0xFFFFB74D).copy(alpha = 0.2f)
+                                    else -> Color.Gray.copy(alpha = 0.2f)
+                                }
+                            ),
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = when (item.estado) {
+                                    EstadoSemaforo.ROJO -> Color(0xFFE57373)
+                                    EstadoSemaforo.AMARILLO -> Color(0xFFFFB74D)
+                                    else -> Color.Gray
+                                }
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
                 }
             }
 

@@ -37,9 +37,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.launch
 
-// 🟢 MODELOS Y REPOSITORIOS KMP DEL PROYECTO
 import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
 import dev.josearroyo.fitlog.data.model.Usuario
 import dev.josearroyo.fitlog.repository.AuthRepository
@@ -47,7 +48,6 @@ import dev.josearroyo.fitlog.repository.UserRepository
 import dev.josearroyo.fitlog.ui.navigation.BottomNavItem
 import dev.josearroyo.fitlog.viewmodel.atleta.PerfilAtletaViewModel
 
-// 🟢 IMPORTACIONES DE LAS NUEVAS FUNCIONES PLATAFORMA KMP
 import dev.josearroyo.fitlog.getCurrentTimeMillis
 import dev.josearroyo.fitlog.formatearFechaHistorial
 import dev.josearroyo.fitlog.ui.dashboard.ProgresoAtletaScreen
@@ -80,7 +80,20 @@ fun AtletaMainScreen(
     val currentRoute = navBackStackEntry?.destination?.route
     val esPantallaEntrenar = currentRoute?.startsWith("entrenar") == true
 
-    // 🟢 CORRECCIÓN 1: Evaluar y actualizar en Firestore al cargar/recargar
+    // 🟢 VALIDACIÓN DE SEGURIDAD CONTRA FIREBASE AUTH (0 Costo Firestore)
+    LaunchedEffect(uid) {
+        try {
+            val userAuth = Firebase.auth.currentUser
+            userAuth?.reload()
+            if (userAuth == null) {
+                onLogout()
+            }
+        } catch (e: Exception) {
+            Firebase.auth.signOut()
+            onLogout()
+        }
+    }
+
     val recargarEstado = {
         scope.launch {
             isLoading = true
@@ -104,7 +117,6 @@ fun AtletaMainScreen(
         recargarEstado()
     }
 
-    // 🟢 CORRECCIÓN 2: Simplificado para leer el estado ya verificado por el repositorio
     val estadoReal = remember(usuario, isLoading) {
         if (isLoading || usuario == null) {
             EstadoSuscripcion.ACTIVO
@@ -115,7 +127,6 @@ fun AtletaMainScreen(
 
     Column(modifier = modifier.fillMaxSize().background(FondoOscuro)) {
 
-        // 1. Cabecera Estática Superior
         if (!esPantallaEntrenar && estadoReal == EstadoSuscripcion.ACTIVO) {
             Row(
                 modifier = Modifier
@@ -134,7 +145,6 @@ fun AtletaMainScreen(
             }
         }
 
-        // 2. Contenedor del Cuerpo Central
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -267,7 +277,6 @@ fun AtletaMainScreen(
             }
         }
 
-        // 3. Base Rígida Inferior
         if (!esPantallaEntrenar && estadoReal == EstadoSuscripcion.ACTIVO) {
             Box(
                 modifier = Modifier

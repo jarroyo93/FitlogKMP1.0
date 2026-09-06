@@ -48,7 +48,8 @@ data class AtletaSemaforoItem(
     val sesionesEjecutadas: Int,
     val sesionesEsperadasHoy: Int,
     val rpePromedio: Float?,
-    val mensajeGestion: String? = null
+    val mensajeGestion: String? = null,
+    val motivosAlerta: List<String> = emptyList() // 🟢 NUEVO: Lista de alertas para la Card
 )
 
 /**

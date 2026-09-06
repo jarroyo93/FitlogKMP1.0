@@ -41,6 +41,10 @@ class SemaforoRepository(
         }
 
         if (cicloActivo == null) {
+            val motivosInactivos = mutableListOf<String>()
+            if (suscripcionInactiva) motivosInactivos.add("Suscripción Inactiva")
+            if (sinCiclo) motivosInactivos.add("Sin plan asignado")
+
             return AtletaSemaforoItem(
                 atletaId = atleta.id,
                 nombreCompleto = "${atleta.nombres} ${atleta.apellidos}".trim(),
@@ -50,7 +54,8 @@ class SemaforoRepository(
                 sesionesEjecutadas = 0,
                 sesionesEsperadasHoy = 0,
                 rpePromedio = null,
-                mensajeGestion = mensajeGestion
+                mensajeGestion = mensajeGestion,
+                motivosAlerta = motivosInactivos
             )
         }
 
@@ -92,6 +97,31 @@ class SemaforoRepository(
             fatiga = metricaFatiga
         )
 
+        // 🟢 5. CONSTRUCCIÓN DE MOTIVOS DE ALERTA EXPLICATIVOS
+        val motivos = mutableListOf<String>()
+
+        if (metricaAdherencia.estado == EstadoSemaforo.ROJO) {
+            motivos.add("Asistencia crítica (${metricaAdherencia.valor.toInt()}%)")
+        } else if (metricaAdherencia.estado == EstadoSemaforo.AMARILLO) {
+            motivos.add("Baja asistencia (${metricaAdherencia.valor.toInt()}%)")
+        }
+
+        if (metricaVolumen.estado == EstadoSemaforo.ROJO) {
+            motivos.add("Volumen crítico (${metricaVolumen.valor.toInt()}%)")
+        } else if (metricaVolumen.estado == EstadoSemaforo.AMARILLO) {
+            motivos.add("Volumen bajo (${metricaVolumen.valor.toInt()}%)")
+        }
+
+        if (metricaFatiga.estado == EstadoSemaforo.ROJO) {
+            motivos.add("Sobrecarga RPE (${metricaFatiga.valor})")
+        } else if (metricaFatiga.estado == EstadoSemaforo.AMARILLO) {
+            motivos.add("RPE elevado (${metricaFatiga.valor})")
+        }
+
+        if (porVencer) {
+            motivos.add("Ciclo por vencer")
+        }
+
         return AtletaSemaforoItem(
             atletaId = atleta.id,
             nombreCompleto = "${atleta.nombres} ${atleta.apellidos}".trim(),
@@ -101,7 +131,8 @@ class SemaforoRepository(
             sesionesEjecutadas = cicloActivo.sesionesCompletadas,
             sesionesEsperadasHoy = cicloActivo.metaSesionesAsignadas,
             rpePromedio = if (metricaFatiga.valor > 0) metricaFatiga.valor.toFloat() else null,
-            mensajeGestion = mensajeGestion
+            mensajeGestion = mensajeGestion,
+            motivosAlerta = motivos
         )
     }
 
