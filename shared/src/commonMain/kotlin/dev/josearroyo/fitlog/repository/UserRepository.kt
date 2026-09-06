@@ -492,7 +492,8 @@ class UserRepository {
         val fechaCreacionMilis = snapshotPeriodo.get<Long>("fechaCreacion") ?: 0L
         val ahora = getCurrentTimeMillis()
 
-        val esCreadoHoy = esMismoDia(ahora, fechaCreacionMilis)
+        // 🛡️ CONTROL DE SEGURIDAD: Validar que fechaCreacionMilis sea un timestamp válido (> 0) antes de verificar el día
+        val esCreadoHoy = fechaCreacionMilis > 0L && esMismoDia(ahora, fechaCreacionMilis)
 
         if (estadoActual == EstadoPeriodo.ACTIVO.name && !esCreadoHoy) {
             println("⚠️ [UserRepository] No se permite cancelar un periodo ACTIVO que no fue creado hoy.")

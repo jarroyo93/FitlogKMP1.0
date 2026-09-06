@@ -2,7 +2,6 @@ package dev.josearroyo.fitlog.ui.entrenador
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -25,8 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
-import dev.josearroyo.fitlog.viewmodel.atleta.AtletaDetailViewModel
 import dev.josearroyo.fitlog.formatearFechaHistorial
+import dev.josearroyo.fitlog.viewmodel.atleta.AtletaDetailViewModel
 import dev.josearroyo.fitlog.viewmodel.atleta.InformeCoach
 
 private val FondoOscuro = Color(0xFF241B3C)
@@ -166,7 +165,7 @@ fun AtletaDetailScreen(
                         }
                     }
 
-                    // 2. 🚀 PANEL DE RENDIMIENTO Y CONTROL (CICLO ACTIVO MULTIPLATAFORMA)
+                    // 2. PANEL DE RENDIMIENTO Y CONTROL (SINCRONIZADO CON SEMÁFORO)
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
@@ -187,9 +186,7 @@ fun AtletaDetailScreen(
                                 val textoFechas =
                                     if (info.fechaInicio != null && info.fechaFin != null) {
                                         "Del ${formatearFechaHistorial(info.fechaInicio)} al ${
-                                            formatearFechaHistorial(
-                                                info.fechaFin
-                                            )
+                                            formatearFechaHistorial(info.fechaFin)
                                         }"
                                     } else {
                                         "Rango de ciclo operacional activo"
@@ -223,10 +220,9 @@ fun AtletaDetailScreen(
                                     color = Color(0xFF81C784)
                                 )
 
-                                // 🚀 KMP SAFE: Redondeo decimal matemático puro sin String.format()
                                 val rpeRedondeado = ((info.rpeAverageGlobal() * 10).toInt() / 10.0)
                                 KpiCircular(
-                                    valor = if (rpeRedondeado == 0.0) "0.0" else "$rpeRedondeado",
+                                    valor = if (rpeRedondeado <= 0.0) "N/A" else "$rpeRedondeado",
                                     titulo = "RPE Medio",
                                     porcentaje = (info.rpePromedioGlobal / 10.0).toFloat()
                                         .coerceIn(0f, 1f),
@@ -302,7 +298,7 @@ fun AtletaDetailScreen(
                         }
                     }
 
-                    // 4. 🚀 COMENTARIOS VIVOS DEL TRABAJO DEL ALUMNO
+                    // 4. COMENTARIOS VIVOS DEL TRABAJO DEL ALUMNO
                     if (state.notasRecientes.isNotEmpty()) {
                         HorizontalDivider(
                             color = FondoTarjeta,
@@ -320,9 +316,7 @@ fun AtletaDetailScreen(
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = CardDefaults.cardColors(
-                                        containerColor = Color(
-                                            0xFF421D24
-                                        )
+                                        containerColor = Color(0xFF421D24)
                                     ),
                                     border = androidx.compose.foundation.BorderStroke(
                                         1.dp,
@@ -366,13 +360,12 @@ fun AtletaDetailScreen(
                         }
                     }
 
-                    // 5. SECCIÓN DE PROGRAMACIÓN DE RÚTINAS
+                    // 5. SECCIÓN DE PROGRAMACIÓN DE RUTINAS
                     HorizontalDivider(
                         color = FondoTarjeta,
                         modifier = Modifier.padding(vertical = 4.dp)
                     )
 
-                    // Reemplaza el bloque del Row en la SECCIÓN DE PROGRAMACIÓN DE RUTINAS:
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -385,7 +378,6 @@ fun AtletaDetailScreen(
                             fontSize = 15.sp
                         )
 
-                        // 🟢 Solo mostramos el botón de asignar si NO hay rutina activa
                         if (rutina == null) {
                             TextButton(
                                 onClick = {
@@ -421,15 +413,12 @@ fun AtletaDetailScreen(
                     }
 
                     if (rutina != null) {
-                        // 🟢 TARJETA DE MATERIAL 3 OPTIMIZADA: Usamos la sobrecarga nativa de onClick para ripples perfectos
                         Card(
                             onClick = { onNavigateToEditRutina(atletaId, rutina.id) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = NaranjaAcento.copy(
-                                    alpha = 0.08f
-                                )
+                                containerColor = NaranjaAcento.copy(alpha = 0.08f)
                             ),
                             border = androidx.compose.foundation.BorderStroke(
                                 1.dp,
@@ -508,14 +497,17 @@ fun MenuButton(modifier: Modifier, text: String, icon: ImageVector, onClick: () 
         colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Column(Modifier.padding(12.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(
+            Modifier.padding(12.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             Icon(imageVector = icon, contentDescription = null, tint = NaranjaAcento, modifier = Modifier.size(24.dp))
             Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
 
-// Extension helper para seguridad del RPE Promedio
 fun InformeCoach.rpeAverageGlobal(): Double {
     return if (this.rpePromedioGlobal.isNaN()) 0.0 else this.rpePromedioGlobal
 }

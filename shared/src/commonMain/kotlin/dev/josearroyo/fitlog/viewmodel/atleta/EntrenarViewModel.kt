@@ -331,11 +331,9 @@ class EntrenarViewModel : ViewModel() {
     fun terminarEntrenamiento(authUid: String) {
         detenerCronometro()
         if (_state.value.isLoading) return
-
         val currentState = _state.value
         val rutinaActual = currentState.rutina
         val diaActual = currentState.diaActual
-
         if (rutinaActual == null || diaActual == null) {
             _state.update {
                 it.copy(
@@ -345,28 +343,37 @@ class EntrenarViewModel : ViewModel() {
             }
             return
         }
-
         val contieneMensajesNuevos = currentState.sesionEnProgreso.ejerciciosRealizados.any { it.notasAtleta.isNotBlank() }
 
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             try {
-                val sesionIdFinal = currentState.sesionEnProgreso.id.ifBlank { Uuid.random().toString() }
-                val ahora = getCurrentTimeMillis()
-
-                val sesionFinal = currentState.sesionEnProgreso
-                    .copy(
-                        id = sesionIdFinal,
-                        fechaEjecucion = ahora,
-                        estado = EstadoSesion.COMPLETADA
-                    )
-                    .calcularMetricas()
-
                 val usuario = userRepository.obtenerUsuario(authUid)
-
                 if (usuario != null) {
-                    val metaSesiones = rutinaActual.diasEntrenamiento.size
 
+                    // 🔒 GUARD DE SEGURIDAD: Re-evaluar estado de la suscripción antes de escribir en Firestore
+                    val usuarioActualizado = userRepository.evaluarYActualizarEstadoSuscripcion(usuario)
+                    if (usuarioActualizado.estadoSuscripcion != EstadoSuscripcion.ACTIVO) {
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                error = "Tu plan de entrenamiento ha expirado o está congelado. No es posible registrar la sesión."
+                            )
+                        }
+                        return@launch
+                    }
+
+                    val sesionIdFinal = currentState.sesionEnProgreso.id.ifBlank { Uuid.random().toString() }
+                    val ahora = getCurrentTimeMillis()
+                    val sesionFinal = currentState.sesionEnProgreso
+                        .copy(
+                            id = sesionIdFinal,
+                            fechaEjecucion = ahora,
+                            estado = EstadoSesion.COMPLETADA
+                        )
+                        .calcularMetricas()
+
+                    val metaSesiones = rutinaActual.diasEntrenamiento.size
                     val exito = atletaProgresoRepository.registrarSesionYActualizarCiclo(
                         atletaId = usuario.id,
                         sesionProcesada = sesionFinal,
@@ -374,14 +381,11 @@ class EntrenarViewModel : ViewModel() {
                         diaActual = diaActual,
                         metaSesiones = metaSesiones
                     )
-
                     if (exito) {
                         BorradorLocalManager.eliminarBorradorLocal()
-
                         if (contieneMensajesNuevos) {
                             userRepository.actualizarPerfilUsuario(usuario.id, mapOf("tieneNotasNuevas" to true))
                         }
-
                         _state.update { it.copy(isLoading = false, isFinished = true) }
                     } else {
                         _state.update { it.copy(isLoading = false, error = "Error al guardar el progreso en el servidor.") }

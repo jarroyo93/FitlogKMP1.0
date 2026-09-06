@@ -25,11 +25,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.Usuario
 import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
 import dev.josearroyo.fitlog.viewmodel.entrenador.EntrenadorViewModel
+import dev.josearroyo.fitlog.viewmodel.entrenador.EntrenadorDashboardViewModel
 import dev.josearroyo.fitlog.viewmodel.entrenador.AsistenciaAtletaUI
 import dev.josearroyo.fitlog.esCumpleanosHoy
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalFocusManager
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -44,6 +42,8 @@ fun EntrenadorDashboardScreen(
     onAddAtletaClick: () -> Unit
 ) {
     val dashboardViewModel: EntrenadorViewModel = viewModel { EntrenadorViewModel() }
+    val semaforoViewModel: EntrenadorDashboardViewModel = viewModel { EntrenadorDashboardViewModel() }
+
     val state by dashboardViewModel.uiState.collectAsState()
     val clipboardManager = LocalClipboardManager.current
     var mostrarDialogOpciones by rememberSaveable { mutableStateOf(false) }
@@ -54,6 +54,7 @@ fun EntrenadorDashboardScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(FondoOscuro)) {
         Column(modifier = Modifier.fillMaxSize()) {
+            // TabRow de 3 pestañas
             TabRow(
                 selectedTabIndex = state.tabSeleccionado,
                 containerColor = FondoOscuro,
@@ -62,73 +63,94 @@ fun EntrenadorDashboardScreen(
                 Tab(
                     selected = state.tabSeleccionado == 0,
                     onClick = { dashboardViewModel.cambiarTab(0) },
-                    text = { Text("Mis Atletas", color = Color.White, fontWeight = FontWeight.Bold) }
+                    text = { Text("Mis Atletas", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
                 )
                 Tab(
                     selected = state.tabSeleccionado == 1,
                     onClick = { dashboardViewModel.cambiarTab(1) },
-                    text = { Text("Asistencia Hoy", color = Color.White, fontWeight = FontWeight.Bold) }
+                    text = { Text("Semáforo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                )
+                Tab(
+                    selected = state.tabSeleccionado == 2,
+                    onClick = { dashboardViewModel.cambiarTab(2) },
+                    text = { Text("Asistencia Hoy", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
                 )
             }
 
-            OutlinedTextField(
-                value = state.textoBusqueda,
-                onValueChange = { dashboardViewModel.aplicarBusqueda(it) },
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                placeholder = { Text("Buscar atleta por nombre...", color = TextoSecundario) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = NaranjaAcento) },
-                shape = MaterialTheme.shapes.medium,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                    focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.3f),
-                    focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta
+            // Oculta el campo de búsqueda cuando está activa la pestaña "Semáforo"
+            if (state.tabSeleccionado != 1) {
+                OutlinedTextField(
+                    value = state.textoBusqueda,
+                    onValueChange = { dashboardViewModel.aplicarBusqueda(it) },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    placeholder = { Text("Buscar atleta por nombre...", color = TextoSecundario) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = NaranjaAcento) },
+                    shape = MaterialTheme.shapes.medium,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                        focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.3f),
+                        focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta
+                    )
                 )
-            )
+            }
 
-            if (state.tabSeleccionado == 0) {
-                if (state.isLoading) {
-                    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = NaranjaAcento)
-                    }
-                } else if (state.atletas.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().weight(1f).padding(16.dp), contentAlignment = Alignment.Center) {
-                        Text("No se encontraron atletas.", color = TextoSecundario, textAlign = TextAlign.Center)
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(bottom = 88.dp)
-                    ) {
-                        items(state.atletas, key = { it.id }) { atleta ->
-                            AtletaCardItem(atleta = atleta, onClick = { onAtletaClick(atleta.id) })
+            when (state.tabSeleccionado) {
+                0 -> {
+                    if (state.isLoading) {
+                        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = NaranjaAcento)
+                        }
+                    } else if (state.atletas.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().weight(1f).padding(16.dp), contentAlignment = Alignment.Center) {
+                            Text("No se encontraron atletas.", color = TextoSecundario, textAlign = TextAlign.Center)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(bottom = 88.dp)
+                        ) {
+                            items(state.atletas, key = { it.id }) { atleta ->
+                                AtletaCardItem(atleta = atleta, onClick = { onAtletaClick(atleta.id) })
+                            }
                         }
                     }
                 }
-            } else {
-                if (state.isLoadingAsistencia) {
-                    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = NaranjaAcento)
+
+                1 -> {
+                    Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                        SemaforoDashboardContent(
+                            entrenadorId = entrenadorId,
+                            viewModel = semaforoViewModel,
+                            onAtletaClick = onAtletaClick
+                        )
                     }
-                } else if (state.asistenciaDia.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().weight(1f).padding(16.dp), contentAlignment = Alignment.Center) {
-                        Text("Sin registros de asistencia hoy.", color = TextoSecundario, textAlign = TextAlign.Center)
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(bottom = 88.dp)
-                    ) {
-                        items(state.asistenciaDia, key = { it.atleta.id }) { reporte ->
-                            AsistenciaCardItem(reporte = reporte)
+                }
+
+                2 -> {
+                    if (state.isLoadingAsistencia) {
+                        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = NaranjaAcento)
+                        }
+                    } else if (state.asistenciaDia.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().weight(1f).padding(16.dp), contentAlignment = Alignment.Center) {
+                            Text("Sin registros de asistencia hoy.", color = TextoSecundario, textAlign = TextAlign.Center)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(bottom = 88.dp)
+                        ) {
+                            items(state.asistenciaDia, key = { it.atleta.id }) { reporte ->
+                                AsistenciaCardItem(reporte = reporte)
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Botón flotante limpio
         FloatingActionButton(
             onClick = { mostrarDialogOpciones = true },
             containerColor = NaranjaAcento,
@@ -142,7 +164,6 @@ fun EntrenadorDashboardScreen(
             }
         }
 
-        // Modal 1: Opciones de Registro
         if (mostrarDialogOpciones) {
             AlertDialog(
                 onDismissRequest = { mostrarDialogOpciones = false },
@@ -170,7 +191,6 @@ fun EntrenadorDashboardScreen(
             )
         }
 
-        // Modal 2: Diálogo Dedicado controlado por la bandera de visibilidad 🟢
         if (state.mostrarModalCodigo && state.codigoGenerado != null) {
             AlertDialog(
                 onDismissRequest = { dashboardViewModel.ocultarModalCodigo() },
@@ -216,7 +236,7 @@ fun EntrenadorDashboardScreen(
                     Button(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(state.codigoGenerado!!))
-                            dashboardViewModel.ocultarModalCodigo() // 🟢 Cerramos la vista modal
+                            dashboardViewModel.ocultarModalCodigo()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
                         shape = RoundedCornerShape(8.dp)
@@ -244,7 +264,6 @@ fun EntrenadorDashboardScreen(
 fun AtletaCardItem(atleta: Usuario, onClick: () -> Unit) {
     val esCumpleanos = esCumpleanosHoy(atleta.fechaNacimiento)
 
-    // 🟢 Asignación de color y texto dinámico según el estado de la suscripción
     val (colorEstado, textoEstado) = when (atleta.estadoSuscripcion) {
         EstadoSuscripcion.ACTIVO -> Color(0xFF81C784) to "ACTIVO"
         EstadoSuscripcion.DIFERIDO -> Color(0xFF4FC3F7) to "DIFERIDO"
@@ -275,7 +294,6 @@ fun AtletaCardItem(atleta: Usuario, onClick: () -> Unit) {
                 }
             }
 
-            // 🟢 Insignia visual adaptada al color correspondiente
             Surface(color = colorEstado.copy(alpha = 0.15f), shape = RoundedCornerShape(6.dp)) {
                 Text(
                     text = textoEstado,

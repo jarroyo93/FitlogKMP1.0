@@ -155,6 +155,25 @@ actual fun reproducirSonidoFinTiempo() {
 }
 
 actual fun normalizarFechaDatePicker(utcMillis: Long): Long {
-    val timeZoneOffset = java.util.TimeZone.getDefault().getOffset(utcMillis)
+    val timeZoneOffset = TimeZone.getDefault().getOffset(utcMillis)
     return utcMillis - timeZoneOffset
+}
+
+actual fun extraerAnoDeFecha(milis: Long): String {
+    if (milis <= 0L) return "2026"
+    val date = java.util.Date(milis)
+    val sdf = SimpleDateFormat("yyyy", Locale("es", "ES")).apply {
+        timeZone = TimeZone.getDefault()
+    }
+    return sdf.format(date)
+}
+
+actual fun extraerMesDeFecha(milis: Long): String {
+    if (milis <= 0L) return "General"
+    val date = java.util.Date(milis)
+    val sdf = SimpleDateFormat("MMMM", Locale("es", "ES")).apply {
+        timeZone = TimeZone.getDefault()
+    }
+    val mes = sdf.format(date)
+    return mes.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale("es", "ES")) else it.toString() }
 }

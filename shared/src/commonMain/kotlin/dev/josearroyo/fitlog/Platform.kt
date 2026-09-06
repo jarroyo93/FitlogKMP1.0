@@ -26,3 +26,7 @@ expect fun esMismoDiaLocal(timestamp1: Long, timestamp2: Long): Boolean
 expect suspend fun crearCuentaEnInstanciaSecundaria(correo: String, contrasena: String): String
 expect fun reproducirSonidoFinTiempo()
 expect fun normalizarFechaDatePicker(utcMillis: Long): Long
+
+// EXTRACCIÓN DE AÑO Y MES MULTIPLATAFORMA
+expect fun extraerAnoDeFecha(milis: Long): String
+expect fun extraerMesDeFecha(milis: Long): String

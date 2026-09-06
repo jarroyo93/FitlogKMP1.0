@@ -12,11 +12,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -43,6 +39,9 @@ import dev.josearroyo.fitlog.viewmodel.atleta.ImpactoFisicoUI
 import dev.josearroyo.fitlog.viewmodel.atleta.RecordPersonalUI
 import dev.josearroyo.fitlog.viewmodel.atleta.ResumenCicloUI
 import dev.josearroyo.fitlog.formatearFechaHistorial
+import dev.josearroyo.fitlog.extraerAnoDeFecha
+import dev.josearroyo.fitlog.extraerMesDeFecha
+import dev.josearroyo.fitlog.getCurrentTimeMillis
 import kotlin.math.roundToInt
 
 private val FondoOscuro = Color(0xFF241B3C)
@@ -61,11 +60,11 @@ fun ProgresoAtletaScreen(
     viewModel: ProgresoAtletaViewModel = viewModel { ProgresoAtletaViewModel() }
 ) {
     val state by viewModel.uiState.collectAsState()
-    var tabSeleccionada by rememberSaveable { mutableStateOf(1) } // Por defecto pestaña "Diario de Ciclos"
+    var tabSeleccionada by rememberSaveable { mutableStateOf(1) } // Pestaña "Diario de Ciclos" por defecto
     val titulosTabs = listOf("Evolución", "Diario de Ciclos", "Récords")
 
-    // Estado local para filtrar dentro de los días/rutinas del ciclo seleccionado
     var filtroDiaRutina by rememberSaveable { mutableStateOf("TODOS") }
+    var mostrarModalHistorico by rememberSaveable { mutableStateOf(false) }
 
     val rutinasDelCiclo = remember(state.historialSesiones) {
         listOf("TODOS") + state.historialSesiones.map { it.nombreRutina }.distinct()
@@ -160,65 +159,85 @@ fun ProgresoAtletaScreen(
                         }
                     }
                     1 -> {
-                        // 1. Selector Horizontal de Ciclos (Ciclo Activo vs. Histórico)
-                        if (state.historialCiclos.isNotEmpty()) {
+                        // 1. Tarjeta Macro Unificada del Ciclo + Botón de Cambiar Ciclo
+                        if (state.cicloSeleccionado != null) {
                             item {
-                                SelectorCiclosRow(
+                                TarjetaEncabezadoCiclo(
+                                    ciclo = state.cicloSeleccionado!!,
+                                    resumen = state.resumenCicloSeleccionado,
+                                    impacto = state.resumenCicloSeleccionado.impactoFisico,
+                                    totalCiclosHistoricos = state.historialCiclos.size,
+                                    onAbrirHistorico = { mostrarModalHistorico = true }
+                                )
+                            }
+
+                            // 2. Encabezado de la lista + Filtro por Rutinas
+                            item {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Diario de Entrenamientos",
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            fontSize = 16.sp
+                                        )
+
+                                        Surface(
+                                            color = FondoTarjeta,
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text(
+                                                text = "${sesionesMostrar.size} Registros",
+                                                color = NaranjaAcento,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+
+                                    if (rutinasDelCiclo.size > 2) {
+                                        FiltroRutinasCicloRow(
+                                            rutinas = rutinasDelCiclo,
+                                            rutinaSeleccionada = filtroDiaRutina,
+                                            onRutinaSeleccionada = { filtroDiaRutina = it }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Modal BottomSheet de Selección de Ciclos
+                        if (mostrarModalHistorico) {
+                            item {
+                                ModalBottomSheetHistoricoCiclos(
                                     ciclos = state.historialCiclos,
                                     cicloSeleccionado = state.cicloSeleccionado,
                                     onCicloSeleccionado = { ciclo ->
-                                        filtroDiaRutina = "TODOS" // Resetea filtro al cambiar de ciclo
+                                        filtroDiaRutina = "TODOS"
                                         viewModel.seleccionarCiclo(ciclo)
-                                    }
+                                        mostrarModalHistorico = false
+                                    },
+                                    onDismiss = { mostrarModalHistorico = false }
                                 )
                             }
                         }
-
-                        // 2. Tarjeta Macro de Resumen del Ciclo Seleccionado
-                        if (state.cicloSeleccionado != null) {
-                            item {
-                                TarjetaResumenCiclo(
-                                    ciclo = state.cicloSeleccionado!!,
-                                    resumen = state.resumenCicloSeleccionado
-                                )
-                            }
-
-                            // 3. Tarjeta de Impacto Corporal (Deltas Físicos)
-                            if (state.resumenCicloSeleccionado.impactoFisico.tieneDatos) {
-                                item {
-                                    TarjetaImpactoFisico(impacto = state.resumenCicloSeleccionado.impactoFisico)
-                                }
-                            }
-
-
-
-                            if (rutinasDelCiclo.size > 2) {
-                                item {
-                                    FiltroRutinasCicloRow(
-                                        rutinas = rutinasDelCiclo,
-                                        rutinaSeleccionada = filtroDiaRutina,
-                                        onRutinaSeleccionada = { filtroDiaRutina = it }
-                                    )
-                                }
-                            }
-                        }
-
-                        item {
-                            Text(
-                                text = "Días de Entrenamiento del Ciclo",
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
-
-
 
                         if (sesionesMostrar.isEmpty()) {
                             item {
-                                Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                                    Text("No hay sesiones registradas en este ciclo.", color = TextoSecundario)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(FondoTarjeta)
+                                        .padding(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("No hay sesiones registradas en este ciclo.", color = TextoSecundario, fontSize = 13.sp)
                                 }
                             }
                         } else {
@@ -247,106 +266,750 @@ fun ProgresoAtletaScreen(
 }
 
 // ============================================================
-// COMPONENTES DE CICLOS E INTERFAZ INTERMEDIA
+// PESTAÑA DE EVOLUCIÓN: SELECCIÓN Y ANÁLISIS DE FUERZA
 // ============================================================
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SelectorCiclosRow(
-    ciclos: List<CicloEntrenamiento>,
-    cicloSeleccionado: CicloEntrenamiento?,
-    onCicloSeleccionado: (CicloEntrenamiento) -> Unit
+fun EvolucionEjercicioSection(
+    ejerciciosDisponibles: List<String>,
+    historialEjercicio: List<DetalleEjercicioUI>,
+    onEjercicioSeleccionado: (String) -> Unit
 ) {
-    var mostrarBottomSheetHistorico by rememberSaveable { mutableStateOf(false) }
+    var mostrarModalSeleccion by rememberSaveable { mutableStateOf(false) }
+    var ejercicioActual by remember(ejerciciosDisponibles) {
+        mutableStateOf(ejerciciosDisponibles.firstOrNull() ?: "Seleccionar Ejercicio")
+    }
+    var tipoMetrica by rememberSaveable { mutableStateOf("PESO_MAXIMO") } // "PESO_MAXIMO" o "VOLUMEN"
 
-    // Acotamos a los 8 ciclos más recientes para la barra rápida
-    val ciclosRecientes = remember(ciclos) { ciclos.take(8) }
+    val registrosOrdenados = remember(historialEjercicio) {
+        historialEjercicio.reversed() // Orden cronológico (antiguo a reciente)
+    }
 
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(vertical = 4.dp)
-    ) {
-        items(ciclosRecientes, key = { it.id }) { ciclo ->
-            val esSeleccionado = ciclo.id == cicloSeleccionado?.id
+    // Cálculo de Métricas Clave de Evolución
+    val pesoInicial = remember(registrosOrdenados) {
+        registrosOrdenados.firstOrNull()?.detalle?.seriesRealizadas?.maxOfOrNull { it.pesoKg } ?: 0.0
+    }
+    val pesoActual = remember(registrosOrdenados) {
+        registrosOrdenados.lastOrNull()?.detalle?.seriesRealizadas?.maxOfOrNull { it.pesoKg } ?: 0.0
+    }
+    val deltaPeso = pesoActual - pesoInicial
+    val porcentajeMejora = if (pesoInicial > 0) (deltaPeso / pesoInicial) * 100.0 else 0.0
 
-            val fechaFormateada = remember(ciclo.fechaInicio) {
-                val fechaTexto = formatearFechaHistorial(ciclo.fechaInicio)
-                val partes = fechaTexto.split(" ")
-                if (partes.size >= 3) {
-                    "${partes[0]} ${partes[2].take(3)}"
-                } else {
-                    fechaTexto
+    val maximo1RMEstimado = remember(registrosOrdenados) {
+        registrosOrdenados.flatMap { reg ->
+            reg.detalle.seriesRealizadas.map { it.pesoKg * (1.0 + it.repeticionesLogradas / 30.0) }
+        }.maxOrNull() ?: 0.0
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(text = "Evolución por Ejercicio", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
+
+        if (ejerciciosDisponibles.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(FondoTarjeta)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No hay ejercicios registrados en el historial.", color = TextoSecundario, fontSize = 13.sp)
+            }
+            return
+        }
+
+        // 1. TARJETA DE SELECCIÓN DE EJERCICIO
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { mostrarModalSeleccion = true },
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = FondoTarjeta)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        color = NaranjaAcento.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = clasificarGrupoMuscular(ejercicioActual).uppercase(),
+                            color = NaranjaAcento,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = ejercicioActual,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        fontSize = 16.sp
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = { mostrarModalSeleccion = true },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NaranjaAcento),
+                    border = BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Buscar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // 2. KPIS DE PROGRESO DE FUERZA
+        if (registrosOrdenados.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    color = FondoTarjeta,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("Carga Máxima", color = TextoSecundario, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            text = "${if (pesoActual % 1.0 == 0.0) pesoActual.toInt() else pesoActual} kg",
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            fontSize = 18.sp
+                        )
+                        if (deltaPeso != 0.0 && registrosOrdenados.size > 1) {
+                            val signo = if (deltaPeso > 0) "+" else ""
+                            Text(
+                                text = "$signo${if (deltaPeso % 1.0 == 0.0) deltaPeso.toInt() else ((deltaPeso * 10).roundToInt() / 10.0)} kg (${((porcentajeMejora * 10).roundToInt() / 10.0)}%)",
+                                color = if (deltaPeso > 0) VerdeExito else RojoIncompleto,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                        } else {
+                            Text("Registro base", color = TextoSecundario, fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    color = FondoTarjeta,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("1RM Estimado Pico", color = TextoSecundario, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            text = "${maximo1RMEstimado.roundToInt()} kg",
+                            fontWeight = FontWeight.Black,
+                            color = NaranjaAcento,
+                            fontSize = 18.sp
+                        )
+                        Text("Fuerza Teórica Max", color = TextoSecundario, fontSize = 11.sp)
+                    }
                 }
             }
 
-            FilterChip(
-                selected = esSeleccionado,
-                onClick = { onCicloSeleccionado(ciclo) },
-                label = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (ciclo.estaActivo) "Ciclo Actual" else "Ciclo ($fechaFormateada)",
-                            fontWeight = FontWeight.Bold,
-                            color = if (esSeleccionado) FondoOscuro else Color.White,
-                            fontSize = 12.sp
-                        )
-                        if (ciclo.estaActivo) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(if (esSeleccionado) FondoOscuro else VerdeExito)
-                            )
-                        }
-                    }
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = FondoTarjeta,
-                    selectedContainerColor = NaranjaAcento
-                ),
-                shape = RoundedCornerShape(20.dp)
+            // 3. SELECTOR DE MÉTRICA DE GRÁFICA
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = tipoMetrica == "PESO_MAXIMO",
+                    onClick = { tipoMetrica = "PESO_MAXIMO" },
+                    label = { Text("Peso Máximo (kg)", fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = NaranjaAcento.copy(alpha = 0.2f),
+                        selectedLabelColor = NaranjaAcento
+                    )
+                )
+
+                FilterChip(
+                    selected = tipoMetrica == "VOLUMEN",
+                    onClick = { tipoMetrica = "VOLUMEN" },
+                    label = { Text("Volumen Total (kg)", fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = NaranjaAcento.copy(alpha = 0.2f),
+                        selectedLabelColor = NaranjaAcento
+                    )
+                )
+            }
+
+            // 4. GRÁFICA DE EVOLUCIÓN
+            GraficaProgresoEjercicio(
+                historialEjercicio = historialEjercicio,
+                tipoMetrica = tipoMetrica
             )
         }
 
-        // Si hay más de 8 ciclos acumulados, renderizamos la tarjeta de acceso directo al histórico
-        if (ciclos.size > 8) {
-            item {
-                AssistChip(
-                    onClick = { mostrarBottomSheetHistorico = true },
-                    label = {
-                        Text(
-                            text = "Ver todos (${ciclos.size}) 🔍",
-                            fontSize = 12.sp,
-                            color = NaranjaAcento,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    colors = AssistChipDefaults.assistChipColors(containerColor = FondoTarjeta),
-                    border = AssistChipDefaults.assistChipBorder(
-                        enabled = true,
-                        borderColor = NaranjaAcento.copy(alpha = 0.5f)
-                    ),
-                    shape = RoundedCornerShape(20.dp)
-                )
+        // 5. LISTA DE REGISTROS DEL EJERCICIO
+        Text(
+            text = "Historial de Ejecución",
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            fontSize = 14.sp,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
+        historialEjercicio.forEach { registro ->
+            key(registro.fechaFormat) {
+                RegistroEjercicioCard(registro)
             }
         }
     }
 
-    // Modal BottomSheet con la lista completa
-    if (mostrarBottomSheetHistorico) {
-        ModalBottomSheetHistoricoCiclos(
-            ciclos = ciclos,
-            cicloSeleccionado = cicloSeleccionado,
-            onCicloSeleccionado = { ciclo ->
-                onCicloSeleccionado(ciclo)
-                mostrarBottomSheetHistorico = false
+    // BottomSheet de Selección de Ejercicio
+    if (mostrarModalSeleccion) {
+        ModalBottomSheetSeleccionEjercicio(
+            ejerciciosDisponibles = ejerciciosDisponibles,
+            ejercicioSeleccionado = ejercicioActual,
+            onEjercicioSeleccionado = { seleccionado ->
+                ejercicioActual = seleccionado
+                onEjercicioSeleccionado(seleccionado)
+                mostrarModalSeleccion = false
             },
-            onDismiss = { mostrarBottomSheetHistorico = false }
+            onDismiss = { mostrarModalSeleccion = false }
         )
     }
 }
 
+/**
+ * Modal BottomSheet para Buscar y Filtrar Ejercicios por Grupo Muscular.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ModalBottomSheetSeleccionEjercicio(
+    ejerciciosDisponibles: List<String>,
+    ejercicioSeleccionado: String,
+    onEjercicioSeleccionado: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+
+    var grupoSeleccionado by rememberSaveable { mutableStateOf("TODOS") }
+    var textoBusqueda by rememberSaveable { mutableStateOf("") }
+
+    val gruposMusculares = remember(ejerciciosDisponibles) {
+        listOf("TODOS", "Pecho", "Espalda", "Piernas", "Hombros", "Brazos", "Core", "Otros")
+    }
+
+    val ejerciciosFiltrados = remember(ejerciciosDisponibles, grupoSeleccionado, textoBusqueda) {
+        ejerciciosDisponibles.filter { ej ->
+            val coincideGrupo = grupoSeleccionado == "TODOS" || clasificarGrupoMuscular(ej) == grupoSeleccionado
+            val coincideTexto = textoBusqueda.isBlank() || ej.contains(textoBusqueda, ignoreCase = true)
+            coincideGrupo && coincideTexto
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = FondoTarjeta,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = TextoSecundario) }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Seleccionar Ejercicio", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Filtra por músculo o busca por nombre", fontSize = 12.sp, color = TextoSecundario)
+                }
+
+                TextButton(onClick = onDismiss) {
+                    Text("Cerrar", color = NaranjaAcento, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // BUSCADOR DE TEXTO
+            OutlinedTextField(
+                value = textoBusqueda,
+                onValueChange = { textoBusqueda = it },
+                placeholder = { Text("Buscar ejercicio...", color = TextoSecundario, fontSize = 13.sp) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = NaranjaAcento) },
+                trailingIcon = {
+                    if (textoBusqueda.isNotEmpty()) {
+                        IconButton(onClick = { textoBusqueda = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Limpiar", tint = TextoSecundario)
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = NaranjaAcento,
+                    unfocusedBorderColor = TextoSecundario.copy(alpha = 0.3f),
+                    focusedContainerColor = FondoOscuro,
+                    unfocusedContainerColor = FondoOscuro
+                ),
+                singleLine = true
+            )
+
+            // FILTRO DE GRUPOS MUSCULARES
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(gruposMusculares) { grupo ->
+                    val esSeleccionado = grupo == grupoSeleccionado
+                    FilterChip(
+                        selected = esSeleccionado,
+                        onClick = { grupoSeleccionado = grupo },
+                        label = { Text(grupo, fontSize = 11.sp, fontWeight = if (esSeleccionado) FontWeight.Bold else FontWeight.Normal) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = NaranjaAcento,
+                            selectedLabelColor = FondoOscuro,
+                            containerColor = FondoOscuro,
+                            labelColor = TextoSecundario
+                        )
+                    )
+                }
+            }
+
+            HorizontalDivider(color = FondoOscuro)
+
+            if (ejerciciosFiltrados.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No se encontraron ejercicios.", color = TextoSecundario, fontSize = 13.sp)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.55f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(ejerciciosFiltrados) { ej ->
+                        val esActivo = ej == ejercicioSeleccionado
+                        val grupo = clasificarGrupoMuscular(ej)
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onEjercicioSeleccionado(ej) },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (esActivo) NaranjaAcento.copy(alpha = 0.15f) else FondoOscuro
+                            ),
+                            border = if (esActivo) BorderStroke(1.5.dp, NaranjaAcento) else null
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = ej,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (esActivo) NaranjaAcento else Color.White,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = grupo,
+                                        color = TextoSecundario,
+                                        fontSize = 11.sp
+                                    )
+                                }
+
+                                if (esActivo) {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = NaranjaAcento)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Clasificador rápido de grupos musculares según palabras clave.
+ */
+fun clasificarGrupoMuscular(nombreEjercicio: String): String {
+    val nombre = nombreEjercicio.lowercase()
+    return when {
+        nombre.contains("pecho") || nombre.contains("press banca") || nombre.contains("aperturas") || nombre.contains("crossover") || nombre.contains("fondos") || nombre.contains("chest") || nombre.contains("inclinado") || nombre.contains("declinado") -> "Pecho"
+        nombre.contains("espalda") || nombre.contains("remo") || nombre.contains("jalón") || nombre.contains("jalon") || nombre.contains("dominadas") || nombre.contains("pulldown") || nombre.contains("dorsal") || nombre.contains("lumbares") -> "Espalda"
+        nombre.contains("sentadilla") || nombre.contains("prensa") || nombre.contains("cuadriceps") || nombre.contains("zancada") || nombre.contains("búlgar") || nombre.contains("bulgar") || nombre.contains("peso muerto") || nombre.contains("isquios") || nombre.contains("femoral") || nombre.contains("pantorrilla") || nombre.contains("gemelos") -> "Piernas"
+        nombre.contains("hombro") || nombre.contains("press militar") || nombre.contains("elevaciones") || nombre.contains("pájaro") || nombre.contains("pajaro") || nombre.contains("deltoides") || nombre.contains("face pull") -> "Hombros"
+        nombre.contains("bíceps") || nombre.contains("biceps") || nombre.contains("curl") || nombre.contains("tríceps") || nombre.contains("triceps") || nombre.contains("copa") || nombre.contains("patada") || nombre.contains("antebrazo") -> "Brazos"
+        nombre.contains("abs") || nombre.contains("abdominal") || nombre.contains("plancha") || nombre.contains("core") || nombre.contains("rueda") -> "Core"
+        else -> "Otros"
+    }
+}
+
+/**
+ * Gráfica de Progreso de Fuerza y Volumen con Valores Claros.
+ */
+@Composable
+fun GraficaProgresoEjercicio(
+    historialEjercicio: List<DetalleEjercicioUI>,
+    tipoMetrica: String
+) {
+    val ultimosRegistros = remember(historialEjercicio) { historialEjercicio.take(6).reversed() }
+
+    val datosMétricas = remember(ultimosRegistros, tipoMetrica) {
+        ultimosRegistros.map { reg ->
+            if (tipoMetrica == "PESO_MAXIMO") {
+                reg.detalle.seriesRealizadas.maxOfOrNull { it.pesoKg }?.toFloat() ?: 0f
+            } else {
+                reg.detalle.seriesRealizadas.sumOf { s -> s.pesoKg * s.repeticionesLogradas }.toFloat()
+            }
+        }
+    }
+
+    val etiquetasFechas = remember(ultimosRegistros) {
+        ultimosRegistros.map { reg ->
+            val partes = reg.fechaFormat.split(" ")
+            if (partes.size >= 2) "${partes[0]} ${partes[1]}" else reg.fechaFormat
+        }
+    }
+
+    if (datosMétricas.isEmpty()) return
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = FondoTarjeta)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = if (tipoMetrica == "PESO_MAXIMO") "Evolución de Carga Máxima" else "Evolución de Volumen",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 15.sp
+                    )
+                    Text(
+                        text = if (tipoMetrica == "PESO_MAXIMO") "Kilos levantados en la serie top" else "Volumen total (kg × reps)",
+                        color = TextoSecundario,
+                        fontSize = 11.sp
+                    )
+                }
+
+                Text(
+                    text = "${datosMétricas.lastOrNull()?.toInt() ?: 0} ${if (tipoMetrica == "PESO_MAXIMO") "kg" else "kg total"}",
+                    fontWeight = FontWeight.Black,
+                    color = NaranjaAcento,
+                    fontSize = 20.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // VALORES ENCIMA DE CADA PUNTO DE LA GRÁFICA
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                datosMétricas.forEachIndexed { idx, valor ->
+                    val esMaximo = valor == datosMétricas.maxOrNull()
+                    Surface(
+                        color = if (esMaximo) NaranjaAcento.copy(alpha = 0.2f) else FondoOscuro,
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = "${valor.toInt()}kg",
+                            color = if (esMaximo) NaranjaAcento else Color.White,
+                            fontWeight = if (esMaximo) FontWeight.Black else FontWeight.Bold,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // CANVAS DE LA CURVA
+            val maxVal = datosMétricas.maxOrNull() ?: 1f
+            val minVal = datosMétricas.minOrNull() ?: 0f
+            val rango = if (maxVal == minVal) 1f else maxVal - minVal
+
+            Canvas(modifier = Modifier.fillMaxWidth().height(110.dp)) {
+                val ancho = size.width
+                val alto = size.height
+                val espacioX = ancho / (if (datosMétricas.size > 1) datosMétricas.size - 1 else 1)
+
+                val puntos = datosMétricas.mapIndexed { i, valor ->
+                    val x = i * espacioX
+                    val y = alto - ((valor - minVal) / rango) * (alto * 0.75f) - (alto * 0.12f)
+                    androidx.compose.ui.geometry.Offset(x, y)
+                }
+
+                if (puntos.size > 1) {
+                    val pathFondo = Path().apply {
+                        moveTo(puntos.first().x, alto)
+                        puntos.forEach { lineTo(it.x, it.y) }
+                        lineTo(puntos.last().x, alto)
+                        close()
+                    }
+                    drawPath(path = pathFondo, brush = Brush.verticalGradient(colors = listOf(NaranjaAcento.copy(alpha = 0.25f), Color.Transparent)))
+
+                    val pathLinea = Path().apply {
+                        moveTo(puntos.first().x, puntos.first().y)
+                        for (i in 1 until puntos.size) { lineTo(puntos[i].x, puntos[i].y) }
+                    }
+                    drawPath(path = pathLinea, color = NaranjaAcento, style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round))
+                }
+
+                puntos.forEach { punto ->
+                    drawCircle(color = FondoOscuro, radius = 5.dp.toPx(), center = punto)
+                    drawCircle(color = NaranjaAcento, radius = 3.5.dp.toPx(), center = punto)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // FECHAS EN EL EJE X
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                etiquetasFechas.forEach { fecha ->
+                    Text(text = fecha, color = TextoSecundario, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Tarjeta de Registro con Resalte de Serie Máxima (Serie Top).
+ */
+@Composable
+fun RegistroEjercicioCard(registro: DetalleEjercicioUI) {
+    val serieTop = remember(registro.detalle.seriesRealizadas) {
+        registro.detalle.seriesRealizadas.maxByOrNull { it.pesoKg * it.repeticionesLogradas }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(registro.fechaFormat, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
+                Text(registro.nombreRutina, color = NaranjaAcento, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            }
+
+            serieTop?.let { top ->
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    color = NaranjaAcento.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = "🔥 Serie Top: ${top.pesoKg} kg × ${top.repeticionesLogradas} reps",
+                        color = NaranjaAcento,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            registro.detalle.seriesRealizadas.forEach { serie ->
+                val esTop = serie.numeroSerie == serieTop?.numeroSerie
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Serie ${serie.numeroSerie} (${serie.tipoSerie.name.take(3)})",
+                        color = if (esTop) Color.White else TextoSecundario,
+                        fontSize = 13.sp,
+                        fontWeight = if (esTop) FontWeight.Bold else FontWeight.Normal
+                    )
+                    Text(
+                        text = "${serie.pesoKg} kg × ${serie.repeticionesLogradas} reps",
+                        fontWeight = FontWeight.Bold,
+                        color = if (esTop) NaranjaAcento else Color.White,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ============================================================
+// COMPONENTES DE DIARIO DE CICLOS (HISTÓRICO)
+// ============================================================
+
+@Composable
+fun TarjetaEncabezadoCiclo(
+    ciclo: CicloEntrenamiento,
+    resumen: ResumenCicloUI,
+    impacto: ImpactoFisicoUI,
+    totalCiclosHistoricos: Int,
+    onAbrirHistorico: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = FondoTarjeta)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (ciclo.estaActivo) "Ciclo Activo" else "Ciclo Histórico",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 16.sp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (ciclo.estaActivo) VerdeExito else TextoSecundario)
+                        )
+                    }
+                    Text(
+                        text = "${formatearFechaHistorial(ciclo.fechaInicio)} — ${if (ciclo.fechaCierre > 0L) formatearFechaHistorial(ciclo.fechaCierre) else "Presente"}",
+                        color = TextoSecundario,
+                        fontSize = 12.sp
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = onAbrirHistorico,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NaranjaAcento),
+                    border = BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.6f)),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (totalCiclosHistoricos > 1) "Histórico ($totalCiclosHistoricos)" else "Cambiar",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                KpiPill(
+                    modifier = Modifier.weight(1f),
+                    valor = "${resumen.porcentajeAsistencia.toInt()}%",
+                    etiqueta = "Asistencia",
+                    subetiqueta = "${resumen.sesionesCompletadas}/${resumen.metaSesiones} Días",
+                    colorVal = VerdeExito
+                )
+                KpiPill(
+                    modifier = Modifier.weight(1f),
+                    valor = if (resumen.rpePromedio > 0.0) "${resumen.rpePromedio}" else "N/A",
+                    etiqueta = "RPE Medio",
+                    subetiqueta = "Esfuerzo",
+                    colorVal = NaranjaAcento
+                )
+                KpiPill(
+                    modifier = Modifier.weight(1f),
+                    valor = (resumen.tonelajeTotalKg / 1000.0).let {
+                        if (it >= 1.0) "${((it * 10).roundToInt() / 10.0)}t" else "${resumen.tonelajeTotalKg.toInt()}kg"
+                    },
+                    etiqueta = "Tonelaje",
+                    subetiqueta = "Volumen",
+                    colorVal = AzulCumplido
+                )
+            }
+
+            if (impacto.tieneDatos) {
+                HorizontalDivider(color = FondoOscuro)
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "⚖️ Cambios Físicos del Ciclo",
+                        fontWeight = FontWeight.Bold,
+                        color = NaranjaAcento,
+                        fontSize = 12.sp
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        impacto.deltaPeso?.let { delta ->
+                            val signo = if (delta > 0) "+" else ""
+                            Text(
+                                text = "Peso: ${impacto.pesoInicial}kg ➔ ${impacto.pesoFinal}kg ($signo$delta kg)",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        impacto.deltaAbdomen?.let { delta ->
+                            val signo = if (delta > 0) "+" else ""
+                            Text(
+                                text = "Cintura: ${impacto.abdomenInicial}cm ➔ ${impacto.abdomenFinal}cm ($signo$delta cm)",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * BottomSheet con Buscador/Filtro por AÑO y MES considerando rangos compartidos.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModalBottomSheetHistoricoCiclos(
@@ -357,19 +1020,59 @@ fun ModalBottomSheetHistoricoCiclos(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
+    var anoSeleccionado by rememberSaveable { mutableStateOf("TODOS") }
+    var mesSeleccionado by rememberSaveable { mutableStateOf("TODOS") }
+
+    val anosDisponibles = remember(ciclos) {
+        val anos = ciclos.flatMap { ciclo ->
+            val fin = if (ciclo.fechaCierre > 0L) ciclo.fechaCierre else getCurrentTimeMillis()
+            listOf(extraerAnoDeFecha(ciclo.fechaInicio), extraerAnoDeFecha(fin))
+        }.distinct().sortedDescending()
+        listOf("TODOS") + anos
+    }
+
+    val mesesDisponibles = remember(ciclos, anoSeleccionado) {
+        val ciclosDelAno = if (anoSeleccionado == "TODOS") ciclos
+        else ciclos.filter { ciclo ->
+            val fin = if (ciclo.fechaCierre > 0L) ciclo.fechaCierre else getCurrentTimeMillis()
+            extraerAnoDeFecha(ciclo.fechaInicio) == anoSeleccionado || extraerAnoDeFecha(fin) == anoSeleccionado
+        }
+
+        val meses = ciclosDelAno.flatMap { ciclo ->
+            val fin = if (ciclo.fechaCierre > 0L) ciclo.fechaCierre else getCurrentTimeMillis()
+            listOf(extraerMesDeFecha(ciclo.fechaInicio), extraerMesDeFecha(fin))
+        }.distinct()
+
+        listOf("TODOS") + meses
+    }
+
+    val ciclosFiltrados = remember(ciclos, anoSeleccionado, mesSeleccionado) {
+        ciclos.filter { ciclo ->
+            val fin = if (ciclo.fechaCierre > 0L) ciclo.fechaCierre else getCurrentTimeMillis()
+
+            val anoInicio = extraerAnoDeFecha(ciclo.fechaInicio)
+            val anoFin = extraerAnoDeFecha(fin)
+            val mesInicio = extraerMesDeFecha(ciclo.fechaInicio)
+            val mesFin = extraerMesDeFecha(fin)
+
+            val cumpleAno = anoSeleccionado == "TODOS" || anoInicio == anoSeleccionado || anoFin == anoSeleccionado
+            val cumpleMes = mesSeleccionado == "TODOS" || mesInicio == mesSeleccionado || mesFin == mesSeleccionado
+
+            cumpleAno && cumpleMes
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = FondoTarjeta,
-        dragHandle = {
-            BottomSheetDefaults.DragHandle(color = TextoSecundario)
-        }
+        dragHandle = { BottomSheetDefaults.DragHandle(color = TextoSecundario) }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 20.dp)
+                .padding(bottom = 24.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -378,13 +1081,13 @@ fun ModalBottomSheetHistoricoCiclos(
             ) {
                 Column {
                     Text(
-                        text = "Histórico de Ciclos",
+                        text = "Buscar Ciclo Histórico",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Text(
-                        text = "Selecciona un período para filtrar el diario",
+                        text = "Filtra por periodo de tiempo",
                         fontSize = 12.sp,
                         color = TextoSecundario
                     )
@@ -395,84 +1098,196 @@ fun ModalBottomSheetHistoricoCiclos(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SelectorFiltroDropdown(
+                    titulo = "Año",
+                    opcionSeleccionada = anoSeleccionado,
+                    opciones = anosDisponibles,
+                    onOpcionSeleccionada = {
+                        anoSeleccionado = it
+                        mesSeleccionado = "TODOS"
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+
+                SelectorFiltroDropdown(
+                    titulo = "Mes",
+                    opcionSeleccionada = mesSeleccionado,
+                    opciones = mesesDisponibles,
+                    onOpcionSeleccionada = { mesSeleccionado = it },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider(color = FondoOscuro)
             Spacer(modifier = Modifier.height(12.dp))
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.65f),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(ciclos, key = { it.id }) { ciclo ->
-                    val esSeleccionado = ciclo.id == cicloSeleccionado?.id
+            if (ciclosFiltrados.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No se encontraron ciclos para este periodo.",
+                        color = TextoSecundario,
+                        fontSize = 13.sp
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.60f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(ciclosFiltrados, key = { it.id }) { ciclo ->
+                        val esSeleccionado = ciclo.id == cicloSeleccionado?.id
 
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onCicloSeleccionado(ciclo) },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (esSeleccionado) NaranjaAcento.copy(alpha = 0.15f) else FondoOscuro
-                        ),
-                        border = if (esSeleccionado) {
-                            BorderStroke(1.5.dp, NaranjaAcento)
-                        } else null
-                    ) {
-                        Row(
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .clickable { onCicloSeleccionado(ciclo) },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (esSeleccionado) NaranjaAcento.copy(alpha = 0.15f) else FondoOscuro
+                            ),
+                            border = if (esSeleccionado) BorderStroke(1.5.dp, NaranjaAcento) else null
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = if (ciclo.estaActivo) "Ciclo Activo" else "Ciclo de Entrenamiento",
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (esSeleccionado) NaranjaAcento else Color.White,
-                                        fontSize = 14.sp
-                                    )
-                                    if (ciclo.estaActivo) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .size(8.dp)
-                                                .clip(CircleShape)
-                                                .background(VerdeExito)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = if (ciclo.estaActivo) "🟢 Ciclo Actual" else "📋 Ciclo de Entrenamiento",
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (esSeleccionado) NaranjaAcento else Color.White,
+                                            fontSize = 14.sp
                                         )
                                     }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Text(
+                                        text = "${formatearFechaHistorial(ciclo.fechaInicio)} — ${if (ciclo.fechaCierre > 0L) formatearFechaHistorial(ciclo.fechaCierre) else "Presente"}",
+                                        color = TextoSecundario,
+                                        fontSize = 12.sp
+                                    )
                                 }
 
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                Text(
-                                    text = "${formatearFechaHistorial(ciclo.fechaInicio)} — ${if (ciclo.fechaCierre > 0L) formatearFechaHistorial(ciclo.fechaCierre) else "Presente"}",
-                                    color = TextoSecundario,
-                                    fontSize = 12.sp
-                                )
-                            }
-
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "${ciclo.sesionesCompletadas}/${ciclo.metaSesionesAsignadas} Días",
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    fontSize = 13.sp
-                                )
-                                Text(
-                                    text = "${ciclo.porcentajeAsistencia.toInt()}% Asistencia",
-                                    color = if (ciclo.porcentajeAsistencia >= 80.0) VerdeExito else TextoSecundario,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = "${ciclo.sesionesCompletadas}/${ciclo.metaSesionesAsignadas} Días",
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        fontSize = 13.sp
+                                    )
+                                    Text(
+                                        text = "${ciclo.porcentajeAsistencia.toInt()}% Asistencia",
+                                        color = if (ciclo.porcentajeAsistencia >= 80.0) VerdeExito else TextoSecundario,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SelectorFiltroDropdown(
+    titulo: String,
+    opcionSeleccionada: String,
+    opciones: List<String>,
+    onOpcionSeleccionada: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expandido by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expandido,
+        onExpandedChange = { expandido = !expandido },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = if (opcionSeleccionada == "TODOS") "Todos ($titulo)" else opcionSeleccionada,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(titulo, color = TextoSecundario, fontSize = 11.sp) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandido) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = NaranjaAcento,
+                unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+                focusedContainerColor = FondoOscuro,
+                unfocusedContainerColor = FondoOscuro
+            ),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.menuAnchor().fillMaxWidth()
+        )
+
+        ExposedDropdownMenu(
+            expanded = expandido,
+            onDismissRequest = { expandido = false },
+            modifier = Modifier.background(FondoTarjeta)
+        ) {
+            opciones.forEach { opcion ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = if (opcion == "TODOS") "Todos ($titulo)" else opcion,
+                            color = Color.White,
+                            fontWeight = if (opcion == opcionSeleccionada) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    onClick = {
+                        onOpcionSeleccionada(opcion)
+                        expandido = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun KpiPill(
+    modifier: Modifier = Modifier,
+    valor: String,
+    etiqueta: String,
+    subetiqueta: String,
+    colorVal: Color
+) {
+    Surface(
+        modifier = modifier,
+        color = FondoOscuro,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(text = valor, fontWeight = FontWeight.Black, color = colorVal, fontSize = 16.sp)
+            Text(text = etiqueta, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            Text(text = subetiqueta, color = TextoSecundario, fontSize = 10.sp)
         }
     }
 }
@@ -508,100 +1323,8 @@ fun FiltroRutinasCicloRow(
     }
 }
 
-@Composable
-fun TarjetaResumenCiclo(ciclo: CicloEntrenamiento, resumen: ResumenCicloUI) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = FondoTarjeta)
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = if (ciclo.estaActivo) "🟢 Ciclo Activo en Curso" else "📋 Resumen de Ciclo Cerrado",
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        fontSize = 15.sp
-                    )
-                    Text(
-                        text = "${formatearFechaHistorial(ciclo.fechaInicio)} — ${if (ciclo.fechaCierre > 0L) formatearFechaHistorial(ciclo.fechaCierre) else "Presente"}",
-                        color = TextoSecundario,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-
-            HorizontalDivider(color = FondoOscuro)
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-                MetricItem(
-                    valor = "${resumen.porcentajeAsistencia.toInt()}%",
-                    subetiqueta = "${resumen.sesionesCompletadas}/${resumen.metaSesiones} Días",
-                    etiqueta = "Asistencia"
-                )
-                MetricItem(
-                    valor = if (resumen.rpePromedio > 0.0) "${resumen.rpePromedio}" else "N/A",
-                    subetiqueta = "Esfuerzo Medio",
-                    etiqueta = "RPE"
-                )
-                MetricItem(
-                    valor = "${(resumen.tonelajeTotalKg / 1000.0).let { if (it >= 1.0) "${((it * 10).roundToInt() / 10.0)}t" else "${resumen.tonelajeTotalKg.toInt()}kg" }}",
-                    subetiqueta = "Volumen Aislado",
-                    etiqueta = "Tonelaje"
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun TarjetaImpactoFisico(impacto: ImpactoFisicoUI) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = NaranjaAcento.copy(alpha = 0.08f)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.25f))
-    ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text = "⚖️ Impacto Corporal del Ciclo", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
-
-            impacto.deltaPeso?.let { delta ->
-                val signo = if (delta > 0) "+" else ""
-                val colorTexto = if (delta <= 0) VerdeExito else NaranjaAcento
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Masa Corporal:", color = TextoSecundario, fontSize = 13.sp)
-                    Text(
-                        text = "${impacto.pesoInicial} kg ➔ ${impacto.pesoFinal} kg ($signo$delta kg)",
-                        fontWeight = FontWeight.Bold,
-                        color = colorTexto,
-                        fontSize = 13.sp
-                    )
-                }
-            }
-
-            impacto.deltaAbdomen?.let { delta ->
-                val signo = if (delta > 0) "+" else ""
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Cintura / Abdomen:", color = TextoSecundario, fontSize = 13.sp)
-                    Text(
-                        text = "${impacto.abdomenInicial} cm ➔ ${impacto.abdomenFinal} cm ($signo$delta cm)",
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        fontSize = 13.sp
-                    )
-                }
-            }
-        }
-    }
-}
-
 // ============================================================
-// TARJETA DE SESIÓN CON MARCADORES DE CUMPLIMIENTO
+// TARJETA DE SESIÓN DEL DIARIO
 // ============================================================
 
 @Composable
@@ -614,9 +1337,9 @@ fun TarjetaDiarioSesion(sesion: SesionEntrenamiento) {
         }
     }
 
-    // Cálculo del estado de cumplimiento de la sesión
     val repsLogradas = sesion.totalRepsEfectivasLogradas
     val repsMeta = sesion.totalRepsEfectivasMeta
+
     val (colorBadge, textoBadge) = remember(repsLogradas, repsMeta) {
         when {
             repsMeta <= 0 -> VerdeExito to "Completada"
@@ -633,37 +1356,66 @@ fun TarjetaDiarioSesion(sesion: SesionEntrenamiento) {
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = FondoTarjeta)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = sesion.nombreRutina, fontWeight = FontWeight.Bold, color = NaranjaAcento, fontSize = 15.sp, modifier = Modifier.weight(1f))
-
-                // Badge de Cumplimiento de Sesión
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(colorBadge.copy(alpha = 0.15f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(text = textoBadge, color = colorBadge, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Text(
+                        text = formatearFechaHistorial(sesion.fechaEjecucion),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+
+                    Surface(
+                        color = colorBadge.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = textoBadge,
+                            color = colorBadge,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                Text(
+                    text = sesion.nombreRutina,
+                    fontWeight = FontWeight.Black,
+                    color = NaranjaAcento,
+                    fontSize = 15.sp
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(
+                        text = "Reps: $repsLogradas / ${if (repsMeta > 0) repsMeta else "-"}",
+                        color = TextoSecundario,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = "Volumen: ${volumenSesion.toInt()} kg",
+                        color = TextoSecundario,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = formatearFechaHistorial(sesion.fechaEjecucion), color = TextoSecundario, fontSize = 12.sp)
-
-            Spacer(modifier = Modifier.height(10.dp))
-            HorizontalDivider(color = FondoOscuro)
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(text = "Reps: $repsLogradas / ${if(repsMeta > 0) repsMeta else "-"}", color = Color.White, fontSize = 13.sp)
-                Text(text = "Volumen: ${volumenSesion.toInt()} kg", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
-                Text(text = "Tocar para detalle ➔", color = NaranjaAcento, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = "Ver Detalle",
+                tint = NaranjaAcento,
+                modifier = Modifier.size(22.dp)
+            )
         }
     }
 
@@ -673,7 +1425,7 @@ fun TarjetaDiarioSesion(sesion: SesionEntrenamiento) {
 }
 
 // ============================================================
-// DIÁLOGO DETALLE QUIRÚRGICO DE LA SESIÓN (PAUTA VS LOGRADO)
+// DIÁLOGO DETALLE DE LA SESIÓN
 // ============================================================
 
 @Composable
@@ -705,7 +1457,7 @@ fun DetalleSesionDialog(sesion: SesionEntrenamiento, onDismiss: () -> Unit) {
                     modifier = Modifier
                         .weight(1f)
                         .padding(vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     itemsIndexed(
                         items = sesion.ejerciciosRealizados,
@@ -803,7 +1555,6 @@ fun DetalleSesionDialog(sesion: SesionEntrenamiento, onDismiss: () -> Unit) {
                                             )
                                         }
 
-                                        // Badge de RPE de la serie
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(6.dp))
@@ -860,17 +1611,8 @@ fun DetalleSesionDialog(sesion: SesionEntrenamiento, onDismiss: () -> Unit) {
 }
 
 // ============================================================
-// COMPONENTES AUXILIARES PRESERVADOS
+// COMPONENTES AUXILIARES DE RACHA Y RÉCORDS
 // ============================================================
-
-@Composable
-fun MetricItem(valor: String, subetiqueta: String, etiqueta: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = valor, fontWeight = FontWeight.Black, color = NaranjaAcento, fontSize = 18.sp)
-        Text(text = subetiqueta, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 11.sp)
-        Text(text = etiqueta, color = TextoSecundario, fontSize = 10.sp)
-    }
-}
 
 @Composable
 fun KpiSection(rachaSemana: List<Pair<String, Boolean>>, entrenosMes: Int, volumenSemanal: Double) {
@@ -921,89 +1663,13 @@ fun MiniKpi(valor: String, etiqueta: String) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun EvolucionEjercicioSection(
-    ejerciciosDisponibles: List<String>,
-    historialEjercicio: List<DetalleEjercicioUI>,
-    onEjercicioSeleccionado: (String) -> Unit
-) {
-    var expandirMenu by rememberSaveable { mutableStateOf(false) }
-    var ejercicioActual by remember(ejerciciosDisponibles) {
-        mutableStateOf(ejerciciosDisponibles.firstOrNull() ?: "Seleccionar Ejercicio")
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(text = "Historial por Ejercicio", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
-
-        if (ejerciciosDisponibles.isEmpty()) {
-            Text("No se registran patrones de fuerza aún.", color = TextoSecundario, fontSize = 14.sp)
-            return
-        }
-
-        Card(
-            onClick = { expandirMenu = true },
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(text = ejercicioActual, fontWeight = FontWeight.Bold, color = Color.White)
-                Icon(Icons.Default.ArrowDropDown, contentDescription = "Seleccionar", tint = NaranjaAcento)
-            }
-
-            DropdownMenu(expanded = expandirMenu, onDismissRequest = { expandirMenu = false }, modifier = Modifier.background(FondoTarjeta)) {
-                ejerciciosDisponibles.forEach { ejercicio ->
-                    DropdownMenuItem(
-                        text = { Text(ejercicio, color = Color.White, fontWeight = FontWeight.Medium) },
-                        onClick = {
-                            ejercicioActual = ejercicio
-                            expandirMenu = false
-                            onEjercicioSeleccionado(ejercicio)
-                        }
-                    )
-                }
-            }
-        }
-
-        if (historialEjercicio.isNotEmpty()) {
-            GraficaProgresoEjercicio(historialEjercicio = historialEjercicio)
-        }
-
-        historialEjercicio.forEach { registro ->
-            key(registro.fechaFormat) {
-                RegistroEjercicioCard(registro)
-            }
-        }
-    }
-}
-
-@Composable
-fun RegistroEjercicioCard(registro: DetalleEjercicioUI) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = FondoTarjeta), shape = RoundedCornerShape(12.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(registro.fechaFormat, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
-                Text(registro.nombreRutina, color = NaranjaAcento, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            registro.detalle.seriesRealizadas.forEach { serie ->
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Serie ${serie.numeroSerie}", color = TextoSecundario, fontSize = 14.sp)
-                    Text("${serie.pesoKg} kg x ${serie.repeticionesLogradas} reps", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun TarjetaRecordPersonal(record: RecordPersonalUI) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = NaranjaAcento.copy(alpha = 0.1f)),
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.3f))
+        border = BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.3f))
     ) {
         Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Star, contentDescription = "Récord", tint = Color(0xFFFFD700), modifier = Modifier.size(36.dp))
@@ -1020,85 +1686,6 @@ fun TarjetaRecordPersonal(record: RecordPersonalUI) {
             Column(horizontalAlignment = Alignment.End) {
                 Text(text = "${if(record.pesoMaximo % 1.0 == 0.0) record.pesoMaximo.toInt() else record.pesoMaximo} kg", fontWeight = FontWeight.Black, color = NaranjaAcento, fontSize = 20.sp)
                 Text(text = "x ${record.repeticiones} reps", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
-            }
-        }
-    }
-}
-
-@Composable
-fun GraficaProgresoEjercicio(historialEjercicio: List<DetalleEjercicioUI>) {
-    val ultimosRegistros = remember(historialEjercicio) { historialEjercicio.take(6).reversed() }
-
-    val datosVolumen = remember(ultimosRegistros) {
-        ultimosRegistros.map { reg ->
-            reg.detalle.seriesRealizadas.sumOf { s -> s.pesoKg * s.repeticionesLogradas }.toFloat()
-        }
-    }
-
-    val etiquetasFechas = remember(ultimosRegistros) {
-        ultimosRegistros.map { reg ->
-            val partes = reg.fechaFormat.split(" ")
-            if (partes.size >= 2) "${partes[0]} ${partes[1]}" else reg.fechaFormat
-        }
-    }
-
-    if (datosVolumen.isEmpty()) return
-
-    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = FondoTarjeta)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text("Curva de Rendimiento", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp)
-                    Text("Volumen por sesión (kg × reps)", color = TextoSecundario, fontSize = 12.sp)
-                }
-                Text(text = "${datosVolumen.lastOrNull()?.toInt() ?: 0} kg", fontWeight = FontWeight.Black, color = NaranjaAcento, fontSize = 22.sp)
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            val maxVal = datosVolumen.maxOrNull() ?: 1f
-            val minVal = datosVolumen.minOrNull() ?: 0f
-            val rango = if (maxVal == minVal) 1f else maxVal - minVal
-
-            Canvas(modifier = Modifier.fillMaxWidth().height(130.dp)) {
-                val ancho = size.width
-                val alto = size.height
-                val espacioX = ancho / (if (datosVolumen.size > 1) datosVolumen.size - 1 else 1)
-
-                val puntos = datosVolumen.mapIndexed { i, valor ->
-                    val x = i * espacioX
-                    val y = alto - ((valor - minVal) / rango) * (alto * 0.8f) - (alto * 0.1f)
-                    androidx.compose.ui.geometry.Offset(x, y)
-                }
-
-                if (puntos.size > 1) {
-                    val pathFondo = Path().apply {
-                        moveTo(puntos.first().x, alto)
-                        puntos.forEach { lineTo(it.x, it.y) }
-                        lineTo(puntos.last().x, alto)
-                        close()
-                    }
-                    drawPath(path = pathFondo, brush = Brush.verticalGradient(colors = listOf(NaranjaAcento.copy(alpha = 0.25f), Color.Transparent)))
-
-                    val pathLinea = Path().apply {
-                        moveTo(puntos.first().x, puntos.first().y)
-                        for (i in 1 until puntos.size) { lineTo(puntos[i].x, puntos[i].y) }
-                    }
-                    drawPath(path = pathLinea, color = NaranjaAcento, style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round))
-                }
-
-                puntos.forEach { punto ->
-                    drawCircle(color = FondoOscuro, radius = 5.dp.toPx(), center = punto)
-                    drawCircle(color = NaranjaAcento, radius = 3.5.dp.toPx(), center = punto)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                etiquetasFechas.forEach { fecha ->
-                    Text(text = fecha, color = TextoSecundario, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
             }
         }
     }

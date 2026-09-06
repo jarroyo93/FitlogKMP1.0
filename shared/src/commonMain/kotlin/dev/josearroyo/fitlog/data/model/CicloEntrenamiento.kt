@@ -13,6 +13,7 @@ data class CicloEntrenamiento(
 
     @Serializable(with = TimestampLongSerializer::class)
     val fechaCierre: Long = 0L,
+    val duracionDias: Int =7,
     val estaActivo: Boolean = true,
 
     val metaSesionesAsignadas: Int = 0,

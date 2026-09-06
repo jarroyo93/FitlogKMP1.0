@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import dev.josearroyo.fitlog.data.model.*
 import dev.josearroyo.fitlog.repository.AtletaProgresoRepository
 import dev.josearroyo.fitlog.repository.AtletaRepository
+import dev.josearroyo.fitlog.ui.util.SemaforoCalculador
+import dev.josearroyo.fitlog.getCurrentTimeMillis
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,7 +56,6 @@ class AtletaDetailViewModel(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             try {
-                // supervisorScope aísla las fallas de red individuales impidiendo crashes
                 supervisorScope {
                     val atletaDeferred = async { atletaRepository.obtenerUsuario(atletaId) }
                     val cicloDeferred = async { progresoRepository.obtenerCicloActivo(atletaId) }
@@ -69,7 +70,7 @@ class AtletaDetailViewModel(
                     if (atleta != null) {
                         val rutinaActiva = rutinas.firstOrNull { it.estaActiva }
 
-                        // 1. Extraer comentarios
+                        // 1. Extraer comentarios de las sesiones
                         val notasExtraidas = sesionesHistorial.flatMap { sesion ->
                             sesion.ejerciciosRealizados
                                 .filter { it.notasAtleta.isNotBlank() }
@@ -83,47 +84,66 @@ class AtletaDetailViewModel(
                                 }
                         }.take(3)
 
-                        // 2. Procesar RPE con sanado explícito contra NaN / Infinity
-                        val todasLasSeriesConRpe = sesionesHistorial
+                        // 2. Filtrar historial de sesiones correspondientes al ciclo activo
+                        val sesionesCicloActivo = if (cicloActivo != null) {
+                            sesionesHistorial.filter { it.fechaEjecucion >= cicloActivo.fechaInicio }
+                        } else emptyList()
+
+                        // 3. RECÁLCULO UNIFICADO CON SEMÁFORO CALCULADOR 🟢
+                        val ahora = getCurrentTimeMillis()
+
+                        val metricaAdherencia = if (cicloActivo != null) {
+                            val milisPorDia = 86_400_000L
+                            val diasTranscurridos = (((ahora - cicloActivo.fechaInicio) / milisPorDia) + 1)
+                                .toInt()
+                                .coerceIn(1, cicloActivo.duracionDias)
+
+                            SemaforoCalculador.evaluarAdherenciaProRata(
+                                metaSesionesCiclo = cicloActivo.metaSesionesAsignadas,
+                                duracionDiasCiclo = cicloActivo.duracionDias,
+                                sesionesEjecutadas = cicloActivo.sesionesCompletadas,
+                                diasTranscurridos = diasTranscurridos
+                            )
+                        } else MetricaSemaforo(0.0, EstadoSemaforo.SIN_DATOS, "")
+
+                        val metricaVolumen = if (cicloActivo != null) {
+                            SemaforoCalculador.evaluarVolumenEfectivo(
+                                repsMetaTotal = cicloActivo.repeticionesMetaTotal,
+                                repsLogradasTotal = cicloActivo.repeticionesLogradasTotal,
+                                metaSesionesCiclo = cicloActivo.metaSesionesAsignadas,
+                                sesionesEjecutadas = cicloActivo.sesionesCompletadas
+                            )
+                        } else MetricaSemaforo(0.0, EstadoSemaforo.SIN_DATOS, "")
+
+                        // Extraer series efectivas del ciclo para RPE (excluyendo aproximaciones)
+                        val todasLasSeriesEfectivas = sesionesCicloActivo.flatMap { sesion ->
+                            sesion.ejerciciosRealizados.flatMap { it.seriesRealizadas }
+                        }
+                        val metricaFatiga = SemaforoCalculador.evaluarFatigaRpe(todasLasSeriesEfectivas)
+
+                        // Top 3 ejercicios con mayor RPE del ciclo activo
+                        val rpePorEj = sesionesCicloActivo
                             .flatMap { it.ejerciciosRealizados }
                             .filter { !it.fueSaltado }
                             .flatMap { ej ->
-                                ej.seriesRealizadas.mapNotNull { serie ->
-                                    serie.rpe?.let { rpe -> ej.nombreEjercicio to rpe.toDouble() }
-                                }
+                                ej.seriesRealizadas
+                                    .filter { it.tipoSerie != TipoSerie.APROXIMACION && (it.rpe ?: 0) > 0 }
+                                    .map { serie -> ej.nombreEjercicio to serie.rpe!!.toDouble() }
                             }
-
-                        val rpeGlobal = if (todasLasSeriesConRpe.isNotEmpty()) {
-                            val avg = todasLasSeriesConRpe.map { it.second }.average()
-                            if (avg.isNaN() || avg.isInfinite()) 0.0 else avg
-                        } else 0.0
-
-                        val rpePorEj = todasLasSeriesConRpe.groupBy { it.first }
-                            .mapValues { entry ->
-                                val avg = entry.value.map { it.second }.average()
-                                if (avg.isNaN() || avg.isInfinite()) 0.0 else avg
-                            }
+                            .groupBy { it.first }
+                            .mapValues { entry -> entry.value.map { it.second }.average() }
                             .toList()
                             .sortedByDescending { it.second }
                             .take(3)
                             .toMap()
 
-                        // 3. Saneamiento de porcentajes del ciclo antes de enviar a la UI
-                        val asistenciaSanada = cicloActivo?.porcentajeAsistencia?.let {
-                            if (it.isNaN() || it.isInfinite()) 0.0 else it
-                        } ?: 0.0
-
-                        val volumenSanado = cicloActivo?.porcentajeVolumenGlobal?.let {
-                            if (it.isNaN() || it.isInfinite()) 0.0 else it
-                        } ?: 0.0
-
-                        // 4. Estructurar Informe seguro
+                        // 4. Estructurar Informe Sincronizado
                         val informe = InformeCoach(
-                            asistenciaPorcentaje = asistenciaSanada,
-                            cumplimientoVolumen = volumenSanado,
-                            rpePromedioGlobal = rpeGlobal,
+                            asistenciaPorcentaje = metricaAdherencia.valor,
+                            cumplimientoVolumen = metricaVolumen.valor,
+                            rpePromedioGlobal = metricaFatiga.valor,
                             rpePromedioPorEjercicio = rpePorEj,
-                            totalSesiones = sesionesHistorial.size,
+                            totalSesiones = cicloActivo?.sesionesCompletadas ?: 0,
                             fechaInicio = cicloActivo?.fechaInicio,
                             fechaFin = cicloActivo?.fechaCierre
                         )

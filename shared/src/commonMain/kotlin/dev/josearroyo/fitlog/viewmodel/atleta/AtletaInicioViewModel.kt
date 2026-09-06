@@ -3,6 +3,7 @@ package dev.josearroyo.fitlog.viewmodel.atleta
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.josearroyo.fitlog.data.model.CicloEntrenamiento
+import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
 import dev.josearroyo.fitlog.data.model.Pesaje
 import dev.josearroyo.fitlog.data.model.RutinaAsignada
 import dev.josearroyo.fitlog.data.model.Usuario
@@ -78,8 +79,18 @@ class AtletaInicioViewModel : ViewModel() {
 
     fun registrarPeso(pesoKg: Double, notas: String) {
         val atletaId = currentAtletaId ?: return
+
+        // 🔒 GUARD DE SEGURIDAD: Verificar que la suscripción cargada en el estado esté ACTIVA
+        val usuarioActual = _state.value.usuario
+        if (usuarioActual?.estadoSuscripcion != EstadoSuscripcion.ACTIVO) {
+            _state.update {
+                it.copy(error = "No puedes registrar pesajes mientras tu suscripción esté inactiva o suspendida.")
+            }
+            return
+        }
+
         viewModelScope.launch {
-            try { // 🟢 Protegido contra caídas de red al guardar peso
+            try {
                 val nuevoPesaje = Pesaje(
                     pesoKg = pesoKg,
                     notas = notas,

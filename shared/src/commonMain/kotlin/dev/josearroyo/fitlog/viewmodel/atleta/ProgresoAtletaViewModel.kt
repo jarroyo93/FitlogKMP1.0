@@ -61,10 +61,8 @@ data class ProgresoAtletaState(
     val volumenSemanal: Double = 0.0,
     val ejerciciosDisponibles: List<String> = emptyList(),
     val historialEjercicioFiltrado: List<DetalleEjercicioUI> = emptyList(),
-    val historialSesiones: List<SesionEntrenamiento> = emptyList(), // Sesiones del ciclo activo/seleccionado
+    val historialSesiones: List<SesionEntrenamiento> = emptyList(),
     val recordsPersonales: List<RecordPersonalUI> = emptyList(),
-
-    // --- NUEVAS PROPIEDADES PARA HISTORIAL DE CICLOS ---
     val historialCiclos: List<CicloEntrenamiento> = emptyList(),
     val cicloSeleccionado: CicloEntrenamiento? = null,
     val resumenCicloSeleccionado: ResumenCicloUI = ResumenCicloUI()
@@ -91,7 +89,6 @@ class ProgresoAtletaViewModel(
                 if (usuario != null) {
                     val atletaId = usuario.id
 
-                    // Carga concurrente paralela para alta velocidad
                     kotlinx.coroutines.supervisorScope {
                         val sesionesDef = async { progresoRepository.obtenerHistorialEntrenamientos(atletaId) }
                         val ciclosDef = async { progresoRepository.obtenerHistorialCiclos(atletaId) }
@@ -103,7 +100,6 @@ class ProgresoAtletaViewModel(
                         todosLosPesajes = pesajesDef.await()
                         todasLasValoraciones = valoracionesDef.await()
 
-                        // Seleccionar ciclo activo por defecto, o el más reciente
                         val cicloInicial = ciclos.firstOrNull { it.estaActivo } ?: ciclos.firstOrNull()
 
                         _uiState.update { state ->
@@ -113,7 +109,6 @@ class ProgresoAtletaViewModel(
                             )
                         }
 
-                        // Calcular métricas generales y del ciclo seleccionado
                         calcularKPIsYEjercicios()
                         cicloInicial?.let { seleccionarCiclo(it) }
                     }
@@ -129,12 +124,19 @@ class ProgresoAtletaViewModel(
     fun seleccionarCiclo(ciclo: CicloEntrenamiento) {
         val toleranciaMilis = 300_000L
         val inicio = (ciclo.fechaInicio - toleranciaMilis).coerceAtLeast(0L)
-        val fin = if (ciclo.fechaCierre > 0L) ciclo.fechaCierre else Long.MAX_VALUE
 
-        // 1. Filtrar sesiones pertenecientes exclusivamente a este ciclo
+        // ✅ SOLUCIÓN AL PUNTO 1: Si el ciclo está activo, el tiempo límite superior NO se recorta por fechaCierre.
+        // Esto permite que el ciclo se extienda en días calendario sin perder las sesiones del historial.
+        val fin = if (ciclo.estaActivo) {
+            Long.MAX_VALUE
+        } else {
+            if (ciclo.fechaCierre > 0L) ciclo.fechaCierre else Long.MAX_VALUE
+        }
+
+        // 1. Filtrar sesiones pertenecientes a este ciclo
         val sesionesDelCiclo = todasLasSesiones.filter { it.fechaEjecucion in inicio..fin }
 
-        // 2. Calcular RPE Promedio Saneado (sin divisiones por cero ni NaN)
+        // 2. Calcular RPE Promedio Saneado
         val seriesConRpe = sesionesDelCiclo
             .flatMap { it.ejerciciosRealizados }
             .filter { !it.fueSaltado }
@@ -154,7 +156,7 @@ class ProgresoAtletaViewModel(
             }
         }
 
-        // 4. Porcentajes de Asistencia y Volumen Saneados
+        // 4. Porcentajes de Asistencia y Volumen Basados en Secuencia de Eventos
         val pctAsistencia = if (ciclo.metaSesionesAsignadas > 0) {
             ((ciclo.sesionesCompletadas.toDouble() / ciclo.metaSesionesAsignadas.toDouble()) * 100.0).coerceAtMost(100.0)
         } else 0.0
@@ -198,7 +200,7 @@ class ProgresoAtletaViewModel(
         _uiState.update { state ->
             state.copy(
                 cicloSeleccionado = ciclo,
-                historialSesiones = sesionesDelCiclo, // ¡El Diario de Cargas ahora responde al ciclo activo!
+                historialSesiones = sesionesDelCiclo,
                 resumenCicloSeleccionado = resumen
             )
         }
@@ -209,12 +211,10 @@ class ProgresoAtletaViewModel(
         val unDiaMilis = 86400000L
         val unMesMilis = unDiaMilis * 30L
 
-        // 1. Cómputo de entrenamientos del mes
         val conteoMes = todasLasSesiones.count {
             it.fechaEjecucion in (ahoraMilis - unMesMilis)..ahoraMilis
         }
 
-        // 2. Cómputo de Racha Semanal y Volumen
         var volumenTotal = 0.0
         val racha = mutableListOf<Pair<String, Boolean>>()
         val nombresDiasSemana = listOf("D", "L", "M", "M", "J", "V", "S")
@@ -239,14 +239,12 @@ class ProgresoAtletaViewModel(
             }
         }
 
-        // 3. Extraer ejercicios únicos
         val nombresUnicos = todasLasSesiones
             .flatMap { it.ejerciciosRealizados }
             .map { it.nombreEjercicio }
             .distinct()
             .sorted()
 
-        // 4. Récords Personales (PRs)
         val recordsMap = mutableMapOf<String, RecordPersonalUI>()
         todasLasSesiones.forEach { sesion ->
             sesion.ejerciciosRealizados.filter { !it.fueSaltado }.forEach { ej ->
@@ -268,7 +266,6 @@ class ProgresoAtletaViewModel(
             }
         }
 
-        // 5. Historial inicial del primer ejercicio
         val historialInicialFiltrado = if (nombresUnicos.isNotEmpty()) {
             val primerEjercicio = nombresUnicos.first()
             todasLasSesiones.mapNotNull { sesion ->

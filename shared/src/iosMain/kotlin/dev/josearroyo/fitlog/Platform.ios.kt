@@ -199,3 +199,26 @@ actual fun normalizarFechaDatePicker(utcMillis: Long): Long {
     val secondsOffset = NSTimeZone.defaultTimeZone.secondsFromGMTForDate(date)
     return utcMillis - (secondsOffset * 1000L)
 }
+
+actual fun extraerAnoDeFecha(milis: Long): String {
+    if (milis <= 0L) return "2026"
+    val date = NSDate.dateWithTimeIntervalSince1970(milis / 1000.0)
+    val formatter = NSDateFormatter().apply {
+        dateFormat = "yyyy"
+        locale = NSLocale.localeWithLocaleIdentifier("es_ES")
+        timeZone = NSTimeZone.defaultTimeZone
+    }
+    return formatter.stringFromDate(date)
+}
+
+actual fun extraerMesDeFecha(milis: Long): String {
+    if (milis <= 0L) return "General"
+    val date = NSDate.dateWithTimeIntervalSince1970(milis / 1000.0)
+    val formatter = NSDateFormatter().apply {
+        dateFormat = "MMMM"
+        locale = NSLocale.localeWithLocaleIdentifier("es_ES")
+        timeZone = NSTimeZone.defaultTimeZone
+    }
+    val mes = formatter.stringFromDate(date)
+    return mes.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+}

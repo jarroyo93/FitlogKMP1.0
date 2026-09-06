@@ -36,7 +36,7 @@ import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
 import dev.josearroyo.fitlog.data.model.Usuario
 import dev.josearroyo.fitlog.formatearFechaHistorial
 import dev.josearroyo.fitlog.getCurrentTimeMillis
-import dev.josearroyo.fitlog.ui.dashboard.entrenador.util.AsignarPlanDialog
+import dev.josearroyo.fitlog.ui.util.AsignarPlanDialog
 import dev.josearroyo.fitlog.viewmodel.FacturacionViewModel
 import dev.josearroyo.fitlog.viewmodel.FiltroFacturacion
 

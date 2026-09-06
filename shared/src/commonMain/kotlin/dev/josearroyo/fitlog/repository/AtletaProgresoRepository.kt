@@ -55,6 +55,7 @@ class AtletaProgresoRepository {
                 val sesion = doc.data<SesionEntrenamiento>()
                 if (sesion.estado == EstadoSesion.COMPLETADA) {
                     for (ej in sesion.ejerciciosRealizados) {
+
                         val globalId = ej.ejercicioGlobalId
                         val nombreNorm = ej.nombreEjercicio.trim().lowercase()
 
@@ -174,6 +175,28 @@ class AtletaProgresoRepository {
         }
     }
 
+    // ✅ CORRECCIÓN EN AtletaProgresoRepository.kt
+
+    suspend fun obtenerCicloActivo(atletaId: String): CicloEntrenamiento? {
+        return try {
+            val snapshot = db.collection("users").document(atletaId)
+                .collection("ciclos_entrenamiento")
+                .where("estaActivo", equalTo = true)
+                .limit(1)
+                .get()
+
+            // REGLA: Devuelve el ciclo si está marcado como activo,
+            // independientemente de si la fechaCierre calendario ya pasó.
+            snapshot.documents.firstOrNull()?.let { doc ->
+                doc.data<CicloEntrenamiento>().copy(id = doc.id)
+            }
+        } catch (e: Exception) {
+            println("  [AtletaProgresoRepository] Error al obtener ciclo activo: ${e.message}")
+            e.printStackTrace()
+            null
+        }
+    }
+
     suspend fun registrarSesionYActualizarCiclo(
         atletaId: String,
         sesionProcesada: SesionEntrenamiento,
@@ -182,18 +205,14 @@ class AtletaProgresoRepository {
         metaSesiones: Int
     ): Boolean = try {
         val ahoraMilis = getCurrentTimeMillis()
-
         val rutinaIdReal = rutinaActual.id.ifBlank { "ID_RUTINA_DESCONOCIDO" }
-
         val sesionIdFinal = sesionProcesada.id.ifBlank { Uuid.random().toString() }
         val sesionRef = db.collection("users").document(atletaId).collection("historial_entrenamientos").document(sesionIdFinal)
-
         val sesionFinal = sesionProcesada.copy(
             id = sesionIdFinal,
             estado = EstadoSesion.COMPLETADA,
             fechaEjecucion = if (sesionProcesada.fechaEjecucion <= 0L) ahoraMilis else sesionProcesada.fechaEjecucion
         )
-
         val ciclosRef = db.collection("users").document(atletaId).collection("ciclos_entrenamiento")
         val rutinaRef = db.collection("users").document(atletaId).collection("rutinas_asignadas").document(rutinaIdReal)
 
@@ -202,22 +221,17 @@ class AtletaProgresoRepository {
             doc.data<CicloEntrenamiento>().copy(id = doc.id)
         }
 
-        if (cicloActivo != null && ahoraMilis > cicloActivo.fechaCierre) {
-            ciclosRef.document(cicloActivo.id).update("estaActivo" to false)
-            cicloActivo = null
-        }
+        // REMOVIDO: Ya no se auto-cierra el ciclo si ahoraMilis > cicloActivo.fechaCierre
 
         db.runTransaction {
             val sesionExistenteDoc = get(sesionRef)
             val esEdicion = sesionExistenteDoc.exists
             val sesionPrevia = if (esEdicion) sesionExistenteDoc.data<SesionEntrenamiento>() else null
-
             val deltaRepsLogradas = if (esEdicion && sesionPrevia != null) {
                 sesionFinal.totalRepsEfectivasLogradas - sesionPrevia.totalRepsEfectivasLogradas
             } else {
                 sesionFinal.totalRepsEfectivasLogradas
             }
-
             set(sesionRef, sesionFinal)
 
             val cicloActualizado: CicloEntrenamiento
@@ -235,10 +249,8 @@ class AtletaProgresoRepository {
                         }
                     }
                 }
-
                 val fechaInicioReal = minOf(ahoraMilis, sesionFinal.fechaInicio)
                 val fechaCierreCalculada = calcularFechaCierreCiclo(fechaInicioReal)
-
                 val nuevoCiclo = CicloEntrenamiento(
                     id = cicloIdToUse,
                     atletaId = atletaId,
@@ -252,12 +264,13 @@ class AtletaProgresoRepository {
                     repeticionesLogradasTotal = sesionFinal.totalRepsEfectivasLogradas
                 )
 
+                // CÁLCULO DE MÉTRICAS BASADO EN EVENTOS (Sesiones completadas / Meta)
                 val porcentajeAsist = if (nuevoCiclo.metaSesionesAsignadas > 0) {
-                    (nuevoCiclo.sesionesCompletadas.toDouble() / nuevoCiclo.metaSesionesAsignadas.toDouble()) * 100.0
+                    ((nuevoCiclo.sesionesCompletadas.toDouble() / nuevoCiclo.metaSesionesAsignadas.toDouble()) * 100.0).coerceAtMost(100.0)
                 } else 0.0
 
                 val porcentajeVol = if (nuevoCiclo.repeticionesMetaTotal > 0) {
-                    (nuevoCiclo.repeticionesLogradasTotal.toDouble() / nuevoCiclo.repeticionesMetaTotal.toDouble()) * 100.0
+                    ((nuevoCiclo.repeticionesLogradasTotal.toDouble() / nuevoCiclo.repeticionesMetaTotal.toDouble()) * 100.0).coerceAtMost(100.0)
                 } else 0.0
 
                 cicloActualizado = nuevoCiclo.copy(
@@ -269,20 +282,26 @@ class AtletaProgresoRepository {
                 val nuevaMetaReps = cicloActivo.repeticionesMetaTotal
                 val nuevasRepsLogradas = maxOf(0, cicloActivo.repeticionesLogradasTotal + deltaRepsLogradas)
 
+                // REGLA: Porcentaje agnóstico al tiempo calendario transcurrido
                 val porcentajeAsist = if (cicloActivo.metaSesionesAsignadas > 0) {
-                    (nuevasSesiones.toDouble() / cicloActivo.metaSesionesAsignadas.toDouble()) * 100.0
+                    ((nuevasSesiones.toDouble() / cicloActivo.metaSesionesAsignadas.toDouble()) * 100.0).coerceAtMost(100.0)
                 } else 0.0
 
                 val porcentajeVol = if (nuevaMetaReps > 0) {
-                    (nuevasRepsLogradas.toDouble() / nuevaMetaReps.toDouble()) * 100.0
+                    ((nuevasRepsLogradas.toDouble() / nuevaMetaReps.toDouble()) * 100.0).coerceAtMost(100.0)
                 } else 0.0
+
+                // REGLA DE AUTO-COMPLETADO: Solo se marca estaActivo = false cuando se alcanza la meta de sesiones
+                val cicloCompleto = nuevasSesiones >= cicloActivo.metaSesionesAsignadas
 
                 cicloActualizado = cicloActivo.copy(
                     sesionesCompletadas = nuevasSesiones,
                     repeticionesMetaTotal = nuevaMetaReps,
                     repeticionesLogradasTotal = nuevasRepsLogradas,
                     porcentajeAsistencia = porcentajeAsist,
-                    porcentajeVolumenGlobal = porcentajeVol
+                    porcentajeVolumenGlobal = porcentajeVol,
+                    estaActivo = !cicloCompleto, // Se cierra solo si completó la meta
+                    fechaCierre = if (cicloCompleto) ahoraMilis else cicloActivo.fechaCierre
                 )
             }
             set(cicloRefToUse, cicloActualizado)
@@ -298,33 +317,9 @@ class AtletaProgresoRepository {
         }
         true
     } catch (e: Exception) {
-        println("🔥 [AtletaProgresoRepository] ERROR CRÍTICO AL GUARDAR ENTRENAMIENTO: ${e.message}")
+        println("  [AtletaProgresoRepository] ERROR CRÍTICO AL GUARDAR ENTRENAMIENTO: ${e.message}")
         e.printStackTrace()
         false
-    }
-
-    suspend fun obtenerCicloActivo(atletaId: String): CicloEntrenamiento? {
-        return try {
-            val snapshot = db.collection("users").document(atletaId)
-                .collection("ciclos_entrenamiento")
-                .where("estaActivo", equalTo = true)
-                .limit(1)
-                .get()
-
-            val ciclo = snapshot.documents.firstOrNull()?.let { doc ->
-                doc.data<CicloEntrenamiento>().copy(id = doc.id)
-            }
-
-            if (ciclo != null && getCurrentTimeMillis() > ciclo.fechaCierre) {
-                null
-            } else {
-                ciclo
-            }
-        } catch (e: Exception) {
-            println("🔥 [AtletaProgresoRepository] Error al obtener ciclo activo: ${e.message}")
-            e.printStackTrace()
-            null
-        }
     }
 
     suspend fun actualizarMetaCicloActivo(atletaId: String, nuevaMetaSesiones: Int, nuevasRepsMetaTotal: Int) {
