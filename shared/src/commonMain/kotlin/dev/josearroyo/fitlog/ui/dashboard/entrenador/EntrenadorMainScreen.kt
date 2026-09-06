@@ -104,8 +104,12 @@ fun EntrenadorMainScreen(
                 composable(BottomNavItem.Atletas.route) {
                     EntrenadorDashboardScreen(
                         entrenadorId = uid,
-                        // 🟢 NAVEGACIÓN DIRECTA A MÉTRICAS / PROGRESO DEL ATLETA
+                        // 🟢 Clic desde pestaña "Mis Atletas" -> Abre el expediente completo AtletaDetailScreen
                         onAtletaClick = { atletaId ->
+                            onNavigateToAtletaDetail(atletaId)
+                        },
+                        // 🟢 Clic desde pestaña "Semáforo" -> Abre ProgresoAtletaScreen directamente
+                        onSemaforoClick = { atletaId ->
                             bottomNavController.navigate("progreso_atleta/$atletaId")
                         },
                         onAddAtletaClick = {
@@ -115,9 +119,11 @@ fun EntrenadorMainScreen(
                 }
 
                 composable(route = "progreso_atleta/{atletaId}") { backStackEntry ->
-                    // 🟢 Forma limpia usando savedStateHandle
                     val atletaId = backStackEntry.savedStateHandle["atletaId"] ?: ""
-                    ProgresoAtletaScreen(userId = atletaId)
+                    ProgresoAtletaScreen(
+                        userId = atletaId,
+                        onBack = { bottomNavController.popBackStack() }
+                    )
                 }
 
                 composable(BottomNavItem.Biblioteca.route) {

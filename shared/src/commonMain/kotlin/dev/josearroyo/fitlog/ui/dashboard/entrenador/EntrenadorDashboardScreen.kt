@@ -39,6 +39,7 @@ private val TextoSecundario = Color(0xFFB3AEC6)
 fun EntrenadorDashboardScreen(
     entrenadorId: String,
     onAtletaClick: (String) -> Unit,
+    onSemaforoClick: (String) -> Unit,
     onAddAtletaClick: () -> Unit
 ) {
     val dashboardViewModel: EntrenadorViewModel = viewModel { EntrenadorViewModel() }
