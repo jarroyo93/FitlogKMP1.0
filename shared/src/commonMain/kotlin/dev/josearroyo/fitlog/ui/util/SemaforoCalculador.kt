@@ -73,10 +73,11 @@ object SemaforoCalculador {
             (repsLogradasTotal.toDouble() / repsMetaAcumulada) * 100.0
         } else 0.0
 
+        // 🟢 RANGOS UNIFICADOS: Tolerancia del 15% por arriba/abajo antes de alertar
         val estado = when {
-            porcentaje in 85.0..110.0 -> EstadoSemaforo.VERDE
-            porcentaje in 70.0..84.9 || porcentaje > 110.0 -> EstadoSemaforo.AMARILLO
-            else -> EstadoSemaforo.ROJO
+            porcentaje in 85.0..115.0 -> EstadoSemaforo.VERDE
+            porcentaje in 70.0..84.9 || porcentaje in 115.1..130.0 -> EstadoSemaforo.AMARILLO
+            else -> EstadoSemaforo.ROJO // < 70.0% (Déficit crítico) o > 130.0% (Exceso crítico)
         }
 
         val porcentajeRedondeado = (porcentaje * 10).roundToInt() / 10.0

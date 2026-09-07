@@ -38,7 +38,7 @@ class SemaforoRepository(
         val sinCiclo = cicloActivo == null
         val porVencer = cicloActivo?.estaPorVencer(ahora) ?: false
 
-        // 🟢 AJUSTE: Solo se requiere gestión bloqueante si NO tiene suscripción o NO tiene plan asignado
+        // Solo se requiere gestión bloqueante si NO tiene suscripción o NO tiene plan asignado
         val requiereGestionAdmin = suscripcionInactiva || sinCiclo
         val mensajeGestion = when {
             suscripcionInactiva -> "Suscripción ${atleta.estadoSuscripcion.name.lowercase()}"
@@ -115,10 +115,19 @@ class SemaforoRepository(
             motivos.add("Baja asistencia (${metricaAdherencia.valor.toInt()}%)")
         }
 
+        // 🟢 CORREGIDO: Manejo dinámico de volumen según déficit o exceso
         if (metricaVolumen.estado == EstadoSemaforo.ROJO) {
-            motivos.add("Volumen crítico (${metricaVolumen.valor.toInt()}%)")
+            if (metricaVolumen.valor < 70.0) {
+                motivos.add("Volumen crítico (${metricaVolumen.valor.toInt()}%)")
+            } else {
+                motivos.add("Exceso crítico de volumen (${metricaVolumen.valor.toInt()}%)")
+            }
         } else if (metricaVolumen.estado == EstadoSemaforo.AMARILLO) {
-            motivos.add("Volumen bajo (${metricaVolumen.valor.toInt()}%)")
+            if (metricaVolumen.valor < 85.0) {
+                motivos.add("Volumen bajo (${metricaVolumen.valor.toInt()}%)")
+            } else {
+                motivos.add("Volumen elevado (${metricaVolumen.valor.toInt()}%)")
+            }
         }
 
         if (metricaFatiga.estado == EstadoSemaforo.ROJO) {
@@ -127,7 +136,6 @@ class SemaforoRepository(
             motivos.add("RPE elevado (${metricaFatiga.valor})")
         }
 
-        // 🟢 Se incluye como alerta visible en la tarjeta, manteniendo el color real del atleta (Verde/Amarillo/Rojo)
         if (porVencer) {
             motivos.add("Ciclo de ${cicloActivo.duracionDias} días por vencer")
         }
