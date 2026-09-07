@@ -26,7 +26,12 @@ class EntrenadorDashboardViewModel(
     private val _uiState = MutableStateFlow(SemaforoDashboardUiState())
     val uiState: StateFlow<SemaforoDashboardUiState> = _uiState.asStateFlow()
 
-    fun cargarDashboard(entrenadorId: String) {
+    fun cargarDashboard(entrenadorId: String, forzarRecarga: Boolean = false) {
+        // ⚡ CACHÉ EN MEMORIA: Evita re-consultar a la red si la lista ya existe y no se forzó recarga
+        if (!forzarRecarga && _uiState.value.atletasTotales.isNotEmpty()) {
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {

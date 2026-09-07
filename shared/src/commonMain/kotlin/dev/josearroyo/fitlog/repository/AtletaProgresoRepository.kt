@@ -23,9 +23,8 @@ class AtletaProgresoRepository {
     private val db = Firebase.firestore
 
     // ============================================================
-    // CONSULTA HISTÓRICA POR EJERCICIO (NUEVA MEJORA)
+    // CONSULTA HISTÓRICA POR EJERCICIO
     // ============================================================
-    // 📦 Objeto contenedor con el registro y su fecha de ejecución
     data class RegistroEjercicioPrevio(
         val ejercicioLog: EjercicioRealizado = EjercicioRealizado(),
         val fechaEjecucion: Long = 0L
@@ -55,7 +54,6 @@ class AtletaProgresoRepository {
                 val sesion = doc.data<SesionEntrenamiento>()
                 if (sesion.estado == EstadoSesion.COMPLETADA) {
                     for (ej in sesion.ejerciciosRealizados) {
-
                         val globalId = ej.ejercicioGlobalId
                         val nombreNorm = ej.nombreEjercicio.trim().lowercase()
 
@@ -71,12 +69,10 @@ class AtletaProgresoRepository {
                                 fechaEjecucion = sesion.fechaEjecucion
                             )
 
-                            // Guardar por ID
                             if (globalId.isNotBlank() && !mapaResultado.containsKey(globalId)) {
                                 mapaResultado[globalId] = registroObj
                             }
 
-                            // Guardar por Nombre (resguardo)
                             val ejCoincidente = nombresBuscar[nombreNorm]
                             if (ejCoincidente != null && !mapaResultado.containsKey(ejCoincidente.nombre)) {
                                 mapaResultado[ejCoincidente.nombre] = registroObj
@@ -175,7 +171,24 @@ class AtletaProgresoRepository {
         }
     }
 
-    // ✅ CORRECCIÓN EN AtletaProgresoRepository.kt
+    // ⚡ OPTIMIZACIÓN DE LECTURAS: Trae solo las sesiones a partir del inicio del ciclo activo
+    suspend fun obtenerEntrenamientosCicloActivo(
+        atletaId: String,
+        fechaInicioCicloMs: Long
+    ): List<SesionEntrenamiento> {
+        return try {
+            val snapshot = db.collection("users").document(atletaId)
+                .collection("historial_entrenamientos")
+                .where { "fechaEjecucion" greaterThanOrEqualTo fechaInicioCicloMs }
+                .orderBy("fechaEjecucion", Direction.DESCENDING)
+                .get()
+
+            snapshot.documents.map { doc -> doc.data<SesionEntrenamiento>().copy(id = doc.id) }
+        } catch (e: Exception) {
+            println("🔥 [AtletaProgresoRepository] Error al obtener entrenamientos del ciclo activo: ${e.message}")
+            emptyList()
+        }
+    }
 
     suspend fun obtenerCicloActivo(atletaId: String): CicloEntrenamiento? {
         return try {
@@ -185,13 +198,11 @@ class AtletaProgresoRepository {
                 .limit(1)
                 .get()
 
-            // REGLA: Devuelve el ciclo si está marcado como activo,
-            // independientemente de si la fechaCierre calendario ya pasó.
             snapshot.documents.firstOrNull()?.let { doc ->
                 doc.data<CicloEntrenamiento>().copy(id = doc.id)
             }
         } catch (e: Exception) {
-            println("  [AtletaProgresoRepository] Error al obtener ciclo activo: ${e.message}")
+            println("🔥 [AtletaProgresoRepository] Error al obtener ciclo activo: ${e.message}")
             e.printStackTrace()
             null
         }
@@ -220,8 +231,6 @@ class AtletaProgresoRepository {
         var cicloActivo = activeCyclesSnapshot.documents.firstOrNull()?.let { doc ->
             doc.data<CicloEntrenamiento>().copy(id = doc.id)
         }
-
-        // REMOVIDO: Ya no se auto-cierra el ciclo si ahoraMilis > cicloActivo.fechaCierre
 
         db.runTransaction {
             val sesionExistenteDoc = get(sesionRef)
@@ -264,7 +273,6 @@ class AtletaProgresoRepository {
                     repeticionesLogradasTotal = sesionFinal.totalRepsEfectivasLogradas
                 )
 
-                // CÁLCULO DE MÉTRICAS BASADO EN EVENTOS (Sesiones completadas / Meta)
                 val porcentajeAsist = if (nuevoCiclo.metaSesionesAsignadas > 0) {
                     ((nuevoCiclo.sesionesCompletadas.toDouble() / nuevoCiclo.metaSesionesAsignadas.toDouble()) * 100.0).coerceAtMost(100.0)
                 } else 0.0
@@ -282,7 +290,6 @@ class AtletaProgresoRepository {
                 val nuevaMetaReps = cicloActivo.repeticionesMetaTotal
                 val nuevasRepsLogradas = maxOf(0, cicloActivo.repeticionesLogradasTotal + deltaRepsLogradas)
 
-                // REGLA: Porcentaje agnóstico al tiempo calendario transcurrido
                 val porcentajeAsist = if (cicloActivo.metaSesionesAsignadas > 0) {
                     ((nuevasSesiones.toDouble() / cicloActivo.metaSesionesAsignadas.toDouble()) * 100.0).coerceAtMost(100.0)
                 } else 0.0
@@ -291,7 +298,6 @@ class AtletaProgresoRepository {
                     ((nuevasRepsLogradas.toDouble() / nuevaMetaReps.toDouble()) * 100.0).coerceAtMost(100.0)
                 } else 0.0
 
-                // REGLA DE AUTO-COMPLETADO: Solo se marca estaActivo = false cuando se alcanza la meta de sesiones
                 val cicloCompleto = nuevasSesiones >= cicloActivo.metaSesionesAsignadas
 
                 cicloActualizado = cicloActivo.copy(
@@ -300,7 +306,7 @@ class AtletaProgresoRepository {
                     repeticionesLogradasTotal = nuevasRepsLogradas,
                     porcentajeAsistencia = porcentajeAsist,
                     porcentajeVolumenGlobal = porcentajeVol,
-                    estaActivo = !cicloCompleto, // Se cierra solo si completó la meta
+                    estaActivo = !cicloCompleto,
                     fechaCierre = if (cicloCompleto) ahoraMilis else cicloActivo.fechaCierre
                 )
             }
@@ -317,7 +323,7 @@ class AtletaProgresoRepository {
         }
         true
     } catch (e: Exception) {
-        println("  [AtletaProgresoRepository] ERROR CRÍTICO AL GUARDAR ENTRENAMIENTO: ${e.message}")
+        println("🔥 [AtletaProgresoRepository] ERROR CRÍTICO AL GUARDAR ENTRENAMIENTO: ${e.message}")
         e.printStackTrace()
         false
     }

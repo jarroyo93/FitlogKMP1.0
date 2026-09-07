@@ -5,6 +5,9 @@ import dev.gitlive.firebase.firestore.firestore
 import dev.josearroyo.fitlog.data.model.*
 import dev.josearroyo.fitlog.getCurrentTimeMillis
 import dev.josearroyo.fitlog.ui.util.SemaforoCalculador
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
 class SemaforoRepository(
     private val userRepository: UserRepository = UserRepository(),
@@ -13,15 +16,18 @@ class SemaforoRepository(
     private val db = Firebase.firestore
 
     /**
-     * Evalúa a todos los atletas asignados al entrenador y genera sus ítems consolidados.
+     * Evalúa a todos los atletas asignados al entrenador en PARALELO.
      */
-    suspend fun obtenerEvaluacionAtletas(entrenadorId: String): List<AtletaSemaforoItem> {
+    suspend fun obtenerEvaluacionAtletas(entrenadorId: String): List<AtletaSemaforoItem> = coroutineScope {
         val atletas = userRepository.obtenerAtletasPorEntrenador(entrenadorId)
         val ahora = getCurrentTimeMillis()
 
-        return atletas.map { atleta ->
-            evaluarAtletaIndividual(atleta, ahora)
-        }
+        // ⚡ Ejecución concurrente usando async + awaitAll
+        atletas.map { atleta ->
+            async {
+                evaluarAtletaIndividual(atleta, ahora)
+            }
+        }.awaitAll()
     }
 
     private suspend fun evaluarAtletaIndividual(atleta: Usuario, ahora: Long): AtletaSemaforoItem {
@@ -32,11 +38,11 @@ class SemaforoRepository(
         val sinCiclo = cicloActivo == null
         val porVencer = cicloActivo?.estaPorVencer(ahora) ?: false
 
-        val requiereGestionAdmin = suscripcionInactiva || sinCiclo || porVencer
+        // 🟢 AJUSTE: Solo se requiere gestión bloqueante si NO tiene suscripción o NO tiene plan asignado
+        val requiereGestionAdmin = suscripcionInactiva || sinCiclo
         val mensajeGestion = when {
             suscripcionInactiva -> "Suscripción ${atleta.estadoSuscripcion.name.lowercase()}"
             sinCiclo -> "Sin rutina o ciclo asignado"
-            porVencer -> "Ciclo por vencer"
             else -> null
         }
 
@@ -80,8 +86,11 @@ class SemaforoRepository(
             sesionesEjecutadas = cicloActivo.sesionesCompletadas
         )
 
-        val entrenamientos = atletaProgresoRepository.obtenerHistorialEntrenamientos(atleta.id)
-            .filter { it.fechaEjecucion >= cicloActivo.fechaInicio }
+        // ⚡ CONSULTA OPTIMIZADA: Solo trae sesiones a partir de la fecha de inicio del ciclo
+        val entrenamientos = atletaProgresoRepository.obtenerEntrenamientosCicloActivo(
+            atletaId = atleta.id,
+            fechaInicioCicloMs = cicloActivo.fechaInicio
+        )
 
         val todasLasSeries = entrenamientos.flatMap { sesion ->
             sesion.ejerciciosRealizados.flatMap { it.seriesRealizadas }
@@ -89,7 +98,7 @@ class SemaforoRepository(
 
         val metricaFatiga = SemaforoCalculador.evaluarFatigaRpe(todasLasSeries)
 
-        // 4. Resolución de estado global
+        // 4. Resolución de estado global (Evaluación puramente física de Rendimiento)
         val estadoGlobal = SemaforoCalculador.resolverEstadoGlobal(
             requiereGestionAdmin = requiereGestionAdmin,
             adherencia = metricaAdherencia,
@@ -97,7 +106,7 @@ class SemaforoRepository(
             fatiga = metricaFatiga
         )
 
-        // 🟢 5. CONSTRUCCIÓN DE MOTIVOS DE ALERTA EXPLICATIVOS
+        // 5. Construcción de motivos de alerta explicativos
         val motivos = mutableListOf<String>()
 
         if (metricaAdherencia.estado == EstadoSemaforo.ROJO) {
@@ -118,8 +127,9 @@ class SemaforoRepository(
             motivos.add("RPE elevado (${metricaFatiga.valor})")
         }
 
+        // 🟢 Se incluye como alerta visible en la tarjeta, manteniendo el color real del atleta (Verde/Amarillo/Rojo)
         if (porVencer) {
-            motivos.add("Ciclo por vencer")
+            motivos.add("Ciclo de ${cicloActivo.duracionDias} días por vencer")
         }
 
         return AtletaSemaforoItem(
