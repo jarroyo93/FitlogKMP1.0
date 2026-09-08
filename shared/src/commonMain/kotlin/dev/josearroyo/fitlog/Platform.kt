@@ -30,3 +30,7 @@ expect fun normalizarFechaDatePicker(utcMillis: Long): Long
 // EXTRACCIÓN DE AÑO Y MES MULTIPLATAFORMA
 expect fun extraerAnoDeFecha(milis: Long): String
 expect fun extraerMesDeFecha(milis: Long): String
+
+// Agregar a Platform.kt
+expect fun obtenerInicioSemanaLunes(timestamp: Long): Long
+expect fun obtenerFinSemanaDomingo(timestamp: Long, duracionSemanas: Int = 1): Long

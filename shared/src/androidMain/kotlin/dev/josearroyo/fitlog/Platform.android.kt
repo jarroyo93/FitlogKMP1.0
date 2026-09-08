@@ -177,3 +177,33 @@ actual fun extraerMesDeFecha(milis: Long): String {
     val mes = sdf.format(date)
     return mes.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale("es", "ES")) else it.toString() }
 }
+
+actual fun obtenerInicioSemanaLunes(timestamp: Long): Long {
+    val cal = Calendar.getInstance(TimeZone.getDefault()).apply {
+        timeInMillis = timestamp
+        firstDayOfWeek = Calendar.MONDAY
+        set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    // Si la fecha se desfasó hacia el futuro por reglas locales de Calendar, retrocedemos 7 días
+    if (cal.timeInMillis > timestamp) {
+        cal.add(Calendar.DAY_OF_YEAR, -7)
+    }
+    return cal.timeInMillis
+}
+
+actual fun obtenerFinSemanaDomingo(timestamp: Long, duracionSemanas: Int): Long {
+    val inicioLunes = obtenerInicioSemanaLunes(timestamp)
+    val cal = Calendar.getInstance(TimeZone.getDefault()).apply {
+        timeInMillis = inicioLunes
+        add(Calendar.DAY_OF_YEAR, (duracionSemanas * 7) - 1)
+        set(Calendar.HOUR_OF_DAY, 23)
+        set(Calendar.MINUTE, 59)
+        set(Calendar.SECOND, 59)
+        set(Calendar.MILLISECOND, 999)
+    }
+    return cal.timeInMillis
+}

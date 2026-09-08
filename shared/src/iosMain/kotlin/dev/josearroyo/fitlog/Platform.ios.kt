@@ -18,6 +18,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import platform.AudioToolbox.AudioServicesPlaySystemSound
 import platform.AudioToolbox.kSystemSoundID_Vibrate
+import platform.Foundation.NSCalendarUnitWeekday
 
 class IOSPlatform: Platform {
     override val name: String = UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
@@ -221,4 +222,42 @@ actual fun extraerMesDeFecha(milis: Long): String {
     }
     val mes = formatter.stringFromDate(date)
     return mes.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+}
+
+actual fun obtenerInicioSemanaLunes(timestamp: Long): Long {
+    val calendar = NSCalendar.currentCalendar
+    val date = NSDate.dateWithTimeIntervalSince1970(timestamp / 1000.0)
+    val comp = calendar.components(
+        NSCalendarUnitYear or NSCalendarUnitMonth or NSCalendarUnitDay or NSCalendarUnitWeekday,
+        fromDate = date
+    )
+    val weekday = comp.weekday.toInt() // 1 = Domingo, 2 = Lunes, ..., 7 = Sábado
+    val diasARestar = if (weekday == 1) 6 else weekday - 2
+
+    val dateMonday = calendar.dateByAddingUnit(
+        NSCalendarUnitDay,
+        value = -diasARestar.toLong(),
+        toDate = date,
+        options = 0UL
+    ) ?: date
+
+    return calendar.dateBySettingHour(0, minute = 0, second = 0, ofDate = dateMonday, options = 0UL)
+        ?.timeIntervalSince1970?.times(1000)?.toLong() ?: timestamp
+}
+
+actual fun obtenerFinSemanaDomingo(timestamp: Long, duracionSemanas: Int): Long {
+    val inicioLunesMs = obtenerInicioSemanaLunes(timestamp)
+    val calendar = NSCalendar.currentCalendar
+    val dateLunes = NSDate.dateWithTimeIntervalSince1970(inicioLunesMs / 1000.0)
+
+    val diasAAgregar = ((duracionSemanas * 7) - 1).toLong()
+    val dateDomingo = calendar.dateByAddingUnit(
+        NSCalendarUnitDay,
+        value = diasAAgregar,
+        toDate = dateLunes,
+        options = 0UL
+    ) ?: dateLunes
+
+    return calendar.dateBySettingHour(23, minute = 59, second = 59, ofDate = dateDomingo, options = 0UL)
+        ?.timeIntervalSince1970?.times(1000)?.toLong() ?: (inicioLunesMs + (duracionSemanas * 604800000L) - 1L)
 }

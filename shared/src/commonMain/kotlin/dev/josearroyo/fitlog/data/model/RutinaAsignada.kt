@@ -6,16 +6,12 @@ import kotlinx.serialization.Serializable
 data class RutinaAsignada(
     var id: String = "",
     val nombreRutina: String = "",
-
-    // Conversión segura del Timestamp de asignación
     @Serializable(with = TimestampLongSerializer::class)
     val fechaAsignacion: Long = 0L,
-
     val estaActiva: Boolean = true,
     val notasEntrenador: String = "",
+    val modoCiclo: ModoCiclo = ModoCiclo.CALENDARIO_SEMANAL,
     val diasEntrenamiento: List<DiaEntrenamientoAsignado> = emptyList(),
-
-    // 🚀 SOLUCIÓN: Cambiado a Long? para tolerar los valores null de la app nativa
     @Serializable(with = TimestampLongSerializer::class)
     val ultimaVezEjecutada: Long? = null
 )

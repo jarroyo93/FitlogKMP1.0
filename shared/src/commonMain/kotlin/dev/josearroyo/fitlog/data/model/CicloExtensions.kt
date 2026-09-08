@@ -1,54 +1,50 @@
 package dev.josearroyo.fitlog.data.model
 
 import dev.josearroyo.fitlog.getCurrentTimeMillis
+import dev.josearroyo.fitlog.obtenerInicioSemanaLunes
+import dev.josearroyo.fitlog.obtenerFinSemanaDomingo
 import kotlin.math.roundToInt
 
 /**
- * Calcula la fecha final del ciclo sumando la duración en días definida por el coach.
+ * Calcula las fechas de inicio y cierre del ciclo según el modo de programación.
  */
-fun calcularFechaCierreCiclo(inicioMilis: Long, duracionDias: Int): Long {
-    val milisPorDia = 86_400_000L
-    return inicioMilis + (duracionDias.toLong() * milisPorDia)
+fun calcularRangoFechasCiclo(
+    fechaPrimerRegistroMs: Long,
+    duracionDias: Int,
+    modo: ModoCiclo
+): Pair<Long, Long> {
+    return if (modo == ModoCiclo.CALENDARIO_SEMANAL) {
+        val semanas = maxOf(1, (duracionDias / 7))
+        val inicioLunes = obtenerInicioSemanaLunes(fechaPrimerRegistroMs)
+        val finDomingo = obtenerFinSemanaDomingo(fechaPrimerRegistroMs, semanas)
+        Pair(inicioLunes, finDomingo)
+    } else {
+        val milisPorDia = 86_400_000L
+        val inicioReal = fechaPrimerRegistroMs
+        val cierreReal = inicioReal + (duracionDias.toLong() * milisPorDia)
+        Pair(inicioReal, cierreReal)
+    }
 }
 
-/**
- * Evalúa si un ciclo requiere gestión por vencimiento o agotamiento.
- * Mantiene la regla: <= 5 días para cerrar o <= 1 sesión restante.
- */
 fun CicloEntrenamiento.estaPorVencer(ahoraMilis: Long = getCurrentTimeMillis()): Boolean {
     if (!estaActivo) return false
     val milisPorDia = 86_400_000L
     val diasRestantes = (fechaCierre - ahoraMilis) / milisPorDia
     val sesionesRestantes = metaSesionesAsignadas - sesionesCompletadas
 
-    // Condición 1: Quedan 2 días calendario o menos para la fecha de cierre
     val porCierreCalendario = diasRestantes in 0..2
-
-    // Condición 2: Queda 1 o 0 sesiones RESTANTES, PERO solo si ya transcurrió más del 60% del tiempo del ciclo
     val tiempoTranscurridoMilis = ahoraMilis - fechaInicio
-    val tiempoTotalMilis = duracionDias.toLong() * milisPorDia
-    val porcentajeTiempoTranscurrido = if (tiempoTotalMilis > 0) {
-        (tiempoTranscurridoMilis.toDouble() / tiempoTotalMilis.toDouble())
-    } else 0.0
+    val tiempoTotalMilis = maxOf(1L, fechaCierre - fechaInicio)
+    val porcentajeTiempoTranscurrido = (tiempoTranscurridoMilis.toDouble() / tiempoTotalMilis.toDouble())
 
     val porAgotamientoSesiones = (sesionesRestantes <= 1) && (porcentajeTiempoTranscurrido >= 0.60)
-
     return porCierreCalendario || porAgotamientoSesiones
 }
 
-// ✅ CORRECCIÓN EN CicloExtensions.kt
-
 fun CicloEntrenamiento.estaVencido(ahoraMilis: Long = getCurrentTimeMillis()): Boolean {
-    // Un ciclo se considera vencido si ya no está activo O si ya cumplió la meta de sesiones.
-    // La fechaCierre es solo una referencia estimada, no un detonador automático de expiración.
     return !estaActivo || (metaSesionesAsignadas > 0 && sesionesCompletadas >= metaSesionesAsignadas)
 }
 
-/**
- * Sincroniza y recalcula dinámicamente un ciclo activo cuando se modifica
- * o asigna la estructura de una rutina, discriminando bloques fijos de
- * microciclos semanales repetibles.
- */
 fun CicloEntrenamiento.sincronizarConRutina(
     rutinaActualizada: RutinaAsignada
 ): CicloEntrenamiento {
@@ -62,27 +58,28 @@ fun CicloEntrenamiento.sincronizarConRutina(
         )
     }
 
-    // 1. Duración mínima: no puede durar menos días que las sesiones asignadas
-    val nuevaDuracionDias = maxOf(this.duracionDias, cantidadDiasRutina)
-    val milisPorDia = 86_400_000L
-    val nuevaFechaCierre = this.fechaInicio + (nuevaDuracionDias.toLong() * milisPorDia)
-
-    // 2. Discriminación de tipo de programa
-    val esBloqueFijo = cantidadDiasRutina > 7 || (nuevaDuracionDias <= cantidadDiasRutina + 2)
-
-    val metaSesionesFinal: Int
-    val multiplicadorVolumen: Double
-
-    if (esBloqueFijo) {
-        metaSesionesFinal = cantidadDiasRutina
-        multiplicadorVolumen = 1.0
+    val modo = rutinaActualizada.modoCiclo
+    val nuevaDuracionDias = if (modo == ModoCiclo.CALENDARIO_SEMANAL) {
+        // En modo semanal forzamos múltiplos de 7
+        val semanas = maxOf(1, (this.duracionDias / 7))
+        semanas * 7
     } else {
-        val semanas = nuevaDuracionDias.toDouble() / 7.0
-        metaSesionesFinal = (cantidadDiasRutina.toDouble() * semanas).roundToInt()
-        multiplicadorVolumen = semanas
+        maxOf(this.duracionDias, cantidadDiasRutina)
     }
 
-    // 3. Recálculo de repeticiones meta
+    val (nuevaFechaInicio, nuevaFechaCierre) = calcularRangoFechasCiclo(
+        fechaPrimerRegistroMs = if (this.fechaInicio > 0L) this.fechaInicio else getCurrentTimeMillis(),
+        duracionDias = nuevaDuracionDias,
+        modo = modo
+    )
+
+    val semanas = nuevaDuracionDias.toDouble() / 7.0
+    val metaSesionesFinal = if (modo == ModoCiclo.CALENDARIO_SEMANAL) {
+        (cantidadDiasRutina.toDouble() * semanas).roundToInt()
+    } else {
+        cantidadDiasRutina
+    }
+
     var repsMetaUnPasada = 0
     rutinaActualizada.diasEntrenamiento.forEach { dia ->
         dia.ejercicios.forEach { ej ->
@@ -93,9 +90,10 @@ fun CicloEntrenamiento.sincronizarConRutina(
             }
         }
     }
+
+    val multiplicadorVolumen = if (modo == ModoCiclo.CALENDARIO_SEMANAL) semanas else 1.0
     val nuevasRepsMetaTotal = (repsMetaUnPasada.toDouble() * multiplicadorVolumen).roundToInt()
 
-    // 4. Recálculo de porcentajes acumulados
     val nuevoPorcentajeAsist = if (metaSesionesFinal > 0) {
         (this.sesionesCompletadas.toDouble() / metaSesionesFinal.toDouble()) * 100.0
     } else 0.0
@@ -105,7 +103,9 @@ fun CicloEntrenamiento.sincronizarConRutina(
     } else 0.0
 
     return this.copy(
+        modoCiclo = modo,
         duracionDias = nuevaDuracionDias,
+        fechaInicio = nuevaFechaInicio,
         fechaCierre = nuevaFechaCierre,
         metaSesionesAsignadas = metaSesionesFinal,
         repeticionesMetaTotal = nuevasRepsMetaTotal,
