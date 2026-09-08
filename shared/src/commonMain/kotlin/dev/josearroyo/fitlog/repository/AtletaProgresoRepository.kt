@@ -4,17 +4,8 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.firestore
 import dev.gitlive.firebase.firestore.where
-import dev.josearroyo.fitlog.data.model.CicloEntrenamiento
-import dev.josearroyo.fitlog.data.model.DiaEntrenamientoAsignado
-import dev.josearroyo.fitlog.data.model.EjercicioRealizado
-import dev.josearroyo.fitlog.data.model.EstadoSesion
-import dev.josearroyo.fitlog.data.model.Pesaje
-import dev.josearroyo.fitlog.data.model.RutinaAsignada
-import dev.josearroyo.fitlog.data.model.SesionEntrenamiento
-import dev.josearroyo.fitlog.data.model.TipoSerie
+import dev.josearroyo.fitlog.data.model.*
 import dev.josearroyo.fitlog.getCurrentTimeMillis
-import dev.josearroyo.fitlog.calcularFechaCierreCiclo
-import dev.josearroyo.fitlog.data.model.EjercicioAsignado
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -171,7 +162,6 @@ class AtletaProgresoRepository {
         }
     }
 
-    // ⚡ OPTIMIZACIÓN DE LECTURAS: Trae solo las sesiones a partir del inicio del ciclo activo
     suspend fun obtenerEntrenamientosCicloActivo(
         atletaId: String,
         fechaInicioCicloMs: Long
@@ -232,6 +222,11 @@ class AtletaProgresoRepository {
             doc.data<CicloEntrenamiento>().copy(id = doc.id)
         }
 
+        // 🟢 DETECCIÓN DE CAMBIO DE SEMANA CALENDARIO: Si el ciclo activo pertenece a una semana ya vencida, se cierra.
+        val cicloSemanaAnteriorExpirado = cicloActivo != null &&
+                cicloActivo.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL &&
+                ahoraMilis > cicloActivo.fechaCierre
+
         db.runTransaction {
             val sesionExistenteDoc = get(sesionRef)
             val esEdicion = sesionExistenteDoc.exists
@@ -244,10 +239,15 @@ class AtletaProgresoRepository {
             set(sesionRef, sesionFinal)
 
             val cicloActualizado: CicloEntrenamiento
-            val cicloIdToUse = cicloActivo?.id ?: Uuid.random().toString()
-            val cicloRefToUse = ciclosRef.document(cicloIdToUse)
 
-            if (cicloActivo == null) {
+            if (cicloActivo == null || cicloSemanaAnteriorExpirado) {
+                // Si el ciclo previo expiró por calendario, lo desactivamos en la transacción
+                if (cicloSemanaAnteriorExpirado && cicloActivo != null) {
+                    val cicloAnteriorCerrado = cicloActivo.copy(estaActivo = false)
+                    set(ciclosRef.document(cicloActivo.id), cicloAnteriorCerrado)
+                }
+
+                val modo = rutinaActual.modoCiclo
                 var totalRepsGlobales = 0
                 rutinaActual.diasEntrenamiento.forEach { dia ->
                     dia.ejercicios.forEach { ejercicio ->
@@ -258,14 +258,25 @@ class AtletaProgresoRepository {
                         }
                     }
                 }
-                val fechaInicioReal = minOf(ahoraMilis, sesionFinal.fechaInicio)
-                val fechaCierreCalculada = calcularFechaCierreCiclo(fechaInicioReal)
+
+                val fechaPrimerRegistro = minOf(ahoraMilis, sesionFinal.fechaInicio)
+                val duracionDiasDefecto = if (modo == ModoCiclo.CALENDARIO_SEMANAL) 7 else maxOf(7, rutinaActual.diasEntrenamiento.size)
+
+                val (inicioCalculado, cierreCalculado) = calcularRangoFechasCiclo(
+                    fechaPrimerRegistroMs = fechaPrimerRegistro,
+                    duracionDias = duracionDiasDefecto,
+                    modo = modo
+                )
+
+                val nuevoCicloId = Uuid.random().toString()
                 val nuevoCiclo = CicloEntrenamiento(
-                    id = cicloIdToUse,
+                    id = nuevoCicloId,
                     atletaId = atletaId,
                     rutinaAsignadaId = sesionFinal.rutinaAsignadaId,
-                    fechaInicio = fechaInicioReal,
-                    fechaCierre = fechaCierreCalculada,
+                    fechaInicio = inicioCalculado,
+                    fechaCierre = cierreCalculado,
+                    duracionDias = duracionDiasDefecto,
+                    modoCiclo = modo,
                     estaActivo = true,
                     metaSesionesAsignadas = metaSesiones,
                     sesionesCompletadas = 1,
@@ -285,6 +296,7 @@ class AtletaProgresoRepository {
                     porcentajeAsistencia = porcentajeAsist,
                     porcentajeVolumenGlobal = porcentajeVol
                 )
+                set(ciclosRef.document(nuevoCicloId), cicloActualizado)
             } else {
                 val nuevasSesiones = if (esEdicion) cicloActivo.sesionesCompletadas else cicloActivo.sesionesCompletadas + 1
                 val nuevaMetaReps = cicloActivo.repeticionesMetaTotal
@@ -309,8 +321,8 @@ class AtletaProgresoRepository {
                     estaActivo = !cicloCompleto,
                     fechaCierre = if (cicloCompleto) ahoraMilis else cicloActivo.fechaCierre
                 )
+                set(ciclosRef.document(cicloActivo.id), cicloActualizado)
             }
-            set(cicloRefToUse, cicloActualizado)
 
             val diasActualizados = rutinaActual.diasEntrenamiento.map { dia ->
                 if (dia.idDia == diaActual.idDia) dia.copy(ultimaVezEjecutada = ahoraMilis) else dia

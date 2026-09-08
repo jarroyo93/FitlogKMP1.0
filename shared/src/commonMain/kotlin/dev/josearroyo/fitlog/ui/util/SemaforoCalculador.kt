@@ -6,27 +6,27 @@ import kotlin.math.roundToInt
 object SemaforoCalculador {
 
     /**
-     * Evalúa la adherencia de asistencia pro-rata según la secuencia de sesiones completadas.
-     * Fórmula: $$ \text{Porcentaje} = \left( \frac{\text{Sesiones Completadas}}{\text{Sesiones Esperadas}} \right) \times 100 $$
+     * Evalúa la adherencia de asistencia pro-rata según las sesiones completadas
+     * y el modo de ciclo activo (CALENDARIO_SEMANAL o SECUENCIAL_RODANTE).
      */
     fun evaluarAdherenciaProRata(
         metaSesionesCiclo: Int,
         duracionDiasCiclo: Int,
         sesionesEjecutadas: Int,
-        diasTranscurridos: Int
+        diasTranscurridos: Int,
+        modoCiclo: ModoCiclo = ModoCiclo.CALENDARIO_SEMANAL
     ): MetricaSemaforo {
         if (metaSesionesCiclo <= 0 || duracionDiasCiclo <= 0 || diasTranscurridos <= 0) {
             return MetricaSemaforo(0.0, EstadoSemaforo.SIN_DATOS, "Sin meta o días válidos asignados")
         }
 
-        // ✅ REGLA 1: Si alcanzó la meta de sesiones, la adherencia es 100% (Verde), sin importar los días transcurridos.
+        // 🟢 REGLA 1: Si alcanzó la meta de sesiones, adherencia 100% (Verde)
         if (sesionesEjecutadas >= metaSesionesCiclo) {
             val detalle = "$sesionesEjecutadas de $metaSesionesCiclo sesiones completadas (100%)"
             return MetricaSemaforo(100.0, EstadoSemaforo.VERDE, detalle)
         }
 
-        // ✅ REGLA 2: Limita la acumulación de días transcurridos al máximo de días del ciclo
-        // para evitar un denominador sobre-inflado si el atleta estuvo inactivo.
+        // 🟢 REGLA 2: Limita la acumulación de días transcurridos al máximo de días del ciclo
         val diasClamped = diasTranscurridos.coerceIn(1, duracionDiasCiclo)
         val esperadasAcc = (metaSesionesCiclo.toDouble() / duracionDiasCiclo.toDouble()) * diasClamped
 
@@ -49,7 +49,8 @@ object SemaforoCalculador {
             ((esperadasAcc * 10).roundToInt() / 10.0).toString()
         }
 
-        val detalle = "$sesionesEjecutadas de $esperadasFormateado sesiones esperadas acumuladas ($porcentajeRedondeado%)"
+        val modoEtiqueta = if (modoCiclo == ModoCiclo.CALENDARIO_SEMANAL) "semanal" else "rodante"
+        val detalle = "$sesionesEjecutadas de $esperadasFormateado sesiones esperadas ($porcentajeRedondeado% $modoEtiqueta)"
 
         return MetricaSemaforo(porcentajeCumplimiento, estado, detalle)
     }
@@ -73,11 +74,10 @@ object SemaforoCalculador {
             (repsLogradasTotal.toDouble() / repsMetaAcumulada) * 100.0
         } else 0.0
 
-        // 🟢 RANGOS UNIFICADOS: Tolerancia del 15% por arriba/abajo antes de alertar
         val estado = when {
             porcentaje in 85.0..115.0 -> EstadoSemaforo.VERDE
             porcentaje in 70.0..84.9 || porcentaje in 115.1..130.0 -> EstadoSemaforo.AMARILLO
-            else -> EstadoSemaforo.ROJO // < 70.0% (Déficit crítico) o > 130.0% (Exceso crítico)
+            else -> EstadoSemaforo.ROJO
         }
 
         val porcentajeRedondeado = (porcentaje * 10).roundToInt() / 10.0

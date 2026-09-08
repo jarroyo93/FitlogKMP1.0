@@ -22,7 +22,6 @@ class SemaforoRepository(
         val atletas = userRepository.obtenerAtletasPorEntrenador(entrenadorId)
         val ahora = getCurrentTimeMillis()
 
-        // ⚡ Ejecución concurrente usando async + awaitAll
         atletas.map { atleta ->
             async {
                 evaluarAtletaIndividual(atleta, ahora)
@@ -38,7 +37,6 @@ class SemaforoRepository(
         val sinCiclo = cicloActivo == null
         val porVencer = cicloActivo?.estaPorVencer(ahora) ?: false
 
-        // Solo se requiere gestión bloqueante si NO tiene suscripción o NO tiene plan asignado
         val requiereGestionAdmin = suscripcionInactiva || sinCiclo
         val mensajeGestion = when {
             suscripcionInactiva -> "Suscripción ${atleta.estadoSuscripcion.name.lowercase()}"
@@ -65,18 +63,19 @@ class SemaforoRepository(
             )
         }
 
-        // 2. Cálculo de días transcurridos
+        // 2. Cálculo de días transcurridos segun fechaInicio (sea Lunes o inicio de bloque)
         val milisPorDia = 86_400_000L
         val diasTranscurridos = (((ahora - cicloActivo.fechaInicio) / milisPorDia) + 1)
             .toInt()
             .coerceIn(1, cicloActivo.duracionDias)
 
-        // 3. Evaluación de métricas
+        // 3. Evaluación de métricas pasando el modo de ciclo
         val metricaAdherencia = SemaforoCalculador.evaluarAdherenciaProRata(
             metaSesionesCiclo = cicloActivo.metaSesionesAsignadas,
             duracionDiasCiclo = cicloActivo.duracionDias,
             sesionesEjecutadas = cicloActivo.sesionesCompletadas,
-            diasTranscurridos = diasTranscurridos
+            diasTranscurridos = diasTranscurridos,
+            modoCiclo = cicloActivo.modoCiclo
         )
 
         val metricaVolumen = SemaforoCalculador.evaluarVolumenEfectivo(
@@ -86,7 +85,6 @@ class SemaforoRepository(
             sesionesEjecutadas = cicloActivo.sesionesCompletadas
         )
 
-        // ⚡ CONSULTA OPTIMIZADA: Solo trae sesiones a partir de la fecha de inicio del ciclo
         val entrenamientos = atletaProgresoRepository.obtenerEntrenamientosCicloActivo(
             atletaId = atleta.id,
             fechaInicioCicloMs = cicloActivo.fechaInicio
@@ -98,7 +96,7 @@ class SemaforoRepository(
 
         val metricaFatiga = SemaforoCalculador.evaluarFatigaRpe(todasLasSeries)
 
-        // 4. Resolución de estado global (Evaluación puramente física de Rendimiento)
+        // 4. Resolución de estado global
         val estadoGlobal = SemaforoCalculador.resolverEstadoGlobal(
             requiereGestionAdmin = requiereGestionAdmin,
             adherencia = metricaAdherencia,
@@ -115,7 +113,6 @@ class SemaforoRepository(
             motivos.add("Baja asistencia (${metricaAdherencia.valor.toInt()}%)")
         }
 
-        // 🟢 CORREGIDO: Manejo dinámico de volumen según déficit o exceso
         if (metricaVolumen.estado == EstadoSemaforo.ROJO) {
             if (metricaVolumen.valor < 70.0) {
                 motivos.add("Volumen crítico (${metricaVolumen.valor.toInt()}%)")
@@ -137,7 +134,8 @@ class SemaforoRepository(
         }
 
         if (porVencer) {
-            motivos.add("Ciclo de ${cicloActivo.duracionDias} días por vencer")
+            val etiquetaCierre = if (cicloActivo.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL) "Semana" else "Ciclo"
+            motivos.add("$etiquetaCierre de ${cicloActivo.duracionDias} días por vencer")
         }
 
         return AtletaSemaforoItem(
