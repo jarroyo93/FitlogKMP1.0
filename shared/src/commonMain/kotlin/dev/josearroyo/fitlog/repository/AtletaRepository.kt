@@ -141,42 +141,48 @@ class AtletaRepository {
         val authUid = crearCuentaEnInstanciaSecundaria(usuario.correo, contrasenaTemporal)
 
         // 3. Escritura atómica (WriteBatch)
-        val nuevoRef = usersRef.document(authUid)
-        val ahoraMilis = getCurrentTimeMillis()
+        return try {
+            val nuevoRef = usersRef.document(authUid)
+            val ahoraMilis = getCurrentTimeMillis()
 
-        val idUnicoCompartido = Uuid.random().toString()
-        val valId = Uuid.random().toString()
-        val habId = Uuid.random().toString()
+            val idUnicoCompartido = Uuid.random().toString()
+            val valId = Uuid.random().toString()
+            val habId = Uuid.random().toString()
 
-        val periodoRef = nuevoRef.collection("periodos_facturables").document(idUnicoCompartido)
-        val registroContableRef = db.collection("historial_facturacion_general").document(idUnicoCompartido)
+            val periodoRef = nuevoRef.collection("periodos_facturables").document(idUnicoCompartido)
+            val registroContableRef = db.collection("historial_facturacion_general").document(idUnicoCompartido)
 
-        val batch = db.batch()
+            val batch = db.batch()
 
-        batch.set(nuevoRef, usuario.copy(id = authUid, authId = authUid, rol = RolUsuario.ATLETA))
+            batch.set(nuevoRef, usuario.copy(id = authUid, authId = authUid, rol = RolUsuario.ATLETA))
 
-        val valRef = nuevoRef.collection("valoraciones").document(valId)
-        batch.set(valRef, valoracion.copy(id = valId, fechaRegistro = ahoraMilis))
+            val valRef = nuevoRef.collection("valoraciones").document(valId)
+            batch.set(valRef, valoracion.copy(id = valId, fechaRegistro = ahoraMilis))
 
-        val habRef = nuevoRef.collection("habitos").document(habId)
-        batch.set(habRef, habitos.copy(id = habId, fechaRegistro = ahoraMilis))
+            val habRef = nuevoRef.collection("habitos").document(habId)
+            batch.set(habRef, habitos.copy(id = habId, fechaRegistro = ahoraMilis))
 
-        batch.set(periodoRef, primerPeriodo.copy(id = idUnicoCompartido, atletaId = authUid, entrenadorId = usuario.entrenadorId ?: ""))
+            batch.set(periodoRef, primerPeriodo.copy(id = idUnicoCompartido, atletaId = authUid, entrenadorId = usuario.entrenadorId ?: ""))
 
-        val reciboContableInicial = mapOf(
-            "id" to idUnicoCompartido,
-            "entrenadorId" to (usuario.entrenadorId ?: ""),
-            "atletaId" to authUid,
-            "atletaNombreSnapshot" to "${usuario.nombres} ${usuario.apellidos}".trim(),
-            "tipoPlan" to primerPeriodo.tipoPlan,
-            "fechaInicio" to primerPeriodo.fechaInicio,
-            "fechaFin" to primerPeriodo.fechaFin,
-            "fechaRegistroTransaccion" to ahoraMilis,
-            "estado" to primerPeriodo.estado.name
-        )
-        batch.set(registroContableRef, reciboContableInicial)
+            val reciboContableInicial = mapOf(
+                "id" to idUnicoCompartido,
+                "entrenadorId" to (usuario.entrenadorId ?: ""),
+                "atletaId" to authUid,
+                "atletaNombreSnapshot" to "${usuario.nombres} ${usuario.apellidos}".trim(),
+                "tipoPlan" to primerPeriodo.tipoPlan,
+                "fechaInicio" to primerPeriodo.fechaInicio,
+                "fechaFin" to primerPeriodo.fechaFin,
+                "fechaRegistroTransaccion" to ahoraMilis,
+                "estado" to primerPeriodo.estado.name
+            )
+            batch.set(registroContableRef, reciboContableInicial)
 
-        batch.commit()
-        return true
+            batch.commit()
+            true
+        } catch (e: Exception) {
+            println("🔥 [AtletaRepository] Error en batch.commit(): ${e.message}")
+            e.printStackTrace()
+            throw Exception("Error al guardar la información en base de datos: ${e.message}")
+        }
     }
 }
