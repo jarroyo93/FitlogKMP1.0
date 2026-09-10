@@ -11,7 +11,8 @@ import kotlinx.coroutines.coroutineScope
 
 class SemaforoRepository(
     private val userRepository: UserRepository = UserRepository(),
-    private val atletaProgresoRepository: AtletaProgresoRepository = AtletaProgresoRepository()
+    private val atletaProgresoRepository: AtletaProgresoRepository = AtletaProgresoRepository(),
+    private val atletaRepository: AtletaRepository = AtletaRepository()
 ) {
     private val db = Firebase.firestore
 
@@ -31,45 +32,60 @@ class SemaforoRepository(
 
     private suspend fun evaluarAtletaIndividual(atleta: Usuario, ahora: Long): AtletaSemaforoItem {
         val cicloActivo = atletaProgresoRepository.obtenerCicloActivo(atleta.id)
+        val rutinasActivas = atletaRepository.obtenerRutinasActivas(atleta.id)
 
-        // 1. Verificación de reglas administrativas
         val suscripcionInactiva = atleta.estadoSuscripcion != EstadoSuscripcion.ACTIVO
         val sinCiclo = cicloActivo == null
-        val porVencer = cicloActivo?.estaPorVencer(ahora) ?: false
+        val sinRutina = rutinasActivas.isEmpty()
 
-        val requiereGestionAdmin = suscripcionInactiva || sinCiclo
-        val mensajeGestion = when {
-            suscripcionInactiva -> "Suscripción ${atleta.estadoSuscripcion.name.lowercase()}"
-            sinCiclo -> "Sin rutina o ciclo asignado"
-            else -> null
-        }
-
-        if (cicloActivo == null) {
-            val motivosInactivos = mutableListOf<String>()
-            if (suscripcionInactiva) motivosInactivos.add("Suscripción Inactiva")
-            if (sinCiclo) motivosInactivos.add("Sin plan asignado")
+        // 🟢 1. PRIMERA PRIORIDAD: Sin rutina asignada -> REQUIERE GESTIÓN (Morado)
+        if (sinRutina) {
+            val motivos = mutableListOf<String>()
+            if (suscripcionInactiva) motivos.add("Suscripción Inactiva")
+            motivos.add("Sin rutina asignada")
+            if (sinCiclo) motivos.add("Sin ciclo activo")
 
             return AtletaSemaforoItem(
                 atletaId = atleta.id,
                 nombreCompleto = "${atleta.nombres} ${atleta.apellidos}".trim(),
                 fotoUrl = atleta.fotoPerfilUrl,
-                estado = if (requiereGestionAdmin) EstadoSemaforo.REQUIERE_GESTION else EstadoSemaforo.SIN_DATOS,
+                estado = EstadoSemaforo.REQUIERE_GESTION,
                 adherenciaPorcentaje = 0,
                 sesionesEjecutadas = 0,
                 sesionesEsperadasHoy = 0,
                 rpePromedio = null,
-                mensajeGestion = mensajeGestion,
-                motivosAlerta = motivosInactivos
+                mensajeGestion = "Requiere asignación de rutina",
+                motivosAlerta = motivos
             )
         }
 
-        // 2. Cálculo de días transcurridos segun fechaInicio (sea Lunes o inicio de bloque)
+        // 🟢 2. SEGUNDA PRIORIDAD: Tiene rutina pero no tiene ciclo -> CRÍTICO (Rojo)
+        if (sinCiclo) {
+            val motivos = mutableListOf<String>()
+            if (suscripcionInactiva) motivos.add("Suscripción Inactiva")
+            motivos.add("Sin ciclo activo")
+
+            return AtletaSemaforoItem(
+                atletaId = atleta.id,
+                nombreCompleto = "${atleta.nombres} ${atleta.apellidos}".trim(),
+                fotoUrl = atleta.fotoPerfilUrl,
+                estado = EstadoSemaforo.ROJO,
+                adherenciaPorcentaje = 0,
+                sesionesEjecutadas = 0,
+                sesionesEsperadasHoy = 0,
+                rpePromedio = null,
+                mensajeGestion = "Sin ciclo de entrenamiento activo",
+                motivosAlerta = motivos
+            )
+        }
+
+        // 🟢 3. TERCERA PRIORIDAD: Tiene rutina y ciclo -> Evaluar métricas de rendimiento
+        val porVencer = cicloActivo.estaPorVencer(ahora)
         val milisPorDia = 86_400_000L
         val diasTranscurridos = (((ahora - cicloActivo.fechaInicio) / milisPorDia) + 1)
             .toInt()
             .coerceIn(1, cicloActivo.duracionDias)
 
-        // 3. Evaluación de métricas pasando el modo de ciclo
         val metricaAdherencia = SemaforoCalculador.evaluarAdherenciaProRata(
             metaSesionesCiclo = cicloActivo.metaSesionesAsignadas,
             duracionDiasCiclo = cicloActivo.duracionDias,
@@ -96,15 +112,13 @@ class SemaforoRepository(
 
         val metricaFatiga = SemaforoCalculador.evaluarFatigaRpe(todasLasSeries)
 
-        // 4. Resolución de estado global
         val estadoGlobal = SemaforoCalculador.resolverEstadoGlobal(
-            requiereGestionAdmin = requiereGestionAdmin,
+            requiereGestionAdmin = suscripcionInactiva,
             adherencia = metricaAdherencia,
             volumen = metricaVolumen,
             fatiga = metricaFatiga
         )
 
-        // 5. Construcción de motivos de alerta explicativos
         val motivos = mutableListOf<String>()
 
         if (metricaAdherencia.estado == EstadoSemaforo.ROJO) {
@@ -137,6 +151,8 @@ class SemaforoRepository(
             val etiquetaCierre = if (cicloActivo.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL) "Semana" else "Ciclo"
             motivos.add("$etiquetaCierre de ${cicloActivo.duracionDias} días por vencer")
         }
+
+        val mensajeGestion = if (suscripcionInactiva) "Suscripción ${atleta.estadoSuscripcion.name.lowercase()}" else null
 
         return AtletaSemaforoItem(
             atletaId = atleta.id,

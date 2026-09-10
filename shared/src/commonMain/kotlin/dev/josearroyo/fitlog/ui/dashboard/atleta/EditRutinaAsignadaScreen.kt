@@ -28,8 +28,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
+import dev.josearroyo.fitlog.data.model.ModoCiclo
 import dev.josearroyo.fitlog.data.model.PrescripcionSerie
 import dev.josearroyo.fitlog.data.model.TipoSerie
 import dev.josearroyo.fitlog.viewmodel.atleta.EditRutinaAsignadaViewModel
@@ -41,7 +43,12 @@ private val TextoSecundario = Color(0xFFB3AEC6)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> Unit) {
+fun EditRutinaAsignadaScreen(
+    atletaId: String,
+    rutinaId: String,
+    navController: NavController? = null, // 👈 Parámetro agregado
+    onBack: () -> Unit
+) {
     val focusManager = LocalFocusManager.current
     val viewModel: EditRutinaAsignadaViewModel = viewModel { EditRutinaAsignadaViewModel() }
     val state by viewModel.state.collectAsState()
@@ -56,9 +63,17 @@ fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> U
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
     LaunchedEffect(rutinaId) { viewModel.cargarRutinaYBiblioteca(atletaId, rutinaId, currentEntrenadorId) }
-    LaunchedEffect(state.isSaved, state.isDeleted) { if (state.isSaved || state.isDeleted) onBack() }
 
-    // 🚀 DIÁLOGO DE ERROR (DUPLICADOS / ADVERTENCIAS)
+    // 🟢 Notifica la bandera de cambios antes de regresar
+    LaunchedEffect(state.isSaved, state.isDeleted) {
+        if (state.isSaved || state.isDeleted) {
+            navController?.previousBackStackEntry
+                ?.savedStateHandle
+                ?.set("hubo_cambios_atleta", true)
+            onBack()
+        }
+    }
+
     if (state.error != null) {
         AlertDialog(
             containerColor = FondoTarjeta,
@@ -141,7 +156,6 @@ fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> U
                                 focusManager.clearFocus()
                                 viewModel.agregarEjercicioDesdeBiblioteca(diaSeleccionadoParaEjercicio, ej)
 
-                                // 🚀 SOLO SE CIERRA SI NO HUBO ERROR DE DUPLICADO
                                 if (viewModel.state.value.error == null) {
                                     showBottomSheetEjercicios = false
                                 }
@@ -197,8 +211,9 @@ fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> U
         } else {
             val rutina = state.rutina!!
 
-            // EVALUACIÓN ESTRICTA DE RANGOS PURE-DATA
             val esProgramaValido = rutina.nombreRutina.isNotBlank() &&
+                    state.duracionTexto.isNotBlank() &&
+                    (state.duracionTexto.toIntOrNull() ?: 0) > 0 &&
                     rutina.diasEntrenamiento.isNotEmpty() &&
                     rutina.diasEntrenamiento.all { dia ->
                         dia.ejercicios.isNotEmpty() &&
@@ -228,11 +243,111 @@ fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> U
                     value = rutina.nombreRutina,
                     onValueChange = { viewModel.actualizarNombreONotas(it, rutina.notasEntrenador) },
                     label = { Text("Nombre del Programa", color = TextoSecundario) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta)
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = NaranjaAcento,
+                        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+                        focusedContainerColor = FondoTarjeta,
+                        unfocusedContainerColor = FondoTarjeta
+                    )
                 )
+
+                // 🟢 CARD INTEGRADA DE MODO DE ENTRENAMIENTO Y DURACIÓN DINÁMICA
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Modo de Entrenamiento y Duración:",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = rutina.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL,
+                                onClick = { viewModel.actualizarModoCiclo(ModoCiclo.CALENDARIO_SEMANAL) },
+                                label = { Text("Semanal (Lun-Dom)", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = NaranjaAcento,
+                                    selectedLabelColor = FondoOscuro,
+                                    containerColor = FondoOscuro,
+                                    labelColor = TextoSecundario
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    borderColor = TextoSecundario.copy(alpha = 0.3f),
+                                    selectedBorderColor = NaranjaAcento,
+                                    enabled = true,
+                                    selected = rutina.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            FilterChip(
+                                selected = rutina.modoCiclo == ModoCiclo.SECUENCIAL_RODANTE,
+                                onClick = { viewModel.actualizarModoCiclo(ModoCiclo.SECUENCIAL_RODANTE) },
+                                label = { Text("Días Corridos", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = NaranjaAcento,
+                                    selectedLabelColor = FondoOscuro,
+                                    containerColor = FondoOscuro,
+                                    labelColor = TextoSecundario
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    borderColor = TextoSecundario.copy(alpha = 0.3f),
+                                    selectedBorderColor = NaranjaAcento,
+                                    enabled = true,
+                                    selected = rutina.modoCiclo == ModoCiclo.SECUENCIAL_RODANTE
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        val esSemanal = rutina.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL
+                        val duracionInt = state.duracionTexto.toIntOrNull() ?: 0
+                        val labelTexto = if (esSemanal) "Duración (Semanas)" else "Duración (Días exactos)"
+                        val helperTexto = if (esSemanal) {
+                            "Equivale a ${duracionInt * 7} días continuos de ciclo"
+                        } else {
+                            "Ciclo continuo de $duracionInt días"
+                        }
+
+                        OutlinedTextField(
+                            value = state.duracionTexto,
+                            onValueChange = { viewModel.actualizarDuracion(it) },
+                            label = { Text(labelTexto, color = TextoSecundario) },
+                            supportingText = { Text(helperTexto, color = TextoSecundario.copy(alpha = 0.7f)) },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = NaranjaAcento,
+                                unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+                                focusedContainerColor = FondoOscuro,
+                                unfocusedContainerColor = FondoOscuro
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true
+                        )
+                    }
+                }
 
                 HorizontalDivider(color = FondoTarjeta)
 
@@ -381,7 +496,7 @@ fun EditRutinaAsignadaScreen(atletaId: String, rutinaId: String, onBack: () -> U
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = if (esProgramaValido) "Guardar Cambios de Planificación" else "Completa los rangos de reps para guardar",
+                        text = if (esProgramaValido) "Guardar Cambios de Planificación" else "Completa el nombre, duración y rangos válidos",
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
@@ -464,7 +579,6 @@ fun EditorSeriesPrescritas(
                         }
                     }
 
-                    // Input Min Reps (Mayor peso asignado)
                     Box(modifier = Modifier.weight(1.0f).padding(horizontal = 2.dp)) {
                         OutlinedTextField(
                             value = valorMinTexto,
@@ -488,7 +602,6 @@ fun EditorSeriesPrescritas(
                         )
                     }
 
-                    // Input Max Reps (Mayor peso asignado)
                     Box(modifier = Modifier.weight(1.0f).padding(horizontal = 2.dp)) {
                         OutlinedTextField(
                             value = valorMaxTexto,

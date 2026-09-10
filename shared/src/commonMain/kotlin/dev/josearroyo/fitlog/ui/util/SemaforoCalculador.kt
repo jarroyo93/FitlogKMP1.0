@@ -50,7 +50,7 @@ object SemaforoCalculador {
         }
 
         val modoEtiqueta = if (modoCiclo == ModoCiclo.CALENDARIO_SEMANAL) "semanal" else "rodante"
-        val detalle = "$sesionesEjecutadas de $esperadasFormateado sesiones esperadas ($porcentajeRedondeado% $modoEtiqueta)"
+        val detalle = "$sesionesEjecutadas de $esperadasFormateado sesiones esperadas acumuladas ($porcentajeRedondeado% $modoEtiqueta)"
 
         return MetricaSemaforo(porcentajeCumplimiento, estado, detalle)
     }

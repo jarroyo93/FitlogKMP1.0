@@ -34,6 +34,7 @@ import kotlinx.coroutines.launch
 import dev.josearroyo.fitlog.ui.dashboard.entrenador.BibliotecaScreen
 import dev.josearroyo.fitlog.ui.dashboard.FacturacionScreen
 import dev.josearroyo.fitlog.ui.dashboard.ProgresoAtletaScreen
+import androidx.navigation.NavController
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -43,6 +44,7 @@ private val TextoSecundario = Color(0xFFB3AEC6)
 @Composable
 fun EntrenadorMainScreen(
     uid: String,
+    mainNavController: NavController? = null,
     onNavigateToAddAtleta: (String) -> Unit,
     onNavigateToAtletaDetail: (String) -> Unit,
     onNavigateToAddExercise: (String) -> Unit,
@@ -55,6 +57,7 @@ fun EntrenadorMainScreen(
     onNavigateToInformeGlobalFacturacion: (String) -> Unit
 ) {
     val bottomNavController = rememberNavController()
+
 
     // 🟢 VALIDACIÓN DE SEGURIDAD CONTRA FIREBASE AUTH (0 Costo Firestore)
     LaunchedEffect(uid) {
@@ -104,11 +107,10 @@ fun EntrenadorMainScreen(
                 composable(BottomNavItem.Atletas.route) {
                     EntrenadorDashboardScreen(
                         entrenadorId = uid,
-                        // 🟢 Clic desde pestaña "Mis Atletas" -> Abre el expediente completo AtletaDetailScreen
+                        navController = mainNavController, // 🟢 PASADO AQUÍ: Para que reciba las señales de cambio
                         onAtletaClick = { atletaId ->
                             onNavigateToAtletaDetail(atletaId)
                         },
-                        // 🟢 Clic desde pestaña "Semáforo" -> Abre ProgresoAtletaScreen directamente
                         onSemaforoClick = { atletaId ->
                             bottomNavController.navigate("progreso_atleta/$atletaId")
                         },

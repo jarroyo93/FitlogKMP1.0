@@ -306,24 +306,19 @@ fun AtletaSemaforoCard(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    // 1. Obtenemos el color directamente con la función helper existente
+                    val colorAlerta = obtenerColorEstado(item.estado)
+
                     item.motivosAlerta.forEach { motivo ->
                         SuggestionChip(
                             onClick = { onClick() },
                             label = { Text(motivo, fontSize = 11.sp, color = Color.White) },
                             colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = when (item.estado) {
-                                    EstadoSemaforo.ROJO -> Color(0xFFE57373).copy(alpha = 0.2f)
-                                    EstadoSemaforo.AMARILLO -> Color(0xFFFFB74D).copy(alpha = 0.2f)
-                                    else -> Color.Gray.copy(alpha = 0.2f)
-                                }
+                                containerColor = colorAlerta.copy(alpha = 0.2f)
                             ),
                             border = BorderStroke(
                                 width = 1.dp,
-                                color = when (item.estado) {
-                                    EstadoSemaforo.ROJO -> Color(0xFFE57373)
-                                    EstadoSemaforo.AMARILLO -> Color(0xFFFFB74D)
-                                    else -> Color.Gray
-                                }
+                                color = colorAlerta
                             ),
                             shape = RoundedCornerShape(8.dp)
                         )

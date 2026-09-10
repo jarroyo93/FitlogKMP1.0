@@ -20,11 +20,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.CicloEntrenamiento
+import dev.josearroyo.fitlog.data.model.ModoCiclo
 import dev.josearroyo.fitlog.viewmodel.atleta.AtletaInicioViewModel
-
-// 🟢 IMPORTACIONES DE TU MÓDULO PLATAFORMA KMP (CERO IMPORTS DE JAVA)
 import dev.josearroyo.fitlog.formatearFechaHora
 
 private val FondoOscuro = Color(0xFF241B3C)
@@ -38,7 +38,6 @@ fun AtletaInicioScreen(
     uid: String,
     onNavigateToEntrenar: (String) -> Unit
 ) {
-
     val viewModel: AtletaInicioViewModel = viewModel { AtletaInicioViewModel() }
     val state by viewModel.state.collectAsState()
 
@@ -62,7 +61,7 @@ fun AtletaInicioScreen(
             containerColor = FondoTarjeta,
             onDismissRequest = {
                 mostrarModalPeso = false
-                inputPeso = ""  // 🟢 Limpieza preventiva al cerrar por fuera
+                inputPeso = ""
                 inputNotas = ""
             },
             title = { Text("Registrar Nuevo Peso", color = Color.White, fontWeight = FontWeight.Bold) },
@@ -120,7 +119,7 @@ fun AtletaInicioScreen(
             dismissButton = {
                 TextButton(onClick = {
                     mostrarModalPeso = false
-                    inputPeso = ""  // 🟢 CORREGIDO: Resetea el buffer temporal al cancelar
+                    inputPeso = ""
                     inputNotas = ""
                 }) {
                     Text("Cancelar", color = NaranjaAcento)
@@ -168,7 +167,6 @@ fun AtletaInicioScreen(
                     )
                 }
             } else {
-                // 🟢 Corregido: .ultimaVezEjecutada es Long? en KMP, por lo que removemos el antiguo operador .time de Java
                 val diaSugerido = rutinaActual.diasEntrenamiento.minByOrNull { it.ultimaVezEjecutada ?: 0L }
 
                 Card(
@@ -198,7 +196,6 @@ fun AtletaInicioScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
 
-                            // 🟢 Reemplazamos SimpleDateFormat por tu función expect/actual KMP
                             val fechaTexto = if (diaSugerido.ultimaVezEjecutada != null) {
                                 "Última vez: ${formatearFechaHora(diaSugerido.ultimaVezEjecutada)}"
                             } else {
@@ -272,7 +269,6 @@ fun AtletaInicioScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             if (ultimoPesaje != null) {
-                                // 🟢 Fecha formateada con función multiplataforma
                                 Text(
                                     text = "Registrado: ${formatearFechaHora(ultimoPesaje.fecha)}",
                                     style = MaterialTheme.typography.bodySmall,
@@ -311,7 +307,6 @@ fun AtletaInicioScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Column {
-                                        // 🟢 Fecha formateada con función multiplataforma
                                         Text(
                                             text = formatearFechaHora(pesaje.fecha),
                                             color = Color.White,
@@ -352,23 +347,46 @@ fun DashboardCicloActivo(cicloActivo: CicloEntrenamiento?) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (cicloActivo == null) {
                 Text(
-                    text = "¡Semana Nueva!",
+                    text = "¡Nuevo Ciclo!",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = NaranjaAcento
                 )
                 Text(
-                    text = "Registra tu primer entrenamiento para iniciar tu ciclo de asistencia semanal.",
+                    text = "Registra tu primer entrenamiento para iniciar el seguimiento de tu ciclo.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White
                 )
             } else {
-                Text(
-                    text = "Progreso de la Semana",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = NaranjaAcento
-                )
+                val esSemanal = cicloActivo.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL
+                val tituloCiclo = if (esSemanal) "Progreso Semanal (Lun - Dom)" else "Progreso Ciclo Rodante (${cicloActivo.duracionDias} días)"
+                val etiquetaModo = if (esSemanal) "Semana Activa" else "Ciclo de Días Corridos"
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = tituloCiclo,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = NaranjaAcento,
+                        fontSize = 15.sp
+                    )
+                    Surface(
+                        color = NaranjaAcento.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = etiquetaModo,
+                            color = NaranjaAcento,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

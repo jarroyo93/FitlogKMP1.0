@@ -10,18 +10,21 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 data class EditRutinaState(
     val rutina: RutinaAsignada? = null,
     val bibliotecaEjercicios: List<Ejercicio> = emptyList(),
     val plantillasDisponibles: List<PlantillaRutina> = emptyList(),
+    val duracionTexto: String = "4", // Almacena Semanas o Días según el modo activo
     val isLoading: Boolean = false,
     val isSaved: Boolean = false,
     val isDeleted: Boolean = false,
     val error: String? = null
 )
 
+@OptIn(ExperimentalUuidApi::class)
 class EditRutinaAsignadaViewModel : ViewModel() {
     private val repository = AtletaRepository()
     private val exerciseRepository = ExerciseRepository()
@@ -38,11 +41,19 @@ class EditRutinaAsignadaViewModel : ViewModel() {
                 val listaEjercicios = exerciseRepository.obtenerBibliotecaCompleta(entrenadorId)
                 val listaPlantillas = exerciseRepository.obtenerPlantillasDelEntrenador(entrenadorId)
 
+                // 🟢 MAPEO INICIAL: Convertir duracionDias a semanas si el modo es semanal
+                val duracionVisual = if (rut?.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL) {
+                    ((rut.duracionDias) / 7).coerceAtLeast(1).toString()
+                } else {
+                    (rut?.duracionDias ?: 28).toString()
+                }
+
                 _state.update {
                     it.copy(
                         rutina = rut,
                         bibliotecaEjercicios = listaEjercicios,
                         plantillasDisponibles = listaPlantillas,
+                        duracionTexto = duracionVisual,
                         isLoading = false
                     )
                 }
@@ -52,6 +63,56 @@ class EditRutinaAsignadaViewModel : ViewModel() {
         }
     }
 
+    // 🟢 CAMBIO DINÁMICO DE MODO CON CONVERSIÓN
+    fun actualizarModoCiclo(nuevoModo: ModoCiclo) {
+        _state.update { currentState ->
+            val rutinaActual = currentState.rutina ?: return@update currentState
+            if (rutinaActual.modoCiclo == nuevoModo) return@update currentState
+
+            val numeroActual = currentState.duracionTexto.toIntOrNull() ?: 1
+            val nuevaDuracionVisual = if (nuevoModo == ModoCiclo.CALENDARIO_SEMANAL) {
+                // Días -> Semanas
+                (numeroActual / 7).coerceAtLeast(1).toString()
+            } else {
+                // Semanas -> Días
+                (numeroActual * 7).toString()
+            }
+
+            val duracionTotalDias = if (nuevoModo == ModoCiclo.CALENDARIO_SEMANAL) {
+                (nuevaDuracionVisual.toIntOrNull() ?: 1) * 7
+            } else {
+                nuevaDuracionVisual.toIntOrNull() ?: 1
+            }
+
+            currentState.copy(
+                rutina = rutinaActual.copy(
+                    modoCiclo = nuevoModo,
+                    duracionDias = duracionTotalDias
+                ),
+                duracionTexto = nuevaDuracionVisual
+            )
+        }
+    }
+
+    // 🟢 ACTUALIZACIÓN DEL CAMPO DE TEXTO DE DURACIÓN
+    fun actualizarDuracion(duracion: String) {
+        if (duracion.all { it.isDigit() }) {
+            _state.update { currentState ->
+                val rutinaActual = currentState.rutina ?: return@update currentState
+                val numeroInt = duracion.toIntOrNull() ?: 0
+                val duracionTotalDias = if (rutinaActual.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL) {
+                    numeroInt * 7
+                } else {
+                    numeroInt
+                }
+
+                currentState.copy(
+                    duracionTexto = duracion,
+                    rutina = rutinaActual.copy(duracionDias = duracionTotalDias)
+                )
+            }
+        }
+    }
 
     fun eliminarDia(diaIndex: Int) {
         _state.update { state ->
@@ -65,13 +126,11 @@ class EditRutinaAsignadaViewModel : ViewModel() {
         }
     }
 
-
     fun moverDia(diaIndex: Int, direccion: Int) {
         _state.update { state ->
             val actual = state.rutina ?: return@update state
             val dias = actual.diasEntrenamiento.sortedBy { it.ordenSecuencia }.toMutableList()
             val nuevoIndex = diaIndex + direccion
-
 
             if (diaIndex in dias.indices && nuevoIndex in dias.indices) {
                 val temp = dias[diaIndex]
@@ -99,7 +158,6 @@ class EditRutinaAsignadaViewModel : ViewModel() {
             state.copy(rutina = actual.copy(diasEntrenamiento = dias))
         }
     }
-
 
     fun moverEjercicio(diaIndex: Int, ejercicioIndex: Int, direccion: Int) {
         _state.update { state ->
@@ -148,7 +206,6 @@ class EditRutinaAsignadaViewModel : ViewModel() {
             }
 
             if (yaExiste) {
-                // Devuelve el estado con el mensaje de error para notificar a la UI
                 return@update state.copy(
                     error = "El ejercicio '${ejercicioGlobal.nombre}' ya está incluido en este día."
                 )
@@ -164,7 +221,6 @@ class EditRutinaAsignadaViewModel : ViewModel() {
             )
 
             dias[diaIndex] = dia.copy(ejercicios = dia.ejercicios + nuevoEjercicio)
-            // Limpiamos cualquier error previo al agregar exitosamente
             state.copy(rutina = actual.copy(diasEntrenamiento = dias), error = null)
         }
     }
@@ -177,23 +233,19 @@ class EditRutinaAsignadaViewModel : ViewModel() {
 
     fun guardarCambios(atletaId: String) {
         val actual = _state.value.rutina ?: return
+        val duracionNumero = _state.value.duracionTexto.toIntOrNull() ?: 0
+
+        if (duracionNumero <= 0) {
+            _state.update { it.copy(error = "Debe ingresar una duración válida para la rutina.") }
+            return
+        }
+
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
             val exito = repository.actualizarRutinaAsignada(atletaId, actual)
 
             if (exito) {
-                val nuevaMetaSesiones = actual.diasEntrenamiento.size
-                var nuevasRepsMetaTotal = 0
-                actual.diasEntrenamiento.forEach { dia ->
-                    dia.ejercicios.forEach { ejercicio ->
-                        ejercicio.seriesPrescritas.forEach { serie ->
-                            if (serie.tipo != TipoSerie.APROXIMACION) {
-                                nuevasRepsMetaTotal += serie.maxReps // 👈 Usa maxReps
-                            }
-                        }
-                    }
-                }
-                progresoRepository.actualizarMetaCicloActivo(atletaId, nuevaMetaSesiones, nuevasRepsMetaTotal)
+                progresoRepository.sincronizarCicloActivoConRutina(atletaId, actual)
             }
             _state.update { it.copy(isSaved = exito, isLoading = false) }
         }
@@ -219,7 +271,7 @@ class EditRutinaAsignadaViewModel : ViewModel() {
 
             val ejerciciosDelDia = plantilla.ejercicios.mapIndexed { indexEj, ej ->
                 EjercicioAsignado(
-                    idInterno = Uuid.random().toString(), // 🚀 ID Multiplataforma
+                    idInterno = Uuid.random().toString(),
                     ejercicioGlobalId = ej.ejercicioId,
                     nombre = ej.nombreEjercicio,
                     seriesPrescritas = ej.seriesPrescritas,
@@ -230,7 +282,7 @@ class EditRutinaAsignadaViewModel : ViewModel() {
             }
 
             val nuevoDia = DiaEntrenamientoAsignado(
-                idDia = Uuid.random().toString(), // 🚀 ID Multiplataforma
+                idDia = Uuid.random().toString(),
                 plantillaOriginalId = plantilla.id,
                 nombreDia = plantilla.nombre,
                 ordenSecuencia = nuevoOrdenSecuencia,

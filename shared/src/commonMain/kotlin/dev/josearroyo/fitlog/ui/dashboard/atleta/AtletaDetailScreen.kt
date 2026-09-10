@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
 import dev.josearroyo.fitlog.formatearFechaHistorial
 import dev.josearroyo.fitlog.viewmodel.atleta.AtletaDetailViewModel
@@ -37,6 +38,7 @@ private val TextoSecundario = Color(0xFFB3AEC6)
 @Composable
 fun AtletaDetailScreen(
     atletaId: String,
+    navController: NavController? = null,
     onBack: () -> Unit,
     onNavigateToHistorialValoraciones: (String) -> Unit,
     onNavigateToHistorialHabitos: (String) -> Unit,
@@ -48,8 +50,39 @@ fun AtletaDetailScreen(
     val detailViewModel: AtletaDetailViewModel = viewModel { AtletaDetailViewModel() }
     val state by detailViewModel.state.collectAsState()
 
+// 🟢 Escuchamos si pantallas de edición hijas (como EditRutinaAsignada o SeleccionarPlantilla) enviaron cambios
+    val savedStateHandle = navController?.currentBackStackEntry?.savedStateHandle
+    val huboCambiosHijo by savedStateHandle
+        ?.getStateFlow("hubo_cambios_atleta", false)
+        ?.collectAsState() ?: remember { mutableStateOf(false) }
+
     LaunchedEffect(atletaId) {
         detailViewModel.cargarExpedienteAtleta(atletaId)
+    }
+
+// 🟢 Refresco automático del expediente Y propagación directa hacia el Semáforo/Dashboard
+    LaunchedEffect(huboCambiosHijo) {
+        if (huboCambiosHijo) {
+            detailViewModel.cargarExpedienteAtleta(atletaId)
+
+            // Propaga el evento hacia la pantalla padre (EntrenadorDashboardScreen)
+            navController?.previousBackStackEntry
+                ?.savedStateHandle
+                ?.set("hubo_cambios_atleta", true)
+
+            // 🟢 LIMPIEZA: Limpia la bandera para no volver a ejecutar este bloque por error
+            savedStateHandle?.remove<Boolean>("hubo_cambios_atleta")
+        }
+    }
+
+    // 🟢 Función de retorno que asegura propagar la bandera de cambio al Dashboard
+    val ejecutarBackConBandera = {
+        if (huboCambiosHijo) {
+            navController?.previousBackStackEntry
+                ?.savedStateHandle
+                ?.set("hubo_cambios_atleta", true)
+        }
+        onBack()
     }
 
     Scaffold(
@@ -64,7 +97,7 @@ fun AtletaDetailScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { ejecutarBackConBandera() }) {
                         Icon(
                             Icons.Default.ArrowBack,
                             contentDescription = "Atrás",

@@ -140,6 +140,7 @@ fun AppNavigation() {
             val uid: String = backStackEntry.savedStateHandle["uid"] ?: ""
             EntrenadorMainScreen(
                 uid = uid,
+                mainNavController = navController, // 🟢 PASADO: Para escuchar señales del savedStateHandle
                 onNavigateToAtletaDetail = { atletaId ->
                     navController.navigate("atleta_detail/$atletaId")
                 },
@@ -231,8 +232,10 @@ fun AppNavigation() {
             arguments = listOf(navArgument("atletaId") { type = NavType.StringType })
         ) { backStackEntry ->
             val atletaId: String = backStackEntry.savedStateHandle["atletaId"] ?: ""
+
             AtletaDetailScreen(
                 atletaId = atletaId,
+                navController = navController,
                 onBack = { navController.safePopBackStack() },
                 onNavigateToHistorialValoraciones = { id ->
                     navController.navigate("historial_valoracion/$id")
@@ -272,6 +275,7 @@ fun AppNavigation() {
             SeleccionarPlantillaScreen(
                 atletaId = atletaId,
                 entrenadorId = entrenadorId,
+                navController = navController, // 🟢 PASADO: Para enviar bandera de cambios al expediente
                 onBack = { navController.safePopBackStack() }
             )
         }
@@ -349,6 +353,7 @@ fun AppNavigation() {
             EditRutinaAsignadaScreen(
                 atletaId = atletaId,
                 rutinaId = rutinaId,
+                navController = navController, // 👈 Inyección agregada
                 onBack = { navController.safePopBackStack() }
             )
         }

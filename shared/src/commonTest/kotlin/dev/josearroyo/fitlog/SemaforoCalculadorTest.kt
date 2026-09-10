@@ -283,9 +283,14 @@ class SemaforoCalculadorTest {
             metaSesionesCiclo = 4,
             duracionDiasCiclo = 7,
             sesionesEjecutadas = 2,
-            diasTranscurridos = 4
+            diasTranscurridos = 4,
+            modoCiclo = ModoCiclo.CALENDARIO_SEMANAL
         )
 
+        // 1. Verifica que el cálculo contenga las sesiones esperadas redondeadas con el texto explicativo
         assertTrue(resultado.detalle.contains("2.3 sesiones esperadas acumuladas"))
+
+        // 2. Verifica que el porcentaje calculado sea coherente (2 / 2.2857... = 87.5%)
+        assertEquals(87.5, resultado.valor, 0.1) // 👈 Se cambió 'porcentaje' por 'valor'
     }
 }

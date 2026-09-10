@@ -222,7 +222,6 @@ class AtletaProgresoRepository {
             doc.data<CicloEntrenamiento>().copy(id = doc.id)
         }
 
-        // 🟢 DETECCIÓN DE CAMBIO DE SEMANA CALENDARIO: Si el ciclo activo pertenece a una semana ya vencida, se cierra.
         val cicloSemanaAnteriorExpirado = cicloActivo != null &&
                 cicloActivo.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL &&
                 ahoraMilis > cicloActivo.fechaCierre
@@ -241,7 +240,6 @@ class AtletaProgresoRepository {
             val cicloActualizado: CicloEntrenamiento
 
             if (cicloActivo == null || cicloSemanaAnteriorExpirado) {
-                // Si el ciclo previo expiró por calendario, lo desactivamos en la transacción
                 if (cicloSemanaAnteriorExpirado && cicloActivo != null) {
                     val cicloAnteriorCerrado = cicloActivo.copy(estaActivo = false)
                     set(ciclosRef.document(cicloActivo.id), cicloAnteriorCerrado)
@@ -338,6 +336,52 @@ class AtletaProgresoRepository {
         println("🔥 [AtletaProgresoRepository] ERROR CRÍTICO AL GUARDAR ENTRENAMIENTO: ${e.message}")
         e.printStackTrace()
         false
+    }
+
+    // 🟢 NUEVO MÉTODO: Sincroniza atómicamente el ciclo activo con la rutina editada
+    suspend fun sincronizarCicloActivoConRutina(atletaId: String, rutinaActualizada: RutinaAsignada) {
+        try {
+            val ciclosRef = db.collection("users").document(atletaId).collection("ciclos_entrenamiento")
+            val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true).limit(1).get()
+            val cicloActivo = activeCyclesSnapshot.documents.firstOrNull()?.let { doc ->
+                doc.data<CicloEntrenamiento>().copy(id = doc.id)
+            }
+
+            if (cicloActivo != null) {
+                val nuevaMetaSesiones = rutinaActualizada.diasEntrenamiento.size
+                var nuevasRepsMetaTotal = 0
+                rutinaActualizada.diasEntrenamiento.forEach { dia ->
+                    dia.ejercicios.forEach { ejercicio ->
+                        ejercicio.seriesPrescritas.forEach { serie ->
+                            if (serie.tipo != TipoSerie.APROXIMACION) {
+                                nuevasRepsMetaTotal += serie.maxReps
+                            }
+                        }
+                    }
+                }
+
+                val nuevoPctAsistencia = if (nuevaMetaSesiones > 0) {
+                    ((cicloActivo.sesionesCompletadas.toDouble() / nuevaMetaSesiones.toDouble()) * 100.0).coerceAtMost(100.0)
+                } else 0.0
+
+                val nuevoPctVolumen = if (nuevasRepsMetaTotal > 0) {
+                    ((cicloActivo.repeticionesLogradasTotal.toDouble() / nuevasRepsMetaTotal.toDouble()) * 100.0).coerceAtMost(100.0)
+                } else 0.0
+
+                val cicloActualizado = cicloActivo.copy(
+                    modoCiclo = rutinaActualizada.modoCiclo,
+                    metaSesionesAsignadas = nuevaMetaSesiones,
+                    repeticionesMetaTotal = nuevasRepsMetaTotal,
+                    porcentajeAsistencia = nuevoPctAsistencia,
+                    porcentajeVolumenGlobal = nuevoPctVolumen
+                )
+
+                ciclosRef.document(cicloActivo.id).set(cicloActualizado)
+            }
+        } catch (e: Exception) {
+            println("🔥 [AtletaProgresoRepository] Error al sincronizar ciclo activo con rutina: ${e.message}")
+            e.printStackTrace()
+        }
     }
 
     suspend fun actualizarMetaCicloActivo(atletaId: String, nuevaMetaSesiones: Int, nuevasRepsMetaTotal: Int) {

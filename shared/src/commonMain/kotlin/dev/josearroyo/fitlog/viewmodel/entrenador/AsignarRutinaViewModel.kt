@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.josearroyo.fitlog.data.model.DiaEntrenamientoAsignado
 import dev.josearroyo.fitlog.data.model.EjercicioAsignado
+import dev.josearroyo.fitlog.data.model.ModoCiclo
 import dev.josearroyo.fitlog.data.model.PlantillaRutina
 import dev.josearroyo.fitlog.data.model.RutinaAsignada
 import dev.josearroyo.fitlog.getCurrentTimeMillis
@@ -22,6 +23,8 @@ data class AsignarRutinaState(
     val plantillas: List<PlantillaRutina> = emptyList(),
     val plantillasSeleccionadas: List<PlantillaRutina> = emptyList(),
     val nombreRutina: String = "",
+    val modoCiclo: ModoCiclo = ModoCiclo.CALENDARIO_SEMANAL,
+    val duracionTexto: String = "4", // Por defecto 4 semanas
     val isLoading: Boolean = false,
     val isSuccess: Boolean = false,
     val error: String? = null
@@ -47,6 +50,29 @@ class AsignarRutinaViewModel(
 
     fun actualizarNombreRutina(nombre: String) {
         _state.update { it.copy(nombreRutina = nombre) }
+    }
+
+    fun actualizarModoCiclo(nuevoModo: ModoCiclo) {
+        _state.update { currentState ->
+            val numeroActual = currentState.duracionTexto.toIntOrNull() ?: 1
+            val nuevaDuracion = if (nuevoModo == ModoCiclo.CALENDARIO_SEMANAL) {
+                // Al pasar a semanal, si venía de días exactos convertimos a semanas
+                (numeroActual / 7).coerceAtLeast(1).toString()
+            } else {
+                // Al pasar a secuencial/rodante, convertimos semanas a días exactos
+                (numeroActual * 7).toString()
+            }
+            currentState.copy(
+                modoCiclo = nuevoModo,
+                duracionTexto = nuevaDuracion
+            )
+        }
+    }
+
+    fun actualizarDuracion(duracion: String) {
+        if (duracion.all { it.isDigit() }) {
+            _state.update { it.copy(duracionTexto = duracion) }
+        }
     }
 
     fun agregarPlantilla(plantilla: PlantillaRutina) {
@@ -80,15 +106,22 @@ class AsignarRutinaViewModel(
 
     fun construirYAsignarRutina(atletaId: String) {
         val currentState = _state.value
+        val duracionNumero = currentState.duracionTexto.toIntOrNull() ?: 0
+
         if (currentState.nombreRutina.isBlank() || currentState.plantillasSeleccionadas.isEmpty()) {
             _state.update { it.copy(error = "Debe asignar un nombre y agregar al menos un día al programa.") }
+            return
+        }
+
+        if (duracionNumero <= 0) {
+            _state.update { it.copy(error = "Debe ingresar una duración válida para la rutina.") }
             return
         }
 
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             try {
-                // 🟢 VALIDACIÓN: Cancelar si el atleta ya posee una rutina activa
+                // VALIDACIÓN: Cancelar si el atleta ya posee una rutina activa
                 val rutinasActivas = atletaRepo.obtenerRutinasActivas(atletaId)
                 if (rutinasActivas.isNotEmpty()) {
                     _state.update {
@@ -98,6 +131,13 @@ class AsignarRutinaViewModel(
                         )
                     }
                     return@launch
+                }
+
+                // Cálculo de la duración total en días según el modo seleccionado
+                val duracionTotalDias = if (currentState.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL) {
+                    duracionNumero * 7
+                } else {
+                    duracionNumero
                 }
 
                 val diasGenerados = currentState.plantillasSeleccionadas.mapIndexed { indexDia, plantilla ->
@@ -124,6 +164,8 @@ class AsignarRutinaViewModel(
 
                 val nuevaRutina = RutinaAsignada(
                     nombreRutina = currentState.nombreRutina,
+                    modoCiclo = currentState.modoCiclo,
+                    duracionDias = duracionTotalDias,
                     fechaAsignacion = getCurrentTimeMillis(),
                     estaActiva = true,
                     diasEntrenamiento = diasGenerados

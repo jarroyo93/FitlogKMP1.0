@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.CicloEntrenamiento
+import dev.josearroyo.fitlog.data.model.ModoCiclo
 import dev.josearroyo.fitlog.data.model.SesionEntrenamiento
 import dev.josearroyo.fitlog.viewmodel.atleta.ProgresoAtletaViewModel
 import dev.josearroyo.fitlog.viewmodel.atleta.DetalleEjercicioUI
@@ -60,7 +61,7 @@ fun ProgresoAtletaScreen(
     viewModel: ProgresoAtletaViewModel = viewModel { ProgresoAtletaViewModel() }
 ) {
     val state by viewModel.uiState.collectAsState()
-    var tabSeleccionada by rememberSaveable { mutableStateOf(1) } // Pestaña "Diario de Ciclos" por defecto
+    var tabSeleccionada by rememberSaveable { mutableStateOf(1) }
     val titulosTabs = listOf("Evolución", "Diario de Ciclos", "Récords")
 
     var filtroDiaRutina by rememberSaveable { mutableStateOf("TODOS") }
@@ -159,7 +160,6 @@ fun ProgresoAtletaScreen(
                         }
                     }
                     1 -> {
-                        // 1. Tarjeta Macro Unificada del Ciclo + Botón de Cambiar Ciclo
                         if (state.cicloSeleccionado != null) {
                             item {
                                 TarjetaEncabezadoCiclo(
@@ -171,7 +171,6 @@ fun ProgresoAtletaScreen(
                                 )
                             }
 
-                            // 2. Encabezado de la lista + Filtro por Rutinas
                             item {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Row(
@@ -211,7 +210,6 @@ fun ProgresoAtletaScreen(
                             }
                         }
 
-                        // Modal BottomSheet de Selección de Ciclos
                         if (mostrarModalHistorico) {
                             item {
                                 ModalBottomSheetHistoricoCiclos(
@@ -893,15 +891,21 @@ fun TarjetaEncabezadoCiclo(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // 1. Título y punto indicador de estado
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Text(
                             text = if (ciclo.estaActivo) "Ciclo Activo" else "Ciclo Histórico",
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             fontSize = 16.sp
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
@@ -909,10 +913,29 @@ fun TarjetaEncabezadoCiclo(
                                 .background(if (ciclo.estaActivo) VerdeExito else TextoSecundario)
                         )
                     }
+
+                    // 2. Badge de la modalidad (Ubicado en su propia línea para evitar compresión)
+                    val modoTexto = if (ciclo.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL) "Calendario Semanal" else "Secuencial Rodante"
+                    Surface(
+                        color = NaranjaAcento.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = modoTexto,
+                            color = NaranjaAcento,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    // 3. Rango de fechas del ciclo
                     Text(
                         text = "${formatearFechaHistorial(ciclo.fechaInicio)} — ${if (ciclo.fechaCierre > 0L) formatearFechaHistorial(ciclo.fechaCierre) else "Presente"}",
                         color = TextoSecundario,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
 
@@ -1168,25 +1191,45 @@ fun ModalBottomSheetHistoricoCiclos(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Columna izquierda: Información del ciclo y fechas
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = "Ciclo de entrenamiento",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = Color.White
+                                    )
+
+                                    Surface(
+                                        color = Color(0xFFFF9F6D).copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
                                         Text(
-                                            text = if (ciclo.estaActivo) "🟢 Ciclo Actual" else "📋 Ciclo de Entrenamiento",
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (esSeleccionado) NaranjaAcento else Color.White,
-                                            fontSize = 14.sp
+                                            text = if (ciclo.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL) "Calendario Semanal" else "Secuencial Rodante",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color(0xFFFF9F6D),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                         )
                                     }
 
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Spacer(modifier = Modifier.height(2.dp))
 
                                     Text(
                                         text = "${formatearFechaHistorial(ciclo.fechaInicio)} — ${if (ciclo.fechaCierre > 0L) formatearFechaHistorial(ciclo.fechaCierre) else "Presente"}",
                                         color = TextoSecundario,
-                                        fontSize = 12.sp
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
                                 }
 
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                // Columna derecha: Estadísticas de días y asistencia
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
                                         text = "${ciclo.sesionesCompletadas}/${ciclo.metaSesionesAsignadas} Días",

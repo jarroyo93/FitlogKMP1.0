@@ -28,6 +28,7 @@ import dev.josearroyo.fitlog.viewmodel.entrenador.EntrenadorViewModel
 import dev.josearroyo.fitlog.viewmodel.entrenador.EntrenadorDashboardViewModel
 import dev.josearroyo.fitlog.viewmodel.entrenador.AsistenciaAtletaUI
 import dev.josearroyo.fitlog.esCumpleanosHoy
+import androidx.navigation.NavController
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -40,7 +41,8 @@ fun EntrenadorDashboardScreen(
     entrenadorId: String,
     onAtletaClick: (String) -> Unit,
     onSemaforoClick: (String) -> Unit,
-    onAddAtletaClick: () -> Unit
+    onAddAtletaClick: () -> Unit,
+    navController: NavController? = null // 🟢 AGREGADO: Para escuchar retornos con cambios
 ) {
     val dashboardViewModel: EntrenadorViewModel = viewModel { EntrenadorViewModel() }
     val semaforoViewModel: EntrenadorDashboardViewModel = viewModel { EntrenadorDashboardViewModel() }
@@ -49,8 +51,24 @@ fun EntrenadorDashboardScreen(
     val clipboardManager = LocalClipboardManager.current
     var mostrarDialogOpciones by rememberSaveable { mutableStateOf(false) }
 
+    // 🟢 Carga inicial
     LaunchedEffect(entrenadorId) {
         dashboardViewModel.cargarDashboard(entrenadorId)
+    }
+
+    // 🟢 Escuchamos la bandera 'hubo_cambios_atleta' desde el NavBackStackEntry actual
+    val savedStateHandle = navController?.currentBackStackEntry?.savedStateHandle
+    val huboCambios by savedStateHandle
+        ?.getStateFlow("hubo_cambios_atleta", false)
+        ?.collectAsState() ?: remember { mutableStateOf(false) }
+
+    // 🟢 Refresco automático ÚNICAMENTE si regresamos habiendo modificado datos
+    LaunchedEffect(huboCambios) {
+        if (huboCambios) {
+            dashboardViewModel.cargarDashboard(entrenadorId)
+            semaforoViewModel.cargarDashboard(entrenadorId, forzarRecarga = true)
+            savedStateHandle?.remove<Boolean>("hubo_cambios_atleta")
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(FondoOscuro)) {
@@ -78,7 +96,6 @@ fun EntrenadorDashboardScreen(
                 )
             }
 
-            // Oculta el campo de búsqueda cuando está activa la pestaña "Semáforo"
             if (state.tabSeleccionado != 1) {
                 OutlinedTextField(
                     value = state.textoBusqueda,

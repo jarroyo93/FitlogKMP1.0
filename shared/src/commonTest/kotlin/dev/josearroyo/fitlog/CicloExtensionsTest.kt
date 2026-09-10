@@ -16,7 +16,7 @@ class CicloExtensionsTest {
         val duracionDias = 14
         val esperado = inicio + (14 * milisPorDia)
 
-        val obtenido = calcularFechaCierreCiclo(inicio, duracionDias)
+        val obtenido = calcularFechaCierreCiclo(inicio, duracionDias, ModoCiclo.SECUENCIAL_RODANTE)
 
         assertEquals(esperado, obtenido)
     }
@@ -77,11 +77,13 @@ class CicloExtensionsTest {
             id = "c1",
             duracionDias = 5,
             fechaInicio = 1_000_000L,
-            fechaCierre = 1_000_000L + (5 * 86_400_000L)
+            fechaCierre = 1_000_000L + (5 * 86_400_000L),
+            modoCiclo = ModoCiclo.SECUENCIAL_RODANTE
         )
 
         val rutinaOchoDias = RutinaAsignada(
-            diasEntrenamiento = List(8) { DiaEntrenamientoAsignado(nombreDia = "Día ${it + 1}") }
+            diasEntrenamiento = List(8) { DiaEntrenamientoAsignado(nombreDia = "Día ${it + 1}") },
+            modoCiclo = ModoCiclo.SECUENCIAL_RODANTE
         )
 
         val cicloSincronizado = cicloOriginal.sincronizarConRutina(rutinaOchoDias)
@@ -97,11 +99,13 @@ class CicloExtensionsTest {
             id = "c1",
             duracionDias = 14,
             fechaInicio = 1_000_000L,
-            fechaCierre = 1_000_000L + (14 * 86_400_000L)
+            fechaCierre = 1_000_000L + (14 * 86_400_000L),
+            modoCiclo = ModoCiclo.CALENDARIO_SEMANAL
         )
 
         val rutinaCuatroDias = RutinaAsignada(
-            diasEntrenamiento = List(4) { DiaEntrenamientoAsignado(nombreDia = "Día ${it + 1}") }
+            diasEntrenamiento = List(4) { DiaEntrenamientoAsignado(nombreDia = "Día ${it + 1}") },
+            modoCiclo = ModoCiclo.CALENDARIO_SEMANAL
         )
 
         val cicloSincronizado = cicloCatorceDias.sincronizarConRutina(rutinaCuatroDias)
@@ -116,11 +120,13 @@ class CicloExtensionsTest {
             id = "c1",
             duracionDias = 8,
             fechaInicio = 1_000_000L,
-            fechaCierre = 1_000_000L + (8 * 86_400_000L)
+            fechaCierre = 1_000_000L + (8 * 86_400_000L),
+            modoCiclo = ModoCiclo.SECUENCIAL_RODANTE
         )
 
         val rutinaSieteDias = RutinaAsignada(
-            diasEntrenamiento = List(7) { DiaEntrenamientoAsignado(nombreDia = "Día ${it + 1}") }
+            diasEntrenamiento = List(7) { DiaEntrenamientoAsignado(nombreDia = "Día ${it + 1}") },
+            modoCiclo = ModoCiclo.SECUENCIAL_RODANTE
         )
 
         val cicloSincronizado = cicloOchoDias.sincronizarConRutina(rutinaSieteDias)
@@ -135,11 +141,13 @@ class CicloExtensionsTest {
             id = "c2",
             duracionDias = 16,
             fechaInicio = 1_000_000L,
-            fechaCierre = 1_000_000L + (16 * 86_400_000L)
+            fechaCierre = 1_000_000L + (16 * 86_400_000L),
+            modoCiclo = ModoCiclo.SECUENCIAL_RODANTE
         )
 
         val rutinaQuinceDias = RutinaAsignada(
-            diasEntrenamiento = List(15) { DiaEntrenamientoAsignado(nombreDia = "Día ${it + 1}") }
+            diasEntrenamiento = List(15) { DiaEntrenamientoAsignado(nombreDia = "Día ${it + 1}") },
+            modoCiclo = ModoCiclo.SECUENCIAL_RODANTE
         )
 
         val cicloSincronizado = cicloDieciseisDias.sincronizarConRutina(rutinaQuinceDias)
