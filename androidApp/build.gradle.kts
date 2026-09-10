@@ -34,8 +34,8 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
 
         // --- ACTUALIZADO PARA FIREBASE APP DISTRIBUTION ---
-        versionCode = 17
-        versionName = "1.2.4"
+        versionCode = 18
+        versionName = "1.2.5"
     }
 
     packaging {
