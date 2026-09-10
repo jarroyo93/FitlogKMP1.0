@@ -186,16 +186,14 @@ class AtletaProgresoRepository {
             val snapshot = db.collection("users").document(atletaId)
                 .collection("ciclos_entrenamiento")
                 .where("estaActivo", equalTo = true)
-                .orderBy("fechaInicio", Direction.DESCENDING)
+                .limit(1)
                 .get()
 
-            val ciclo = snapshot.documents.firstOrNull()?.let { doc ->
-                doc.data<CicloEntrenamiento>().copy(id = doc.id)
-            } ?: return null
-
+            val doc = snapshot.documents.firstOrNull() ?: return null
+            val ciclo = doc.data<CicloEntrenamiento>().copy(id = doc.id)
             val ahoraMilis = getCurrentTimeMillis()
+
             if (ahoraMilis > ciclo.fechaCierre) {
-                // El ciclo activo ya superó su fecha límite; se marca como inactivo
                 db.collection("users").document(atletaId)
                     .collection("ciclos_entrenamiento")
                     .document(ciclo.id)
