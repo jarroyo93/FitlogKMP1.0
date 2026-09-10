@@ -180,17 +180,30 @@ class AtletaProgresoRepository {
         }
     }
 
+    // 🟢 CORREGIDO: Cierra automáticamente los ciclos expirados por fecha al consultar
     suspend fun obtenerCicloActivo(atletaId: String): CicloEntrenamiento? {
         return try {
             val snapshot = db.collection("users").document(atletaId)
                 .collection("ciclos_entrenamiento")
                 .where("estaActivo", equalTo = true)
-                .limit(1)
+                .orderBy("fechaInicio", Direction.DESCENDING)
                 .get()
 
-            snapshot.documents.firstOrNull()?.let { doc ->
+            val ciclo = snapshot.documents.firstOrNull()?.let { doc ->
                 doc.data<CicloEntrenamiento>().copy(id = doc.id)
+            } ?: return null
+
+            val ahoraMilis = getCurrentTimeMillis()
+            if (ahoraMilis > ciclo.fechaCierre) {
+                // El ciclo activo ya superó su fecha límite; se marca como inactivo
+                db.collection("users").document(atletaId)
+                    .collection("ciclos_entrenamiento")
+                    .document(ciclo.id)
+                    .update("estaActivo" to false)
+                return null
             }
+
+            ciclo
         } catch (e: Exception) {
             println("🔥 [AtletaProgresoRepository] Error al obtener ciclo activo: ${e.message}")
             e.printStackTrace()
@@ -198,6 +211,7 @@ class AtletaProgresoRepository {
         }
     }
 
+    // 🟢 CORREGIDO: Expiración universal por fecha para cualquier tipo de ciclo
     suspend fun registrarSesionYActualizarCiclo(
         atletaId: String,
         sesionProcesada: SesionEntrenamiento,
@@ -217,14 +231,16 @@ class AtletaProgresoRepository {
         val ciclosRef = db.collection("users").document(atletaId).collection("ciclos_entrenamiento")
         val rutinaRef = db.collection("users").document(atletaId).collection("rutinas_asignadas").document(rutinaIdReal)
 
-        val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true).get()
+        val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true)
+            .orderBy("fechaInicio", Direction.DESCENDING)
+            .get()
+
         var cicloActivo = activeCyclesSnapshot.documents.firstOrNull()?.let { doc ->
             doc.data<CicloEntrenamiento>().copy(id = doc.id)
         }
 
-        val cicloSemanaAnteriorExpirado = cicloActivo != null &&
-                cicloActivo.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL &&
-                ahoraMilis > cicloActivo.fechaCierre
+        // 🟢 Aplica para cualquier modo si la fecha actual es mayor a la fecha de cierre programada
+        val cicloExpiradoPorFecha = cicloActivo != null && ahoraMilis > cicloActivo.fechaCierre
 
         db.runTransaction {
             val sesionExistenteDoc = get(sesionRef)
@@ -239,8 +255,8 @@ class AtletaProgresoRepository {
 
             val cicloActualizado: CicloEntrenamiento
 
-            if (cicloActivo == null || cicloSemanaAnteriorExpirado) {
-                if (cicloSemanaAnteriorExpirado && cicloActivo != null) {
+            if (cicloActivo == null || cicloExpiradoPorFecha) {
+                if (cicloExpiradoPorFecha && cicloActivo != null) {
                     val cicloAnteriorCerrado = cicloActivo.copy(estaActivo = false)
                     set(ciclosRef.document(cicloActivo.id), cicloAnteriorCerrado)
                 }
@@ -338,11 +354,13 @@ class AtletaProgresoRepository {
         false
     }
 
-    // 🟢 NUEVO MÉTODO: Sincroniza atómicamente el ciclo activo con la rutina editada
     suspend fun sincronizarCicloActivoConRutina(atletaId: String, rutinaActualizada: RutinaAsignada) {
         try {
             val ciclosRef = db.collection("users").document(atletaId).collection("ciclos_entrenamiento")
-            val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true).limit(1).get()
+            val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true)
+                .orderBy("fechaInicio", Direction.DESCENDING)
+                .get()
+
             val cicloActivo = activeCyclesSnapshot.documents.firstOrNull()?.let { doc ->
                 doc.data<CicloEntrenamiento>().copy(id = doc.id)
             }
@@ -387,7 +405,10 @@ class AtletaProgresoRepository {
     suspend fun actualizarMetaCicloActivo(atletaId: String, nuevaMetaSesiones: Int, nuevasRepsMetaTotal: Int) {
         try {
             val ciclosRef = db.collection("users").document(atletaId).collection("ciclos_entrenamiento")
-            val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true).limit(1).get()
+            val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true)
+                .orderBy("fechaInicio", Direction.DESCENDING)
+                .get()
+
             val cicloActivo = activeCyclesSnapshot.documents.firstOrNull()?.let { doc ->
                 doc.data<CicloEntrenamiento>().copy(id = doc.id)
             }
@@ -414,17 +435,17 @@ class AtletaProgresoRepository {
         }
     }
 
+    // 🟢 CORREGIDO: Cierra TODOS los ciclos activos en caso de duplicados o reasignación
     suspend fun forzarCierreCicloActivo(atletaId: String) {
         try {
             val ciclosRef = db.collection("users").document(atletaId).collection("ciclos_entrenamiento")
-            val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true).limit(1).get()
-            val cicloActivo = activeCyclesSnapshot.documents.firstOrNull()?.id
+            val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true).get()
 
-            if (cicloActivo != null) {
-                ciclosRef.document(cicloActivo).update("estaActivo" to false)
+            for (doc in activeCyclesSnapshot.documents) {
+                ciclosRef.document(doc.id).update("estaActivo" to false)
             }
         } catch (e: Exception) {
-            println("🔥 [AtletaProgresoRepository] Error al forzar cierre del ciclo activo: ${e.message}")
+            println("🔥 [AtletaProgresoRepository] Error al forzar cierre de ciclos activos: ${e.message}")
             e.printStackTrace()
         }
     }
