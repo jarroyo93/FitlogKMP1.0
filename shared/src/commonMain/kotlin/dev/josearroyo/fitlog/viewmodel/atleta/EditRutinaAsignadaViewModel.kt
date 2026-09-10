@@ -17,7 +17,7 @@ data class EditRutinaState(
     val rutina: RutinaAsignada? = null,
     val bibliotecaEjercicios: List<Ejercicio> = emptyList(),
     val plantillasDisponibles: List<PlantillaRutina> = emptyList(),
-    val duracionTexto: String = "4", // Almacena Semanas o Días según el modo activo
+    val duracionTexto: String = "4",
     val isLoading: Boolean = false,
     val isSaved: Boolean = false,
     val isDeleted: Boolean = false,
@@ -41,7 +41,6 @@ class EditRutinaAsignadaViewModel : ViewModel() {
                 val listaEjercicios = exerciseRepository.obtenerBibliotecaCompleta(entrenadorId)
                 val listaPlantillas = exerciseRepository.obtenerPlantillasDelEntrenador(entrenadorId)
 
-                // 🟢 MAPEO INICIAL: Convertir duracionDias a semanas si el modo es semanal
                 val duracionVisual = if (rut?.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL) {
                     ((rut.duracionDias) / 7).coerceAtLeast(1).toString()
                 } else {
@@ -63,7 +62,6 @@ class EditRutinaAsignadaViewModel : ViewModel() {
         }
     }
 
-    // 🟢 CAMBIO DINÁMICO DE MODO CON CONVERSIÓN
     fun actualizarModoCiclo(nuevoModo: ModoCiclo) {
         _state.update { currentState ->
             val rutinaActual = currentState.rutina ?: return@update currentState
@@ -71,10 +69,8 @@ class EditRutinaAsignadaViewModel : ViewModel() {
 
             val numeroActual = currentState.duracionTexto.toIntOrNull() ?: 1
             val nuevaDuracionVisual = if (nuevoModo == ModoCiclo.CALENDARIO_SEMANAL) {
-                // Días -> Semanas
                 (numeroActual / 7).coerceAtLeast(1).toString()
             } else {
-                // Semanas -> Días
                 (numeroActual * 7).toString()
             }
 
@@ -94,7 +90,6 @@ class EditRutinaAsignadaViewModel : ViewModel() {
         }
     }
 
-    // 🟢 ACTUALIZACIÓN DEL CAMPO DE TEXTO DE DURACIÓN
     fun actualizarDuracion(duracion: String) {
         if (duracion.all { it.isDigit() }) {
             _state.update { currentState ->
@@ -228,8 +223,6 @@ class EditRutinaAsignadaViewModel : ViewModel() {
     fun actualizarNombreONotas(nombre: String, notas: String) {
         _state.update { it.copy(rutina = it.rutina?.copy(nombreRutina = nombre, notasEntrenador = notas)) }
     }
-
-    // --- GUARDAR Y BORRAR RUTINA ---
 
     fun guardarCambios(atletaId: String) {
         val actual = _state.value.rutina ?: return

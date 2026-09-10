@@ -1,4 +1,4 @@
-package dev.josearroyo.fitlog.ui.util
+package dev.josearroyo.fitlog.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

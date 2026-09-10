@@ -25,7 +25,7 @@ import dev.josearroyo.fitlog.data.model.PeriodoFacturable
 import dev.josearroyo.fitlog.esMismoDia
 import dev.josearroyo.fitlog.formatearFechaCorto
 import dev.josearroyo.fitlog.getCurrentTimeMillis
-import dev.josearroyo.fitlog.ui.util.AsignarPlanDialog
+import dev.josearroyo.fitlog.ui.components.AsignarPlanDialog
 import dev.josearroyo.fitlog.viewmodel.entrenador.HistorialFacturacionViewModel
 
 private val FondoOscuro = Color(0xFF241B3C)

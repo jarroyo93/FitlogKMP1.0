@@ -47,6 +47,7 @@ fun EntrenarScreen(
     val viewModel: EntrenarViewModel = viewModel { EntrenarViewModel() }
     val state by viewModel.state.collectAsState()
     var mostrarConfirmacion by remember { mutableStateOf(false) }
+    var mostrarModalNotasGeneral by remember { mutableStateOf(false) }
 
     val focusManager = LocalFocusManager.current
 
@@ -64,11 +65,13 @@ fun EntrenarScreen(
         if (state.isFinished) onFinish()
     }
 
+    val rutina = state.rutina
+
     Scaffold(
         containerColor = FondoOscuro,
         topBar = {
             TopAppBar(
-                title = { Text(state.rutina?.nombreRutina ?: "Entrenamiento", color = Color.White, fontWeight = FontWeight.Bold) },
+                title = { Text(rutina?.nombreRutina ?: "Entrenamiento", color = Color.White, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(
                         onClick = {
@@ -79,12 +82,24 @@ fun EntrenarScreen(
                         Icon(Icons.Default.ArrowBack, "Volver", tint = NaranjaAcento)
                     }
                 },
+                actions = {
+                    // 🟢 ÍCONO 1: NOTAS GENERALES DE LA RUTINA (TOP BAR)
+                    if (rutina != null && rutina.notasEntrenador.isNotBlank()) {
+                        IconButton(onClick = { mostrarModalNotasGeneral = true }) {
+                            Icon(
+                                imageVector = Icons.Default.StickyNote2,
+                                contentDescription = "Indicaciones Generales",
+                                tint = NaranjaAcento
+                            )
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FondoOscuro),
                 windowInsets = WindowInsets.statusBars
             )
         },
         bottomBar = {
-            if (state.rutina != null) {
+            if (rutina != null) {
                 Surface(color = FondoOscuro, tonalElevation = 0.dp) {
                     Column(
                         modifier = Modifier
@@ -140,12 +155,12 @@ fun EntrenarScreen(
                     detectTapGestures(onTap = { focusManager.clearFocus() })
                 }
         ) {
-            if (state.isLoading && state.rutina == null) {
+            if (state.isLoading && rutina == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = NaranjaAcento)
                 }
             } else {
-                // 🔒 MODAL: ENTRENAMIENTO YA COMPLETADO HOY (Obligatorio escoger opción, sin opción de duplicar)
+                // 🔒 MODAL: ENTRENAMIENTO YA COMPLETADO HOY
                 if (state.mostrarDialogoEdicionHoy) {
                     AlertDialog(
                         properties = androidx.compose.ui.window.DialogProperties(
@@ -153,7 +168,7 @@ fun EntrenarScreen(
                             dismissOnClickOutside = false
                         ),
                         containerColor = FondoTarjeta,
-                        onDismissRequest = { /* Bloqueado */ },
+                        onDismissRequest = { },
                         title = {
                             Text(
                                 text = "Entrenamiento Ya Completado",
@@ -188,6 +203,33 @@ fun EntrenarScreen(
                                 }
                             ) {
                                 Text("Cancelar", color = Color(0xFFE57373))
+                            }
+                        }
+                    )
+                }
+
+                // 🟢 MODAL 1: NOTAS GENERALES DE LA RUTINA
+                if (mostrarModalNotasGeneral && rutina != null) {
+                    AlertDialog(
+                        containerColor = FondoTarjeta,
+                        onDismissRequest = { mostrarModalNotasGeneral = false },
+                        title = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.StickyNote2, contentDescription = null, tint = NaranjaAcento)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Indicaciones del Coach", color = NaranjaAcento, fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        text = {
+                            Text(
+                                text = rutina.notasEntrenador,
+                                color = Color.White,
+                                fontSize = 14.sp
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { mostrarModalNotasGeneral = false }) {
+                                Text("Entendido", color = NaranjaAcento, fontWeight = FontWeight.Bold)
                             }
                         }
                     )
@@ -228,7 +270,6 @@ fun EntrenarScreen(
                     )
                 }
 
-                val rutina = state.rutina
                 val diaActual = state.diaActual
                 val sesion = state.sesionEnProgreso
 
@@ -250,20 +291,6 @@ fun EntrenarScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         item {
-                            if (rutina.notasEntrenador.isNotBlank()) {
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
-                                    border = BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.3f))
-                                ) {
-                                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Info, contentDescription = null, tint = NaranjaAcento)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Indicación del Coach: ${rutina.notasEntrenador}", style = MaterialTheme.typography.bodyMedium, color = Color.White)
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                            }
-
                             var expandedDiaSelector by remember { mutableStateOf(false) }
 
                             Card(
@@ -346,6 +373,7 @@ fun EjercicioInteractivoCard(
     onIniciarDescanso: (Int) -> Unit
 ) {
     var mostrarInfoEntrenador by remember { mutableStateOf(false) }
+    var mostrarModalNotasEspecificas by remember { mutableStateOf(false) }
     var mostrarRpeSheet by remember { mutableStateOf(false) }
     var mostrarBottomSheetHistorial by remember { mutableStateOf(false) }
     var serieSeleccionadaParaRpe by remember { mutableStateOf(-1) }
@@ -373,8 +401,27 @@ fun EjercicioInteractivoCard(
                     color = NaranjaAcento,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = { mostrarInfoEntrenador = true }) {
-                    Icon(Icons.Default.Info, null, tint = NaranjaAcento)
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 🟢 ÍCONO 2: RECOMENDACIONES TÉCNICAS DEL EJERCICIO
+                    if (ejercicioAsignado.notasEspecificas.isNotBlank()) {
+                        IconButton(onClick = { mostrarModalNotasEspecificas = true }) {
+                            Icon(
+                                imageVector = Icons.Default.FormatListBulleted,
+                                contentDescription = "Recomendaciones Técnicas",
+                                tint = NaranjaAcento
+                            )
+                        }
+                    }
+
+                    // 🟢 ÍCONO 3: PRECRIPCIÓN DE SERIES Y DESCANSO (i)
+                    IconButton(onClick = { mostrarInfoEntrenador = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Prescripción de Series",
+                            tint = NaranjaAcento
+                        )
+                    }
                 }
             }
 
@@ -696,17 +743,54 @@ fun EjercicioInteractivoCard(
         }
     }
 
+    // 🟢 MODAL 2: RECOMENDACIONES TÉCNICAS DEL EJERCICIO
+    if (mostrarModalNotasEspecificas) {
+        AlertDialog(
+            containerColor = FondoTarjeta,
+            onDismissRequest = { mostrarModalNotasEspecificas = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.FormatListBulleted, contentDescription = null, tint = NaranjaAcento)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Recomendaciones Técnicas", color = NaranjaAcento, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        text = ejercicioAsignado.nombre,
+                        color = TextoSecundario,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = ejercicioAsignado.notasEspecificas,
+                        color = Color.White,
+                        fontSize = 14.sp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { mostrarModalNotasEspecificas = false }) {
+                    Text("Cerrar", color = NaranjaAcento, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    // 🟢 MODAL 3: PRESCRIPCIÓN DE SERIES Y DESCANSO (i)
     if (mostrarInfoEntrenador) {
         AlertDialog(
             containerColor = FondoTarjeta,
             onDismissRequest = { mostrarInfoEntrenador = false },
-            title = { Text("Prescripción del Ciclo", color = NaranjaAcento, fontWeight = FontWeight.Bold) },
+            title = { Text("Prescripción de Series y Descanso", color = NaranjaAcento, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (ejercicioAsignado.descansoSegundos > 0) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Icon(Icons.Default.Timer, contentDescription = null, tint = NaranjaAcento, modifier = Modifier.size(18.dp))
-                            Text("Descanso recomendado entre series: ${ejercicioAsignado.descansoSegundos} segundos", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text("Descanso recomendado: ${ejercicioAsignado.descansoSegundos} segundos", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                         HorizontalDivider(color = FondoOscuro, modifier = Modifier.padding(vertical = 4.dp))
                     }
@@ -730,10 +814,6 @@ fun EjercicioInteractivoCard(
                         }
 
                         Text("• Serie ${serie.numeroSerie}: $etiquetaTipo - $textoRango reps meta", color = Color.White)
-                    }
-                    if (ejercicioAsignado.notasEspecificas.isNotBlank()) {
-                        HorizontalDivider(color = FondoOscuro, modifier = Modifier.padding(vertical = 4.dp))
-                        Text("Nota técnica: ${ejercicioAsignado.notasEspecificas}", fontStyle = FontStyle.Italic, color = TextoSecundario)
                     }
                 }
             },

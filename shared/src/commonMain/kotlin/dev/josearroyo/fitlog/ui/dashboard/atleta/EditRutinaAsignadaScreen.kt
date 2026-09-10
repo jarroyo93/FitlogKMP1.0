@@ -34,6 +34,7 @@ import dev.gitlive.firebase.auth.auth
 import dev.josearroyo.fitlog.data.model.ModoCiclo
 import dev.josearroyo.fitlog.data.model.PrescripcionSerie
 import dev.josearroyo.fitlog.data.model.TipoSerie
+import dev.josearroyo.fitlog.ui.components.EditorNotasLista
 import dev.josearroyo.fitlog.viewmodel.atleta.EditRutinaAsignadaViewModel
 import kotlinx.coroutines.launch
 
@@ -63,11 +64,9 @@ fun EditRutinaAsignadaScreen(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
-    // Controladores de Scroll y Corutinas para desplazamiento rápido
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Variable local para smart-casting correcto
     val rutina = state.rutina
     val esProgramaValido = remember(rutina, state.duracionTexto) {
         rutina != null &&
@@ -225,7 +224,6 @@ fun EditRutinaAsignadaScreen(
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Volver", tint = NaranjaAcento) } },
                 actions = {
                     if (rutina != null) {
-                        // Único botón de guardar en la barra superior
                         IconButton(
                             onClick = { viewModel.guardarCambios(atletaId) },
                             enabled = esProgramaValido && !state.isLoading
@@ -292,6 +290,16 @@ fun EditRutinaAsignadaScreen(
                         focusedContainerColor = FondoTarjeta,
                         unfocusedContainerColor = FondoTarjeta
                     )
+                )
+
+                // 🟢 Editor de Indicaciones Generales de la Rutina
+                EditorNotasLista(
+                    titulo = "Indicaciones Generales de la Rutina (Opcional)",
+                    placeholder = "Ej: RPE 8 general",
+                    notasTexto = rutina.notasEntrenador,
+                    onNotasChanged = { nuevasNotas ->
+                        viewModel.actualizarNombreONotas(rutina.nombreRutina, nuevasNotas)
+                    }
                 )
 
                 // CARD INTEGRADA DE MODO DE ENTRENAMIENTO Y DURACIÓN DINÁMICA
@@ -480,6 +488,21 @@ fun EditRutinaAsignadaScreen(
                                                 )
 
                                                 Spacer(modifier = Modifier.height(12.dp))
+
+                                                // 🟢 Editor de Recomendaciones Técnicas del Ejercicio
+                                                EditorNotasLista(
+                                                    titulo = "Recomendaciones / Tempo / Técnica",
+                                                    placeholder = "Ej: Tempo 3-0-1-0",
+                                                    notasTexto = ejercicio.notasEspecificas,
+                                                    onNotasChanged = { nuevasNotas ->
+                                                        viewModel.actualizarEjercicio(
+                                                            realDiaIndex,
+                                                            realEjIndex,
+                                                            ejercicio.copy(notasEspecificas = nuevasNotas)
+                                                        )
+                                                    },
+                                                    modifier = Modifier.padding(bottom = 8.dp)
+                                                )
 
                                                 OutlinedTextField(
                                                     value = if (ejercicio.descansoSegundos == 0) "" else ejercicio.descansoSegundos.toString(),

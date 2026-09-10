@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.ModoCiclo
+import dev.josearroyo.fitlog.ui.components.EditorNotasLista
 import dev.josearroyo.fitlog.viewmodel.entrenador.AsignarRutinaViewModel
 import androidx.navigation.NavController
 
@@ -43,7 +44,7 @@ fun SeleccionarPlantillaScreen(
     atletaId: String,
     entrenadorId: String,
     onBack: () -> Unit,
-    navController: NavController? = null, // 🟢 AGREGADO: Para enviar la bandera al expediente
+    navController: NavController? = null,
     viewModel: AsignarRutinaViewModel = viewModel { AsignarRutinaViewModel() }
 ) {
     val state by viewModel.state.collectAsState()
@@ -51,7 +52,6 @@ fun SeleccionarPlantillaScreen(
 
     LaunchedEffect(entrenadorId) { viewModel.cargarBiblioteca(entrenadorId) }
 
-    // 🟢 CORREGIDO: Notifica el cambio al expediente del atleta antes de cerrar la pantalla
     LaunchedEffect(state.isSuccess) {
         if (state.isSuccess) {
             navController?.previousBackStackEntry
@@ -129,7 +129,7 @@ fun SeleccionarPlantillaScreen(
                     label = { Text("Nombre del Bloque o Macrociclo", color = TextoSecundario) },
                     placeholder = { Text("Ej: Hipertrofia Bloque 1", color = TextoSecundario.copy(alpha = 0.4f)) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
@@ -142,7 +142,18 @@ fun SeleccionarPlantillaScreen(
                     singleLine = true
                 )
 
-                // 2. Configuración del Modo de Ciclo y Duración
+                // 2. Editor de Indicaciones Generales de la Rutina
+                EditorNotasLista(
+                    titulo = "Indicaciones Generales de la Rutina (Opcional)",
+                    placeholder = "Ej: RPE 8 general",
+                    notasTexto = state.notasEntrenador,
+                    onNotasChanged = { nuevasNotas ->
+                        viewModel.actualizarNotasEntrenador(nuevasNotas)
+                    },
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                // 3. Configuración del Modo de Ciclo y Duración
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                     shape = RoundedCornerShape(12.dp),
@@ -236,7 +247,7 @@ fun SeleccionarPlantillaScreen(
                     }
                 }
 
-                // 3. Secuencia de Plantillas Seleccionadas
+                // 4. Secuencia de Plantillas Seleccionadas
                 Text(
                     text = "Secuencia del Programa:",
                     style = MaterialTheme.typography.titleMedium,
@@ -331,7 +342,7 @@ fun SeleccionarPlantillaScreen(
 
                 HorizontalDivider(color = FondoTarjeta, modifier = Modifier.padding(vertical = 12.dp))
 
-                // 4. Catálogo de Plantillas
+                // 5. Catálogo de Plantillas
                 Text(
                     text = "Catálogo de Plantillas Disponibles:",
                     style = MaterialTheme.typography.titleMedium,

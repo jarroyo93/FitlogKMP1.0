@@ -1,4 +1,4 @@
-package dev.josearroyo.fitlog.ui.util
+package dev.josearroyo.fitlog.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
