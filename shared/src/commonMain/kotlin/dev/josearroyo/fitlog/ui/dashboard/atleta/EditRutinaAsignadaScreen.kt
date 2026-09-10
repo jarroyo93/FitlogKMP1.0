@@ -35,6 +35,7 @@ import dev.josearroyo.fitlog.data.model.ModoCiclo
 import dev.josearroyo.fitlog.data.model.PrescripcionSerie
 import dev.josearroyo.fitlog.data.model.TipoSerie
 import dev.josearroyo.fitlog.viewmodel.atleta.EditRutinaAsignadaViewModel
+import kotlinx.coroutines.launch
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -46,7 +47,7 @@ private val TextoSecundario = Color(0xFFB3AEC6)
 fun EditRutinaAsignadaScreen(
     atletaId: String,
     rutinaId: String,
-    navController: NavController? = null, // 👈 Parámetro agregado
+    navController: NavController? = null,
     onBack: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
@@ -62,9 +63,33 @@ fun EditRutinaAsignadaScreen(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
+    // Controladores de Scroll y Corutinas para desplazamiento rápido
+    val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
+
+    // Variable local para smart-casting correcto
+    val rutina = state.rutina
+    val esProgramaValido = remember(rutina, state.duracionTexto) {
+        rutina != null &&
+                rutina.nombreRutina.isNotBlank() &&
+                state.duracionTexto.isNotBlank() &&
+                (state.duracionTexto.toIntOrNull() ?: 0) > 0 &&
+                rutina.diasEntrenamiento.isNotEmpty() &&
+                rutina.diasEntrenamiento.all { dia ->
+                    dia.ejercicios.isNotEmpty() &&
+                            dia.ejercicios.all { ej ->
+                                ej.seriesPrescritas.isNotEmpty() &&
+                                        ej.seriesPrescritas.all { serie ->
+                                            val min = if (serie.repeticiones > 0) serie.minReps else serie.repsMin
+                                            val max = if (serie.repeticiones > 0) serie.maxReps else serie.repsMax
+                                            min > 0 && max > 0 && max >= min
+                                        }
+                            }
+                }
+    }
+
     LaunchedEffect(rutinaId) { viewModel.cargarRutinaYBiblioteca(atletaId, rutinaId, currentEntrenadorId) }
 
-    // 🟢 Notifica la bandera de cambios antes de regresar
     LaunchedEffect(state.isSaved, state.isDeleted) {
         if (state.isSaved || state.isDeleted) {
             navController?.previousBackStackEntry
@@ -199,34 +224,48 @@ fun EditRutinaAsignadaScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FondoOscuro),
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Volver", tint = NaranjaAcento) } },
                 actions = {
-                    if (state.rutina != null) {
+                    if (rutina != null) {
+                        // Único botón de guardar en la barra superior
+                        IconButton(
+                            onClick = { viewModel.guardarCambios(atletaId) },
+                            enabled = esProgramaValido && !state.isLoading
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Save,
+                                contentDescription = "Guardar",
+                                tint = if (esProgramaValido && !state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
+                            )
+                        }
+
                         IconButton(onClick = { showDialogBorrar = true }) { Icon(Icons.Default.Delete, "Borrar", tint = Color(0xFFE57373)) }
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            if (rutina != null) {
+                FloatingActionButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            scrollState.animateScrollTo(scrollState.maxValue)
+                        }
+                    },
+                    containerColor = FondoTarjeta,
+                    contentColor = NaranjaAcento,
+                    shape = CircleShape,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Ir al final"
+                    )
+                }
+            }
         }
     ) { padding ->
-        if (state.isLoading || state.rutina == null) {
+        if (state.isLoading || rutina == null) {
             Box(Modifier.fillMaxSize().background(FondoOscuro), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = NaranjaAcento) }
         } else {
-            val rutina = state.rutina!!
-
-            val esProgramaValido = rutina.nombreRutina.isNotBlank() &&
-                    state.duracionTexto.isNotBlank() &&
-                    (state.duracionTexto.toIntOrNull() ?: 0) > 0 &&
-                    rutina.diasEntrenamiento.isNotEmpty() &&
-                    rutina.diasEntrenamiento.all { dia ->
-                        dia.ejercicios.isNotEmpty() &&
-                                dia.ejercicios.all { ej ->
-                                    ej.seriesPrescritas.isNotEmpty() &&
-                                            ej.seriesPrescritas.all { serie ->
-                                                val min = if (serie.repeticiones > 0) serie.minReps else serie.repsMin
-                                                val max = if (serie.repeticiones > 0) serie.maxReps else serie.repsMax
-                                                min > 0 && max > 0 && max >= min
-                                            }
-                                }
-                    }
-
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -236,7 +275,7 @@ fun EditRutinaAsignadaScreen(
                         detectTapGestures(onTap = { focusManager.clearFocus() })
                     }
                     .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 OutlinedTextField(
@@ -255,7 +294,7 @@ fun EditRutinaAsignadaScreen(
                     )
                 )
 
-                // 🟢 CARD INTEGRADA DE MODO DE ENTRENAMIENTO Y DURACIÓN DINÁMICA
+                // CARD INTEGRADA DE MODO DE ENTRENAMIENTO Y DURACIÓN DINÁMICA
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
@@ -481,25 +520,6 @@ fun EditRutinaAsignadaScreen(
                     Icon(Icons.Default.Add, null, tint = NaranjaAcento)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Añadir Día Extra (Plantilla)", fontWeight = FontWeight.Bold)
-                }
-
-                Button(
-                    onClick = { viewModel.guardarCambios(atletaId) },
-                    enabled = esProgramaValido && !state.isLoading,
-                    modifier = Modifier.fillMaxWidth().height(50.dp).padding(top = 8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = NaranjaAcento,
-                        disabledContainerColor = NaranjaAcento.copy(alpha = 0.3f),
-                        contentColor = FondoOscuro,
-                        disabledContentColor = TextoSecundario.copy(alpha = 0.7f)
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = if (esProgramaValido) "Guardar Cambios de Planificación" else "Completa el nombre, duración y rangos válidos",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
                 }
             }
         }
