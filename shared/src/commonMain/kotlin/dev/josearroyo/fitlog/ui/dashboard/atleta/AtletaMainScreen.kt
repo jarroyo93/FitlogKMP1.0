@@ -160,11 +160,16 @@ fun AtletaMainScreen(
                     EstadoSuscripcion.HUERFANO -> {
                         PantallaHuerfano(
                             isActionLoading = isActionLoading,
-                            onIngresarCodigo = { corr, cod ->
+                            onIngresarCodigo = { corr, cod, onError ->
                                 scope.launch {
                                     isActionLoading = true
-                                    if (userRepository.vincularConEntrenador(usuario!!.id, corr, cod)) recargarEstado()
+                                    val exito = userRepository.vincularConEntrenador(usuario!!.id, corr, cod)
                                     isActionLoading = false
+                                    if (exito) {
+                                        recargarEstado()
+                                    } else {
+                                        onError() // 🟢 Solo activa el mensaje rojo si la respuesta de Firestore es false
+                                    }
                                 }
                             },
                             onLogout = {
@@ -464,7 +469,7 @@ fun PantallaRestringida(
 @Composable
 fun PantallaHuerfano(
     isActionLoading: Boolean,
-    onIngresarCodigo: (String, String) -> Unit,
+    onIngresarCodigo: (correo: String, codigo: String, onError: () -> Unit) -> Unit,
     onLogout: () -> Unit
 ) {
     var correoEntrenador by remember { mutableStateOf("") }
@@ -531,7 +536,10 @@ fun PantallaHuerfano(
                 keyboardActions = KeyboardActions(onDone = {
                     focusManager.clearFocus()
                     if (correoEntrenador.isNotBlank() && codigoEntrenador.isNotBlank()) {
-                        onIngresarCodigo(correoEntrenador, codigoEntrenador)
+                        errorVinculacion = false
+                        onIngresarCodigo(correoEntrenador, codigoEntrenador) {
+                            errorVinculacion = true
+                        }
                     }
                 }),
                 modifier = Modifier.fillMaxWidth(),
@@ -560,8 +568,11 @@ fun PantallaHuerfano(
             } else {
                 Button(
                     onClick = {
-                        onIngresarCodigo(correoEntrenador, codigoEntrenador)
-                        errorVinculacion = true
+                        focusManager.clearFocus()
+                        errorVinculacion = false
+                        onIngresarCodigo(correoEntrenador, codigoEntrenador) {
+                            errorVinculacion = true
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()

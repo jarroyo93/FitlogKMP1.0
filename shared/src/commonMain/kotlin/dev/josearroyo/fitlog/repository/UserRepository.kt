@@ -127,14 +127,12 @@ class UserRepository {
             } else {
                 val userRef = db.collection("users").document(atletaId)
 
-                // Consultar periodos vigentes o diferidos para cancelarlos
                 val periodosVigentesSnapshot = userRef.collection("periodos_facturables")
                     .where { "estado" inArray listOf(EstadoPeriodo.ACTIVO.name, EstadoPeriodo.DIFERIDO.name) }
                     .get()
 
                 val batch = db.batch()
 
-                // RESETEAMOS TODOS LOS CAMPOS DE LA RAÍZ
                 batch.update(
                     userRef,
                     "entrenadorId" to entrenadorDocId,
@@ -146,7 +144,6 @@ class UserRepository {
                     "motivoPausa" to null
                 )
 
-                // Cancelamos los periodos facturables de la subcolección
                 for (pDoc in periodosVigentesSnapshot.documents) {
                     val refP = userRef.collection("periodos_facturables").document(pDoc.id)
                     batch.update(refP, "estado" to EstadoPeriodo.CANCELADO.name)
@@ -264,7 +261,6 @@ class UserRepository {
         val estadoSuscripcion = userSnap.get<String>("estadoSuscripcion")
         val ahora = getCurrentTimeMillis()
 
-        // 🛡️ REGLA DE ORO: Si el atleta NO está ACTIVO ni DIFERIDO, la cadena siempre termina HOY
         if (estadoSuscripcion != EstadoSuscripcion.ACTIVO.name &&
             estadoSuscripcion != EstadoSuscripcion.DIFERIDO.name) {
             return ahora
@@ -464,7 +460,6 @@ class UserRepository {
 
         if (periodosDiferidos.isNotEmpty()) {
             val batchDiferidos = db.batch()
-            // 🟢 REGLA: +1 ms para pasar de las 23:59:59.999 a las 00:00:00.000 del día siguiente
             var proximoInicio = nuevaFechaFin + 1L
 
             for (p in periodosDiferidos) {
@@ -473,7 +468,6 @@ class UserRepository {
                 val refP = userRef.collection("periodos_facturables").document(p.id)
                 batchDiferidos.update(refP, "fechaInicio" to proximoInicio, "fechaFin" to nuevoFin)
 
-                // 🟢 El siguiente plan en la cadena también inicia 1 ms después de que vence este
                 proximoInicio = nuevoFin + 1L
             }
             batchDiferidos.commit()
@@ -496,7 +490,6 @@ class UserRepository {
         val fechaCreacionMilis = snapshotPeriodo.get<Long>("fechaCreacion") ?: 0L
         val ahora = getCurrentTimeMillis()
 
-        // 🛡️ CONTROL DE SEGURIDAD: Validar que fechaCreacionMilis sea un timestamp válido (> 0) antes de verificar el día
         val esCreadoHoy = fechaCreacionMilis > 0L && esMismoDia(ahora, fechaCreacionMilis)
 
         if (estadoActual == EstadoPeriodo.ACTIVO.name && !esCreadoHoy) {
@@ -535,7 +528,7 @@ class UserRepository {
                 .get()
                 .documents.map { it.data<PeriodoFacturable>().copy(id = it.id) }
 
-            // 1. Marca como COMPLETADO cualquier plan cuya fecha de fin ya pasó
+            // 1. Marca como COMPLETADO cualquier plan activo cuya fecha de fin ya transcurrió
             periodosSnapshot.filter { it.estado == EstadoPeriodo.ACTIVO && (it.fechaFin ?: 0L) < ahora }.forEach { p ->
                 userRef.collection("periodos_facturables").document(p.id).update("estado" to EstadoPeriodo.COMPLETADO.name)
             }
@@ -544,7 +537,7 @@ class UserRepository {
                 !(it.estado == EstadoPeriodo.ACTIVO && (it.fechaFin ?: 0L) < ahora)
             }
 
-            // 2. AUTORREPARACIÓN: Si no hay planes vivos en la subcolección, limpia la raíz a VENCIDO
+            // 2. Si no quedan planes vivos, marca como VENCIDO
             if (periodosVivosRestantes.isEmpty()) {
                 if (usuario.estadoSuscripcion != EstadoSuscripcion.VENCIDO || usuario.vencimientoSuscripcion != 0L) {
                     val updates = mapOf(
@@ -564,28 +557,45 @@ class UserRepository {
                 return usuario
             }
 
-            // 3. Activa planes diferidos programados para hoy
-            val proximoDiferido = periodosVivosRestantes
-                .filter { it.estado == EstadoPeriodo.DIFERIDO && it.fechaInicio <= ahora }
-                .minByOrNull { it.fechaInicio }
+            // 3. Promoción atómica de plan DIFERIDO a ACTIVO
+            val tieneActivoVigente = periodosVivosRestantes.any { it.estado == EstadoPeriodo.ACTIVO && (it.fechaFin ?: 0L) > ahora }
 
-            if (proximoDiferido != null) {
-                userRef.collection("periodos_facturables").document(proximoDiferido.id)
-                    .update("estado" to EstadoPeriodo.ACTIVO.name)
+            if (!tieneActivoVigente) {
+                val proximoDiferido = periodosVivosRestantes
+                    .filter { it.estado == EstadoPeriodo.DIFERIDO }
+                    .minByOrNull { it.fechaInicio }
 
-                val updates = mapOf(
-                    "estadoSuscripcion" to EstadoSuscripcion.ACTIVO.name,
-                    "planActivo" to proximoDiferido.tipoPlan,
-                    "fechaInicioSuscripcion" to proximoDiferido.fechaInicio,
-                    "vencimientoSuscripcion" to (proximoDiferido.fechaFin ?: 0L)
-                )
-                userRef.update(updates)
-                return usuario.copy(
-                    estadoSuscripcion = EstadoSuscripcion.ACTIVO,
-                    planActivo = proximoDiferido.tipoPlan,
-                    fechaInicioSuscripcion = proximoDiferido.fechaInicio,
-                    vencimientoSuscripcion = proximoDiferido.fechaFin
-                )
+                if (proximoDiferido != null) {
+                    val nuevaFechaInicio = if (proximoDiferido.fechaInicio <= ahora) proximoDiferido.fechaInicio else ahora
+                    val duracion = (proximoDiferido.fechaFin ?: 0L) - proximoDiferido.fechaInicio
+                    val nuevaFechaFin = nuevaFechaInicio + duracion
+
+                    val batch = db.batch()
+                    val refP = userRef.collection("periodos_facturables").document(proximoDiferido.id)
+
+                    batch.update(
+                        refP,
+                        "estado" to EstadoPeriodo.ACTIVO.name,
+                        "fechaInicio" to nuevaFechaInicio,
+                        "fechaFin" to nuevaFechaFin
+                    )
+
+                    val updates = mapOf(
+                        "estadoSuscripcion" to EstadoSuscripcion.ACTIVO.name,
+                        "planActivo" to proximoDiferido.tipoPlan,
+                        "fechaInicioSuscripcion" to nuevaFechaInicio,
+                        "vencimientoSuscripcion" to nuevaFechaFin
+                    )
+                    batch.update(userRef, updates)
+                    batch.commit()
+
+                    return usuario.copy(
+                        estadoSuscripcion = EstadoSuscripcion.ACTIVO,
+                        planActivo = proximoDiferido.tipoPlan,
+                        fechaInicioSuscripcion = nuevaFechaInicio,
+                        vencimientoSuscripcion = nuevaFechaFin
+                    )
+                }
             }
 
             usuario
