@@ -35,6 +35,7 @@ import dev.josearroyo.fitlog.data.model.ModoCiclo
 import dev.josearroyo.fitlog.data.model.PrescripcionSerie
 import dev.josearroyo.fitlog.data.model.TipoSerie
 import dev.josearroyo.fitlog.ui.components.EditorNotasLista
+import dev.josearroyo.fitlog.ui.components.ModoCicloSection
 import dev.josearroyo.fitlog.viewmodel.atleta.EditRutinaAsignadaViewModel
 import kotlinx.coroutines.launch
 
@@ -292,7 +293,6 @@ fun EditRutinaAsignadaScreen(
                     )
                 )
 
-                // 🟢 Editor de Indicaciones Generales de la Rutina
                 EditorNotasLista(
                     titulo = "Indicaciones Generales de la Rutina (Opcional)",
                     placeholder = "Ej: RPE 8 general",
@@ -302,109 +302,18 @@ fun EditRutinaAsignadaScreen(
                     }
                 )
 
-                // CARD INTEGRADA DE MODO DE ENTRENAMIENTO Y DURACIÓN DINÁMICA
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "Modo de Entrenamiento y Duración:",
-                            color = Color.White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            FilterChip(
-                                selected = rutina.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL,
-                                onClick = { viewModel.actualizarModoCiclo(ModoCiclo.CALENDARIO_SEMANAL) },
-                                label = { Text("Semanal (Lun-Dom)", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = NaranjaAcento,
-                                    selectedLabelColor = FondoOscuro,
-                                    containerColor = FondoOscuro,
-                                    labelColor = TextoSecundario
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    borderColor = TextoSecundario.copy(alpha = 0.3f),
-                                    selectedBorderColor = NaranjaAcento,
-                                    enabled = true,
-                                    selected = rutina.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            FilterChip(
-                                selected = rutina.modoCiclo == ModoCiclo.SECUENCIAL_RODANTE,
-                                onClick = { viewModel.actualizarModoCiclo(ModoCiclo.SECUENCIAL_RODANTE) },
-                                label = { Text("Días Corridos", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = NaranjaAcento,
-                                    selectedLabelColor = FondoOscuro,
-                                    containerColor = FondoOscuro,
-                                    labelColor = TextoSecundario
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    borderColor = TextoSecundario.copy(alpha = 0.3f),
-                                    selectedBorderColor = NaranjaAcento,
-                                    enabled = true,
-                                    selected = rutina.modoCiclo == ModoCiclo.SECUENCIAL_RODANTE
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        val esSemanal = rutina.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL
-                        val duracionInt = state.duracionTexto.toIntOrNull() ?: 0
-                        val labelTexto = if (esSemanal) "Duración (Semanas)" else "Duración (Días exactos)"
-                        val helperTexto = if (esSemanal) {
-                            "Equivale a ${duracionInt * 7} días continuos de ciclo"
-                        } else {
-                            "Ciclo continuo de $duracionInt días"
-                        }
-
-                        OutlinedTextField(
-                            value = state.duracionTexto,
-                            onValueChange = { viewModel.actualizarDuracion(it) },
-                            label = { Text(labelTexto, color = TextoSecundario) },
-                            supportingText = { Text(helperTexto, color = TextoSecundario.copy(alpha = 0.7f)) },
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Number,
-                                imeAction = ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = NaranjaAcento,
-                                unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                                focusedContainerColor = FondoOscuro,
-                                unfocusedContainerColor = FondoOscuro
-                            ),
-                            shape = RoundedCornerShape(10.dp),
-                            singleLine = true
-                        )
-                    }
-                }
+                ModoCicloSection(
+                    modoCiclo = rutina.modoCiclo,
+                    duracionTexto = state.duracionTexto,
+                    onModoCicloChange = viewModel::actualizarModoCiclo,
+                    onDuracionChange = viewModel::actualizarDuracion
+                )
 
                 HorizontalDivider(color = FondoTarjeta)
 
                 val diasOrdenados = rutina.diasEntrenamiento.sortedBy { it.ordenSecuencia }
 
                 diasOrdenados.forEachIndexed { visualDiaIndex, dia ->
-                    val realDiaIndex = remember(rutina.diasEntrenamiento, dia) {
-                        rutina.diasEntrenamiento.indexOf(dia)
-                    }
-
                     key(dia.ordenSecuencia) {
                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = FondoTarjeta), shape = RoundedCornerShape(16.dp)) {
                             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -413,7 +322,7 @@ fun EditRutinaAsignadaScreen(
                                     Text("Día ${dia.ordenSecuencia}: ${dia.nombreDia}", fontWeight = FontWeight.Black, color = NaranjaAcento, fontSize = 16.sp, modifier = Modifier.weight(1f))
 
                                     IconButton(
-                                        onClick = { viewModel.moverDia(realDiaIndex, -1) },
+                                        onClick = { viewModel.moverDia(visualDiaIndex, -1) },
                                         enabled = visualDiaIndex > 0
                                     ) {
                                         Icon(
@@ -424,7 +333,7 @@ fun EditRutinaAsignadaScreen(
                                     }
 
                                     IconButton(
-                                        onClick = { viewModel.moverDia(realDiaIndex, 1) },
+                                        onClick = { viewModel.moverDia(visualDiaIndex, 1) },
                                         enabled = visualDiaIndex < diasOrdenados.size - 1
                                     ) {
                                         Icon(
@@ -434,16 +343,12 @@ fun EditRutinaAsignadaScreen(
                                         )
                                     }
 
-                                    IconButton(onClick = { viewModel.eliminarDia(realDiaIndex) }) { Icon(Icons.Default.Delete, null, tint = Color(0xFFE57373)) }
+                                    IconButton(onClick = { viewModel.eliminarDia(visualDiaIndex) }) { Icon(Icons.Default.Delete, null, tint = Color(0xFFE57373)) }
                                 }
 
                                 val ejerciciosOrdenados = dia.ejercicios.sortedBy { it.ordenSecuencia }
 
                                 ejerciciosOrdenados.forEachIndexed { visualEjIndex, ejercicio ->
-                                    val realEjIndex = remember(dia.ejercicios, ejercicio) {
-                                        dia.ejercicios.indexOf(ejercicio)
-                                    }
-
                                     key(ejercicio.ordenSecuencia) {
                                         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = FondoOscuro), shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, FondoTarjeta)) {
                                             Column(modifier = Modifier.padding(12.dp)) {
@@ -452,7 +357,7 @@ fun EditRutinaAsignadaScreen(
                                                     Text("${ejercicio.ordenSecuencia}. ${ejercicio.nombre}", fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
 
                                                     IconButton(
-                                                        onClick = { viewModel.moverEjercicio(realDiaIndex, realEjIndex, -1) },
+                                                        onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, -1) },
                                                         enabled = visualEjIndex > 0
                                                     ) {
                                                         Icon(
@@ -464,7 +369,7 @@ fun EditRutinaAsignadaScreen(
                                                     }
 
                                                     IconButton(
-                                                        onClick = { viewModel.moverEjercicio(realDiaIndex, realEjIndex, 1) },
+                                                        onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, 1) },
                                                         enabled = visualEjIndex < ejerciciosOrdenados.size - 1
                                                     ) {
                                                         Icon(
@@ -475,7 +380,7 @@ fun EditRutinaAsignadaScreen(
                                                         )
                                                     }
 
-                                                    IconButton(onClick = { viewModel.eliminarEjercicio(realDiaIndex, realEjIndex) }) { Icon(Icons.Default.Clear, null, tint = TextoSecundario) }
+                                                    IconButton(onClick = { viewModel.eliminarEjercicio(visualDiaIndex, visualEjIndex) }) { Icon(Icons.Default.Clear, null, tint = TextoSecundario) }
                                                 }
 
                                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = FondoTarjeta)
@@ -483,21 +388,20 @@ fun EditRutinaAsignadaScreen(
                                                 EditorSeriesPrescritas(
                                                     seriesPrescritas = ejercicio.seriesPrescritas,
                                                     onSeriesUpdate = { nuevaLista ->
-                                                        viewModel.actualizarEjercicio(realDiaIndex, realEjIndex, ejercicio.copy(seriesPrescritas = nuevaLista))
+                                                        viewModel.actualizarEjercicio(visualDiaIndex, visualEjIndex, ejercicio.copy(seriesPrescritas = nuevaLista))
                                                     }
                                                 )
 
                                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                                // 🟢 Editor de Recomendaciones Técnicas del Ejercicio
                                                 EditorNotasLista(
                                                     titulo = "Recomendaciones / Tempo / Técnica",
                                                     placeholder = "Ej: Tempo 3-0-1-0",
                                                     notasTexto = ejercicio.notasEspecificas,
                                                     onNotasChanged = { nuevasNotas ->
                                                         viewModel.actualizarEjercicio(
-                                                            realDiaIndex,
-                                                            realEjIndex,
+                                                            visualDiaIndex,
+                                                            visualEjIndex,
                                                             ejercicio.copy(notasEspecificas = nuevasNotas)
                                                         )
                                                     },
@@ -506,7 +410,7 @@ fun EditRutinaAsignadaScreen(
 
                                                 OutlinedTextField(
                                                     value = if (ejercicio.descansoSegundos == 0) "" else ejercicio.descansoSegundos.toString(),
-                                                    onValueChange = { nv -> if (nv.all { it.isDigit() }) viewModel.actualizarEjercicio(realDiaIndex, realEjIndex, ejercicio.copy(descansoSegundos = nv.toIntOrNull() ?: 0)) },
+                                                    onValueChange = { nv -> if (nv.all { it.isDigit() }) viewModel.actualizarEjercicio(visualDiaIndex, visualEjIndex, ejercicio.copy(descansoSegundos = nv.toIntOrNull() ?: 0)) },
                                                     label = { Text("Descanso sugerido (segundos)", color = TextoSecundario) },
                                                     keyboardOptions = KeyboardOptions(
                                                         keyboardType = KeyboardType.Number,
@@ -522,7 +426,7 @@ fun EditRutinaAsignadaScreen(
                                 }
 
                                 OutlinedButton(
-                                    onClick = { diaSeleccionadoParaEjercicio = realDiaIndex; showBottomSheetEjercicios = true },
+                                    onClick = { diaSeleccionadoParaEjercicio = visualDiaIndex; showBottomSheetEjercicios = true },
                                     modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = NaranjaAcento),
                                     border = androidx.compose.foundation.BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.5f)), shape = RoundedCornerShape(10.dp)
                                 ) {

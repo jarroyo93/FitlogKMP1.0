@@ -384,12 +384,16 @@ class AtletaProgresoRepository {
                     ((cicloActivo.repeticionesLogradasTotal.toDouble() / nuevasRepsMetaTotal.toDouble()) * 100.0).coerceAtMost(100.0)
                 } else 0.0
 
+                val cicloCompleto = cicloActivo.sesionesCompletadas >= nuevaMetaSesiones && nuevaMetaSesiones > 0
+
                 val cicloActualizado = cicloActivo.copy(
                     modoCiclo = rutinaActualizada.modoCiclo,
                     metaSesionesAsignadas = nuevaMetaSesiones,
                     repeticionesMetaTotal = nuevasRepsMetaTotal,
                     porcentajeAsistencia = nuevoPctAsistencia,
-                    porcentajeVolumenGlobal = nuevoPctVolumen
+                    porcentajeVolumenGlobal = nuevoPctVolumen,
+                    estaActivo = !cicloCompleto,
+                    fechaCierre = if (cicloCompleto) getCurrentTimeMillis() else cicloActivo.fechaCierre
                 )
 
                 ciclosRef.document(cicloActivo.id).set(cicloActualizado)
