@@ -7,6 +7,7 @@ import dev.gitlive.firebase.firestore.firestore
 import dev.gitlive.firebase.firestore.where
 import dev.josearroyo.fitlog.crearCuentaEnInstanciaSecundaria
 import dev.josearroyo.fitlog.data.model.*
+import dev.josearroyo.fitlog.eliminarCuentaEnInstanciaSecundaria
 import dev.josearroyo.fitlog.getCurrentTimeMillis
 import kotlin.uuid.Uuid
 
@@ -137,11 +138,11 @@ class AtletaRepository {
         if (snapshotCorreo.documents.isNotEmpty()) throw Exception("El correo ya se encuentra registrado en Firestore.")
         if (snapshotDoc.documents.isNotEmpty()) throw Exception("El documento ya se encuentra registrado en Firestore.")
 
-        // 2. Crear usuario en Auth mediante la instancia secundaria en memoria (mantiene activa la sesión del entrenador)
+        // 2. Crear usuario en Auth mediante la instancia secundaria
         val authUid = crearCuentaEnInstanciaSecundaria(usuario.correo, contrasenaTemporal)
 
         // 3. Escritura atómica (WriteBatch)
-        return try {
+        try {
             val nuevoRef = usersRef.document(authUid)
             val ahoraMilis = getCurrentTimeMillis()
 
@@ -178,10 +179,14 @@ class AtletaRepository {
             batch.set(registroContableRef, reciboContableInicial)
 
             batch.commit()
-            true
+            return true
         } catch (e: Exception) {
-            println("🔥 [AtletaRepository] Error en batch.commit(): ${e.message}")
-            e.printStackTrace()
+            println("🔥 [AtletaRepository] Error en batch.commit(). Ejecutando rollback en Auth...")
+            try {
+                eliminarCuentaEnInstanciaSecundaria(usuario.correo, contrasenaTemporal)
+            } catch (rollbackError: Exception) {
+                println("🔥 [AtletaRepository] Error durante el rollback: ${rollbackError.message}")
+            }
             throw Exception("Error al guardar la información en base de datos: ${e.message}")
         }
     }

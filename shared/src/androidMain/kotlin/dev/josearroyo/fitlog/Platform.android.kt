@@ -207,3 +207,21 @@ actual fun obtenerFinSemanaDomingo(timestamp: Long, duracionSemanas: Int): Long 
     }
     return cal.timeInMillis
 }
+
+actual suspend fun eliminarCuentaEnInstanciaSecundaria(correo: String, contrasena: String) {
+    val mainApp = FirebaseApp.getInstance()
+    val options = mainApp.options
+    val tempAppName = "TempAuthDeleteApp_${System.currentTimeMillis()}"
+
+    val secondaryApp = FirebaseApp.initializeApp(mainApp.applicationContext, options, tempAppName)
+    val secondaryAuth = FirebaseAuth.getInstance(secondaryApp)
+
+    try {
+        val result = secondaryAuth.signInWithEmailAndPassword(correo, contrasena).await()
+        result.user?.delete()?.await()
+    } catch (e: Exception) {
+        println("🔥 [AndroidPlatform] Error al eliminar usuario secundario en rollback: ${e.message}")
+    } finally {
+        secondaryApp.delete()
+    }
+}

@@ -4,6 +4,7 @@ import platform.Foundation.NSCalendar
 import platform.Foundation.NSCalendarUnitDay
 import platform.Foundation.NSCalendarUnitMonth
 import platform.Foundation.NSCalendarUnitYear
+import platform.Foundation.NSCalendarUnitWeekday
 import platform.UIKit.UIDevice
 import platform.Foundation.NSDate
 import platform.Foundation.NSDateFormatter
@@ -18,7 +19,6 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import platform.AudioToolbox.AudioServicesPlaySystemSound
 import platform.AudioToolbox.kSystemSoundID_Vibrate
-import platform.Foundation.NSCalendarUnitWeekday
 
 class IOSPlatform: Platform {
     override val name: String = UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
@@ -170,6 +170,7 @@ actual fun obtenerUltimos7DiasTimestamps(): List<Long> {
 
 object IOSSecondaryAuthBridge {
     var handler: ((String, String, (String?, String?) -> Unit) -> Unit)? = null
+    var deleteHandler: ((String, String, (Boolean, String?) -> Unit) -> Unit)? = null
 }
 
 actual suspend fun crearCuentaEnInstanciaSecundaria(correo: String, contrasena: String): String =
@@ -184,6 +185,24 @@ actual suspend fun crearCuentaEnInstanciaSecundaria(correo: String, contrasena: 
                 continuation.resume(uid)
             } else {
                 continuation.resumeWithException(Exception(errorMsg ?: "Error desconocido en iOS Auth."))
+            }
+        }
+    }
+
+actual suspend fun eliminarCuentaEnInstanciaSecundaria(correo: String, contrasena: String): Unit =
+    suspendCancellableCoroutine { continuation ->
+        val deleteHandler = IOSSecondaryAuthBridge.deleteHandler
+        if (deleteHandler == null) {
+            continuation.resume(Unit)
+            return@suspendCancellableCoroutine
+        }
+
+        deleteHandler(correo, contrasena) { exito, errorMsg ->
+            if (exito) {
+                continuation.resume(Unit)
+            } else {
+                println("🔥 [IOSPlatform] Error en rollback de Auth: $errorMsg")
+                continuation.resume(Unit)
             }
         }
     }

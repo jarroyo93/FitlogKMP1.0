@@ -34,3 +34,5 @@ expect fun extraerMesDeFecha(milis: Long): String
 // Agregar a Platform.kt
 expect fun obtenerInicioSemanaLunes(timestamp: Long): Long
 expect fun obtenerFinSemanaDomingo(timestamp: Long, duracionSemanas: Int = 1): Long
+
+expect suspend fun eliminarCuentaEnInstanciaSecundaria(correo: String, contrasena: String)
