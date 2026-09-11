@@ -295,20 +295,44 @@ fun AtletaCardItem(atleta: Usuario, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(contentAlignment = Alignment.Center) {
-                Box(modifier = Modifier.size(40.dp).background(FondoOscuro, CircleShape), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.size(40.dp).background(FondoOscuro, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(Icons.Default.Person, contentDescription = null, tint = NaranjaAcento)
                 }
-                if (esCumpleanos) { Text("🎂", modifier = Modifier.offset(x = 10.dp, y = (-12).dp), fontSize = 14.sp) }
+                if (esCumpleanos) {
+                    Text("🎂", modifier = Modifier.offset(x = 10.dp, y = (-12).dp), fontSize = 14.sp)
+                }
             }
             Spacer(modifier = Modifier.width(16.dp))
+
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = "${atleta.nombres} ${atleta.apellidos}".trim().ifEmpty { "Atleta Sin Nombre" }, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(
+                    text = "${atleta.nombres} ${atleta.apellidos}".trim().ifEmpty { "Atleta Sin Nombre" },
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                // 🟢 Mostramos siempre el plan activo
+                Text(
+                    text = "Plan: ${atleta.planActivo}",
+                    color = TextoSecundario,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                // 🟢 Si es cumpleaños, se añade como una línea extra resaltada en naranja
                 if (esCumpleanos) {
-                    Text("🎉 ¡Hoy cumple años!", style = MaterialTheme.typography.bodySmall, color = NaranjaAcento, fontWeight = FontWeight.Bold)
-                } else {
-                    Text("Plan: ${atleta.planActivo}", color = TextoSecundario, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "🎉 ¡Hoy cumple años!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NaranjaAcento,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 
