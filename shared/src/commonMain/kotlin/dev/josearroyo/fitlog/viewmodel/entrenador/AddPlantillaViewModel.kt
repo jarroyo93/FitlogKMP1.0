@@ -117,16 +117,23 @@ class AddPlantillaViewModel(
 
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
-            val nuevaPlantilla = PlantillaRutina(
-                nombre = currentState.nombrePlantilla,
-                entrenadorId = entrenadorId,
-                ejercicios = currentState.ejerciciosEnCarrito,
-                activo = true
-            )
             try {
                 if (plantillaIdActual != null) {
-                    repository.actualizarPlantilla(nuevaPlantilla.copy(id = plantillaIdActual!!))
+                    val plantillaActualizada = PlantillaRutina(
+                        id = plantillaIdActual!!,
+                        nombre = currentState.nombrePlantilla,
+                        entrenadorId = entrenadorId,
+                        ejercicios = currentState.ejerciciosEnCarrito,
+                        activo = true
+                    )
+                    repository.actualizarPlantilla(plantillaActualizada)
                 } else {
+                    val nuevaPlantilla = PlantillaRutina(
+                        nombre = currentState.nombrePlantilla,
+                        entrenadorId = entrenadorId,
+                        ejercicios = currentState.ejerciciosEnCarrito,
+                        activo = true
+                    )
                     repository.guardarPlantillaRutina(nuevaPlantilla)
                 }
                 _state.update { it.copy(isLoading = false, isGuardado = true) }
