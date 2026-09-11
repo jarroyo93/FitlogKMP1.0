@@ -26,9 +26,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.josearroyo.fitlog.repository.AuthRepository
 import dev.josearroyo.fitlog.viewmodel.AuthViewModel
-import kotlinx.coroutines.launch
 
 private val TextoSecundario = Color(0xFFB3AEC6)
 
@@ -41,9 +39,7 @@ fun CambiarContrasenaScreen(
 ) {
     val viewModel: AuthViewModel = viewModel { AuthViewModel() }
     val state by viewModel.activationState.collectAsState()
-    val scope = rememberCoroutineScope()
-    val authRepository = remember { AuthRepository() }
-    val focusManager = LocalFocusManager.current // 🟢 Administrador de foco
+    val focusManager = LocalFocusManager.current
 
     var contrasena by remember { mutableStateOf("") }
     var confirmarContrasena by remember { mutableStateOf("") }
@@ -56,8 +52,7 @@ fun CambiarContrasenaScreen(
 
     val handleLogout = {
         focusManager.clearFocus()
-        scope.launch {
-            authRepository.logout()
+        viewModel.logout {
             onLogout()
         }
     }
@@ -96,7 +91,7 @@ fun CambiarContrasenaScreen(
                 .background(FondoOscuro)
                 .padding(paddingValues)
                 .pointerInput(Unit) {
-                    detectTapGestures(onTap = { focusManager.clearFocus() }) // 🟢 Oculta el teclado al tocar la pantalla
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
                 }
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -170,7 +165,7 @@ fun CambiarContrasenaScreen(
                 ),
                 keyboardActions = KeyboardActions(
                     onDone = {
-                        focusManager.clearFocus() // 🟢 Oculta el teclado
+                        focusManager.clearFocus()
                         if (isButtonEnable) {
                             viewModel.actualizarContrasenaPrimeraVez(uid, contrasena)
                         }
@@ -219,7 +214,7 @@ fun CambiarContrasenaScreen(
 
             Button(
                 onClick = {
-                    focusManager.clearFocus() // 🟢 Oculta el teclado al iniciar el guardado
+                    focusManager.clearFocus()
                     viewModel.actualizarContrasenaPrimeraVez(uid, contrasena)
                 },
                 modifier = Modifier

@@ -15,7 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -51,10 +50,17 @@ fun LoginScreen(
 
     val isLoginEnable = email.isNotBlank() && password.isNotBlank() && authState !is AuthState.Loading
 
+    // 🟢 Navegación limpia al tener éxito sin parpadeo de UI
     LaunchedEffect(authState) {
         if (authState is AuthState.Success) {
             val success = authState as AuthState.Success
             onLoginSuccess(success.uid, success.rol, success.requiereCambioContrasena)
+        }
+    }
+
+    // 🟢 Reseteo seguro del estado cuando la pantalla deja el árbol de composición (al salir)
+    DisposableEffect(Unit) {
+        onDispose {
             authViewModel.resetState()
         }
     }
@@ -157,8 +163,8 @@ fun EmailField(
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
         keyboardOptions = KeyboardOptions(
-            autoCorrect = false, // 🟢 Nombre correcto del parámetro
-            keyboardType = KeyboardType.Email, // 🟢 Activa teclado y sugerencias de correo en iOS/Android
+            autoCorrect = false,
+            keyboardType = KeyboardType.Email,
             imeAction = ImeAction.Next
         ),
         colors = TextFieldDefaults.colors(
@@ -189,7 +195,7 @@ fun Password(
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
         keyboardOptions = KeyboardOptions(
-            keyboardType = KeyboardType.Password, // 🟢 Dispara el llavero de contraseñas de iOS/Android
+            keyboardType = KeyboardType.Password,
             imeAction = ImeAction.Done
         ),
         keyboardActions = KeyboardActions(
@@ -217,6 +223,7 @@ fun Password(
         visualTransformation = if (passwordVisibility) VisualTransformation.None else PasswordVisualTransformation(),
     )
 }
+
 @Composable
 fun ImagenLogo() {
     Image(
