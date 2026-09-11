@@ -53,8 +53,12 @@ class UserRepository {
         false
     }
 
-    suspend fun existeDocumento(documento: String): Boolean = try {
-        val result = usersCollection.where("numeroDocumento", equalTo = documento.trim()).limit(1).get()
+    suspend fun existeDocumento(documento: String, rol: RolUsuario = RolUsuario.ATLETA): Boolean = try {
+        val result = usersCollection
+            .where("numeroDocumento", equalTo = documento.trim())
+            .where("rol", equalTo = rol.name)
+            .limit(1)
+            .get()
         result.documents.isNotEmpty()
     } catch (e: Exception) {
         println("🔥 [UserRepository] Error en existeDocumento ($documento): ${e.message}")

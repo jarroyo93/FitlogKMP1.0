@@ -131,17 +131,11 @@ class AtletaRepository {
         contrasenaTemporal: String,
         primerPeriodo: PeriodoFacturable
     ): Boolean {
-        // 1. Validaciones de existencia en Firestore
-        val snapshotCorreo = db.collection("users").where("correo", equalTo = usuario.correo).get()
-        val snapshotDoc = db.collection("users").where("numeroDocumento", equalTo = usuario.numeroDocumento).where("rol", equalTo = "ATLETA").get()
-
-        if (snapshotCorreo.documents.isNotEmpty()) throw Exception("El correo ya se encuentra registrado en Firestore.")
-        if (snapshotDoc.documents.isNotEmpty()) throw Exception("El documento ya se encuentra registrado en Firestore.")
-
-        // 2. Crear usuario en Auth mediante la instancia secundaria
+        // 🟢 1. Crear usuario en Auth mediante la instancia secundaria directamente
+        // (La validación de existencia se realizó previamente en el Paso 1 del ViewModel)
         val authUid = crearCuentaEnInstanciaSecundaria(usuario.correo, contrasenaTemporal)
 
-        // 3. Escritura atómica (WriteBatch)
+        // 2. Escritura atómica (WriteBatch)
         try {
             val nuevoRef = usersRef.document(authUid)
             val ahoraMilis = getCurrentTimeMillis()

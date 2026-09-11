@@ -6,6 +6,7 @@ import dev.josearroyo.fitlog.data.model.EstadoPeriodo
 import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
 import dev.josearroyo.fitlog.data.model.Habitos
 import dev.josearroyo.fitlog.data.model.PeriodoFacturable
+import dev.josearroyo.fitlog.data.model.RolUsuario
 import dev.josearroyo.fitlog.data.model.TipoPlanSuscripcion
 import dev.josearroyo.fitlog.data.model.Usuario
 import dev.josearroyo.fitlog.data.model.ValoracionFisica
@@ -61,14 +62,15 @@ class AddAtletaViewModel(
 
     fun onEvent(event: AddAtletaEvent) {
         when (event) {
-            is AddAtletaEvent.UpdateUsuario -> _state.update { it.copy(usuario = event.usuario) }
-            is AddAtletaEvent.UpdateConfirmarCorreo -> _state.update { it.copy(confirmarCorreo = event.correo) }
-            is AddAtletaEvent.UpdateValoracion -> _state.update { it.copy(valoracionFisica = event.valoracion) }
-            is AddAtletaEvent.UpdateHabitos -> _state.update { it.copy(habitos = event.habitos) }
-            is AddAtletaEvent.UpdatePlan -> _state.update { it.copy(planSeleccionado = event.plan) }
-            is AddAtletaEvent.UpdateDiasPersonalizados -> _state.update { it.copy(diasPersonalizados = event.dias) }
-            is AddAtletaEvent.UpdateIniciarPeriodo -> _state.update { it.copy(iniciarPeriodoEnseguida = event.iniciar) }
-            is AddAtletaEvent.UpdateFechaInicioPlan -> _state.update { it.copy(fechaInicioPlan = event.fecha) }
+            // 🟢 Al modificar cualquier campo del formulario, limpiamos el error acumulado
+            is AddAtletaEvent.UpdateUsuario -> _state.update { it.copy(usuario = event.usuario, error = null) }
+            is AddAtletaEvent.UpdateConfirmarCorreo -> _state.update { it.copy(confirmarCorreo = event.correo, error = null) }
+            is AddAtletaEvent.UpdateValoracion -> _state.update { it.copy(valoracionFisica = event.valoracion, error = null) }
+            is AddAtletaEvent.UpdateHabitos -> _state.update { it.copy(habitos = event.habitos, error = null) }
+            is AddAtletaEvent.UpdatePlan -> _state.update { it.copy(planSeleccionado = event.plan, error = null) }
+            is AddAtletaEvent.UpdateDiasPersonalizados -> _state.update { it.copy(diasPersonalizados = event.dias, error = null) }
+            is AddAtletaEvent.UpdateIniciarPeriodo -> _state.update { it.copy(iniciarPeriodoEnseguida = event.iniciar, error = null) }
+            is AddAtletaEvent.UpdateFechaInicioPlan -> _state.update { it.copy(fechaInicioPlan = event.fecha, error = null) }
 
             AddAtletaEvent.NextStep -> {
                 if (_state.value.currentStep == 1) {
@@ -84,23 +86,34 @@ class AddAtletaViewModel(
     }
 
     private fun validarPaso1YContinuar() {
+        // 🟢 1. Limpiamos cualquier error previo en la primera línea
+        _state.update { it.copy(error = null) }
+
         val currentState = _state.value
         val usuario = currentState.usuario
         val correo = usuario.correo.trim()
         val confirmar = currentState.confirmarCorreo.trim()
         val documento = usuario.numeroDocumento.trim()
 
+        // 2. Validaciones de campos obligatorios
         if (usuario.nombres.isBlank() || usuario.apellidos.isBlank() || documento.isBlank() || correo.isBlank()) {
             _state.update { it.copy(error = "Por favor, completa los campos obligatorios.") }
             return
         }
 
+        // 3. Documento mínimo de 6 dígitos
+        if (documento.length < 6) {
+            _state.update { it.copy(error = "El número de documento debe tener al menos 6 dígitos para la clave inicial.") }
+            return
+        }
+
+        // 4. Coincidencia de correos
         if (correo.lowercase() != confirmar.lowercase()) {
             _state.update { it.copy(error = "Los correos electrónicos ingresados no coinciden.") }
             return
         }
 
-        _state.update { it.copy(isSaving = true, error = null) }
+        _state.update { it.copy(isSaving = true) }
 
         viewModelScope.launch {
             try {
@@ -110,9 +123,9 @@ class AddAtletaViewModel(
                     return@launch
                 }
 
-                val existeDoc = userRepository.existeDocumento(documento)
+                val existeDoc = userRepository.existeDocumento(documento, RolUsuario.ATLETA)
                 if (existeDoc) {
-                    _state.update { it.copy(isSaving = false, error = "El número de documento ya está registrado.") }
+                    _state.update { it.copy(isSaving = false, error = "El número de documento ya está registrado para un atleta.") }
                     return@launch
                 }
 
@@ -128,8 +141,15 @@ class AddAtletaViewModel(
         val correo = currentState.usuario.correo.trim().lowercase()
         val confirmar = currentState.confirmarCorreo.trim().lowercase()
 
+        // 1. Verificación de coincidencia de correo
         if (correo != confirmar) {
             _state.update { it.copy(error = "Los correos electrónicos no coinciden.") }
+            return
+        }
+
+        // 2. 🟢 PUNTO 3: Validar que los días sean al menos 1 si se eligió un plan personalizado
+        if (currentState.planSeleccionado == TipoPlanSuscripcion.PERSONALIZADO && currentState.diasPersonalizados < 1) {
+            _state.update { it.copy(error = "Para un plan personalizado, debes asignar al menos 1 día de duración.") }
             return
         }
 
@@ -151,23 +171,11 @@ class AddAtletaViewModel(
 
                 val fechaFinLong = dev.josearroyo.fitlog.calcularFechaFinSuscripcion(fechaInicioLong, diasPlan)
 
-                // 🟢 CORRECCIÓN DE ESTADO INICIAL:
-                // Si 'iniciarPeriodoEnseguida' es true O si la fecha seleccionada es hoy o pasada,
-                // el atleta arranca como ACTIVO inmediatamente sin pasar por DIFERIDO.
                 val esHoyOPasado = fechaInicioLong <= ahoraMilis || esMismoDia(fechaInicioLong, ahoraMilis)
                 val esActivoDesdeInicio = currentState.iniciarPeriodoEnseguida || esHoyOPasado
 
-                val estadoPeriodoInicial = if (esActivoDesdeInicio) {
-                    EstadoPeriodo.ACTIVO
-                } else {
-                    EstadoPeriodo.DIFERIDO
-                }
-
-                val estadoSuscripcionInicial = if (esActivoDesdeInicio) {
-                    EstadoSuscripcion.ACTIVO
-                } else {
-                    EstadoSuscripcion.DIFERIDO
-                }
+                val estadoPeriodoInicial = if (esActivoDesdeInicio) EstadoPeriodo.ACTIVO else EstadoPeriodo.DIFERIDO
+                val estadoSuscripcionInicial = if (esActivoDesdeInicio) EstadoSuscripcion.ACTIVO else EstadoSuscripcion.DIFERIDO
 
                 val primerPeriodo = PeriodoFacturable(
                     tipoPlan = currentState.planSeleccionado.name,
@@ -177,7 +185,13 @@ class AddAtletaViewModel(
                     estado = estadoPeriodoInicial
                 )
 
+                // 3. 🟢 PUNTO 4: Limpieza estricta (.trim()) en todos los campos de texto del usuario
                 val usuarioModificado = currentState.usuario.copy(
+                    nombres = currentState.usuario.nombres.trim(),
+                    apellidos = currentState.usuario.apellidos.trim(),
+                    numeroDocumento = currentState.usuario.numeroDocumento.trim(),
+                    telefono = currentState.usuario.telefono.trim(),
+                    correo = correo,
                     entrenadorId = entrenadorId,
                     planActivo = currentState.planSeleccionado.name,
                     fechaInicioSuscripcion = fechaInicioLong,
@@ -187,12 +201,8 @@ class AddAtletaViewModel(
                     fechaCreacion = ahoraMilis
                 )
 
-                val documentoLimpio = usuarioModificado.numeroDocumento.trim()
-                val contrasenaTemporalSegura = if (documentoLimpio.length >= 6) {
-                    documentoLimpio
-                } else {
-                    documentoLimpio.padEnd(6, '0')
-                }
+                // Como el Paso 1 ya garantizó que el documento tiene al menos 6 dígitos, la clave temporal es idéntica
+                val contrasenaTemporalSegura = usuarioModificado.numeroDocumento
 
                 atletaRepository.crearAtletaCompleto(
                     usuario = usuarioModificado,
