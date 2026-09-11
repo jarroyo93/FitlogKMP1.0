@@ -71,6 +71,9 @@ actual fun formatearFechaCorto(timestamp: Long): String {
 }
 
 actual fun esCumpleanosHoy(fechaNacimiento: Long): Boolean {
+    // 🟢 Protección contra marcas de tiempo no registradas (1970)
+    if (fechaNacimiento <= 0L) return false
+
     val calHoy = Calendar.getInstance(TimeZone.getDefault())
     val calNac = Calendar.getInstance(TimeZone.getDefault()).apply { timeInMillis = fechaNacimiento }
     return calHoy.get(Calendar.MONTH) == calNac.get(Calendar.MONTH) &&

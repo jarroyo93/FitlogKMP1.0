@@ -60,18 +60,21 @@ class AtletaDetailViewModel(
                     val atletaDeferred = async { atletaRepository.obtenerUsuario(atletaId) }
                     val cicloDeferred = async { progresoRepository.obtenerCicloActivo(atletaId) }
                     val rutinasDeferred = async { atletaRepository.obtenerRutinasActivas(atletaId) }
-                    val sesionesDeferred = async { progresoRepository.obtenerHistorialEntrenamientos(atletaId) }
 
                     val atleta = atletaDeferred.await()
                     val cicloActivo = cicloDeferred.await()
                     val rutinas = rutinasDeferred.await()
-                    val sesionesHistorial = sesionesDeferred.await()
 
                     if (atleta != null) {
                         val rutinaActiva = rutinas.firstOrNull { it.estaActiva }
 
-                        // 1. Extraer comentarios de las sesiones
-                        val notasExtraidas = sesionesHistorial.flatMap { sesion ->
+                        // 🟢 Carga optimizada: solo sesiones del ciclo activo (evita descargar el historial completo de años)
+                        val sesionesCicloActivo = if (cicloActivo != null) {
+                            progresoRepository.obtenerEntrenamientosCicloActivo(atletaId, cicloActivo.fechaInicio)
+                        } else emptyList()
+
+                        // Extraer comentarios recientes únicamente de las últimas sesiones
+                        val notasExtraidas = sesionesCicloActivo.flatMap { sesion ->
                             sesion.ejerciciosRealizados
                                 .filter { it.notasAtleta.isNotBlank() }
                                 .map { ej ->
@@ -84,12 +87,6 @@ class AtletaDetailViewModel(
                                 }
                         }.take(3)
 
-                        // 2. Filtrar historial de sesiones correspondientes al ciclo activo
-                        val sesionesCicloActivo = if (cicloActivo != null) {
-                            sesionesHistorial.filter { it.fechaEjecucion >= cicloActivo.fechaInicio }
-                        } else emptyList()
-
-                        // 3. RECÁLCULO UNIFICADO CON SEMÁFORO CALCULADOR 🟢
                         val ahora = getCurrentTimeMillis()
 
                         val metricaAdherencia = if (cicloActivo != null) {
@@ -115,13 +112,12 @@ class AtletaDetailViewModel(
                             )
                         } else MetricaSemaforo(0.0, EstadoSemaforo.SIN_DATOS, "")
 
-                        // Extraer series efectivas del ciclo para RPE (excluyendo aproximaciones)
                         val todasLasSeriesEfectivas = sesionesCicloActivo.flatMap { sesion ->
                             sesion.ejerciciosRealizados.flatMap { it.seriesRealizadas }
                         }
                         val metricaFatiga = SemaforoCalculador.evaluarFatigaRpe(todasLasSeriesEfectivas)
 
-                        // Top 3 ejercicios con mayor RPE del ciclo activo
+                        // 🟢 Cálculo seguro de RPE con protección contra NaN
                         val rpePorEj = sesionesCicloActivo
                             .flatMap { it.ejerciciosRealizados }
                             .filter { !it.fueSaltado }
@@ -131,13 +127,15 @@ class AtletaDetailViewModel(
                                     .map { serie -> ej.nombreEjercicio to serie.rpe!!.toDouble() }
                             }
                             .groupBy { it.first }
-                            .mapValues { entry -> entry.value.map { it.second }.average() }
+                            .mapValues { entry ->
+                                val avg = entry.value.map { it.second }.average()
+                                if (avg.isNaN()) 0.0 else avg
+                            }
                             .toList()
                             .sortedByDescending { it.second }
                             .take(3)
                             .toMap()
 
-                        // 4. Estructurar Informe Sincronizado
                         val informe = InformeCoach(
                             asistenciaPorcentaje = metricaAdherencia.valor,
                             cumplimientoVolumen = metricaVolumen.valor,

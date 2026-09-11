@@ -94,6 +94,9 @@ actual fun formatearFechaCorto(timestamp: Long): String {
 }
 
 actual fun esCumpleanosHoy(fechaNacimiento: Long): Boolean {
+    // 🟢 Protección contra marcas de tiempo no registradas (1970)
+    if (fechaNacimiento <= 0L) return false
+
     val calendarLocal = NSCalendar.currentCalendar
     val hoy = NSDate()
     val nac = NSDate.dateWithTimeIntervalSince1970(fechaNacimiento / 1000.0)
