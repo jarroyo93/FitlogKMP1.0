@@ -46,7 +46,6 @@ actual fun calcularFechaCierreCiclo(inicioMilis: Long): Long {
 actual fun calcularFechaFinSuscripcion(inicioMilis: Long, dias: Int): Long {
     val calendar = NSCalendar.currentCalendar
     val date = NSDate.dateWithTimeIntervalSince1970(inicioMilis / 1000.0)
-    // 🟢 Conteo inclusivo: restamos 1 para que el día de inicio cuente como el Día 1
     val diasAAgregar = (dias - 1).coerceAtLeast(0)
     val datePlusDays = calendar.dateByAddingUnit(
         NSCalendarUnitDay,
@@ -70,6 +69,7 @@ actual fun formatearHora(timestamp: Long): String {
     val formatter = NSDateFormatter().apply {
         dateFormat = "hh:mm a"
         locale = NSLocale(localeIdentifier = "es_ES")
+        timeZone = NSTimeZone.defaultTimeZone
     }
     return formatter.stringFromDate(date)
 }
@@ -79,6 +79,7 @@ actual fun formatearFechaHora(timestamp: Long): String {
     val formatter = NSDateFormatter().apply {
         dateFormat = "dd/MM/yyyy hh:mm a"
         locale = NSLocale(localeIdentifier = "es_ES")
+        timeZone = NSTimeZone.defaultTimeZone
     }
     return formatter.stringFromDate(date)
 }
@@ -94,7 +95,6 @@ actual fun formatearFechaCorto(timestamp: Long): String {
 }
 
 actual fun esCumpleanosHoy(fechaNacimiento: Long): Boolean {
-    // 🟢 Protección contra marcas de tiempo no registradas (1970)
     if (fechaNacimiento <= 0L) return false
 
     val calendarLocal = NSCalendar.currentCalendar
@@ -122,6 +122,7 @@ actual fun formatearFechaDiario(timestamp: Long): String {
     val formatter = NSDateFormatter().apply {
         dateFormat = "EEEE, dd MMMM yyyy - HH:mm"
         locale = NSLocale(localeIdentifier = "es_ES")
+        timeZone = NSTimeZone.defaultTimeZone
     }
     return formatter.stringFromDate(date).replaceFirstChar { it.uppercase() }
 }
@@ -141,6 +142,7 @@ actual fun obtenerLetraDiaSemana(timestamp: Long): String {
     val formatter = NSDateFormatter().apply {
         dateFormat = "E"
         locale = NSLocale(localeIdentifier = "es_ES")
+        timeZone = NSTimeZone.defaultTimeZone
     }
     return formatter.stringFromDate(date).uppercase().take(1)
 }

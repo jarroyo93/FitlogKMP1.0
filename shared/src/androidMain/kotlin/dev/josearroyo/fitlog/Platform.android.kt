@@ -34,7 +34,6 @@ actual fun calcularFechaCierreCiclo(inicioMilis: Long): Long {
 actual fun calcularFechaFinSuscripcion(inicioMilis: Long, dias: Int): Long {
     val calendar = Calendar.getInstance(TimeZone.getDefault()).apply {
         timeInMillis = inicioMilis
-        // 🟢 Conteo inclusivo: restamos 1 para que el día de inicio cuente como el Día 1
         val diasAAgregar = (dias - 1).coerceAtLeast(0)
         add(Calendar.DAY_OF_YEAR, diasAAgregar)
         set(Calendar.HOUR_OF_DAY, 23)
@@ -54,12 +53,18 @@ actual fun esMismoDia(timestamp1: Long, timestamp2: Long): Boolean {
 
 actual fun formatearHora(timestamp: Long): String {
     val date = java.util.Date(timestamp)
-    return SimpleDateFormat("hh:mm a", Locale("es", "ES")).format(date)
+    val sdf = SimpleDateFormat("hh:mm a", Locale("es", "ES")).apply {
+        timeZone = TimeZone.getDefault()
+    }
+    return sdf.format(date)
 }
 
 actual fun formatearFechaHora(timestamp: Long): String {
     val date = java.util.Date(timestamp)
-    return SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale("es", "ES")).format(date)
+    val sdf = SimpleDateFormat("dd/MM/yyyy hh:mm a", Locale("es", "ES")).apply {
+        timeZone = TimeZone.getDefault()
+    }
+    return sdf.format(date)
 }
 
 actual fun formatearFechaCorto(timestamp: Long): String {
@@ -71,7 +76,6 @@ actual fun formatearFechaCorto(timestamp: Long): String {
 }
 
 actual fun esCumpleanosHoy(fechaNacimiento: Long): Boolean {
-    // 🟢 Protección contra marcas de tiempo no registradas (1970)
     if (fechaNacimiento <= 0L) return false
 
     val calHoy = Calendar.getInstance(TimeZone.getDefault())
@@ -90,7 +94,9 @@ actual fun formatearFechaHistorial(timestamp: Long): String {
 
 actual fun formatearFechaDiario(timestamp: Long): String {
     val date = java.util.Date(timestamp)
-    val sdf = SimpleDateFormat("EEEE, dd MMMM yyyy - HH:mm", Locale("es", "ES"))
+    val sdf = SimpleDateFormat("EEEE, dd MMMM yyyy - HH:mm", Locale("es", "ES")).apply {
+        timeZone = TimeZone.getDefault()
+    }
     return sdf.format(date).replaceFirstChar { it.uppercase() }
 }
 
@@ -104,7 +110,9 @@ actual fun formatearFechaMesCorto(timestamp: Long): String {
 
 actual fun obtenerLetraDiaSemana(timestamp: Long): String {
     val date = java.util.Date(timestamp)
-    val sdf = SimpleDateFormat("E", Locale("es", "ES"))
+    val sdf = SimpleDateFormat("E", Locale("es", "ES")).apply {
+        timeZone = TimeZone.getDefault()
+    }
     return sdf.format(date).uppercase().take(1)
 }
 
@@ -191,7 +199,6 @@ actual fun obtenerInicioSemanaLunes(timestamp: Long): Long {
         set(Calendar.SECOND, 0)
         set(Calendar.MILLISECOND, 0)
     }
-    // Si la fecha se desfasó hacia el futuro por reglas locales de Calendar, retrocedemos 7 días
     if (cal.timeInMillis > timestamp) {
         cal.add(Calendar.DAY_OF_YEAR, -7)
     }

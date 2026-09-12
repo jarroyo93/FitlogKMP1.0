@@ -7,11 +7,13 @@ import dev.josearroyo.fitlog.data.model.EjercicioRealizado
 import dev.josearroyo.fitlog.data.model.Pesaje
 import dev.josearroyo.fitlog.data.model.SesionEntrenamiento
 import dev.josearroyo.fitlog.data.model.ValoracionFisica
+import dev.josearroyo.fitlog.esMismoDia
 import dev.josearroyo.fitlog.repository.AtletaProgresoRepository
 import dev.josearroyo.fitlog.repository.AtletaRepository
 import dev.josearroyo.fitlog.repository.UserRepository
 import dev.josearroyo.fitlog.getCurrentTimeMillis
 import dev.josearroyo.fitlog.formatearFechaHistorial
+import dev.josearroyo.fitlog.obtenerLetraDiaSemana
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -221,12 +223,12 @@ class ProgresoAtletaViewModel(
 
         for (i in 6 downTo 0) {
             val objetivoDiaTimestamp = ahoraMilis - (i * unDiaMilis)
-            val inicioDia = objetivoDiaTimestamp - (objetivoDiaTimestamp % unDiaMilis)
-            val finDia = inicioDia + unDiaMilis - 1
 
-            val sesionesDelDia = todasLasSesiones.filter { it.fechaEjecucion in inicioDia..finDia }
-            val diaIndex = (((inicioDia / unDiaMilis) + 4) % 7).toInt()
-            val letraDia = nombresDiasSemana[if (diaIndex < 0) diaIndex + 7 else diaIndex]
+            // 🟢 Se utiliza la función nativa esMismoDia para evaluar con la zona horaria del dispositivo
+            val sesionesDelDia = todasLasSesiones.filter { esMismoDia(it.fechaEjecucion, objetivoDiaTimestamp) }
+
+            // 🟢 Se obtiene la inicial del día respetando el calendario local (L, M, M, J, V, S, D)
+            val letraDia = obtenerLetraDiaSemana(objetivoDiaTimestamp)
 
             racha.add(Pair(letraDia, sesionesDelDia.isNotEmpty()))
 
