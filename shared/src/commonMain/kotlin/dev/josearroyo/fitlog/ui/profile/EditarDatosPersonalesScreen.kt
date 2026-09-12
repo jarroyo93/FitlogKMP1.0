@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.josearroyo.fitlog.data.model.Usuario
 import dev.josearroyo.fitlog.data.model.RolUsuario
+import dev.josearroyo.fitlog.formatearFechaCorto
+import dev.josearroyo.fitlog.getCurrentTimeMillis
+import dev.josearroyo.fitlog.normalizarFechaDatePicker
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -59,14 +63,15 @@ fun EditarDatosPersonalesScreen(
     var numeroDocumento by remember { mutableStateOf(usuarioActual.numeroDocumento) }
     var telefono by remember { mutableStateOf(usuarioActual.telefono) }
 
-    // 2. Estados de Campos Exclusivos del Atleta (Null-safe)
+    // 2. Estados de Campos Exclusivos del Atleta
     var tipoSangre by remember { mutableStateOf(usuarioActual.tipoSangre) }
     var nacionalidad by remember { mutableStateOf(usuarioActual.nacionalidad) }
+    var fechaNacimientoMilis by remember {
+        mutableStateOf(if (usuarioActual.fechaNacimiento > 0L) usuarioActual.fechaNacimiento else null)
+    }
 
-    // Control de Fecha de Nacimiento (Epoch Millis)
-    var fechaNacimientoMilis by remember { mutableStateOf(usuarioActual.fechaNacimiento) }
-
-    // Selectores dropdown
+    // Modal DatePicker y Dropdowns
+    var mostrarDatePicker by remember { mutableStateOf(false) }
     var mostrarTiposDoc by remember { mutableStateOf(false) }
     var mostrarTiposSangre by remember { mutableStateOf(false) }
 
@@ -74,6 +79,34 @@ fun EditarDatosPersonalesScreen(
     val tiposSangreValidos = listOf("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
 
     val esAtleta = usuarioActual.rol == RolUsuario.ATLETA
+
+    // 🟢 DatePicker multiplatform-safe con normalización de Timezone UTC local
+    if (mostrarDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = fechaNacimientoMilis ?: getCurrentTimeMillis()
+        )
+        DatePickerDialog(
+            onDismissRequest = { mostrarDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val utcMillis = datePickerState.selectedDateMillis
+                    fechaNacimientoMilis = if (utcMillis != null) {
+                        normalizarFechaDatePicker(utcMillis)
+                    } else null
+                    mostrarDatePicker = false
+                }) {
+                    Text("OK", color = NaranjaAcento)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDatePicker = false }) {
+                    Text("Cancelar", color = TextoSecundario)
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 
     Scaffold(
         containerColor = FondoOscuro,
@@ -153,11 +186,7 @@ fun EditarDatosPersonalesScreen(
                         Icon(
                             imageVector = Icons.Default.ArrowDropDown,
                             contentDescription = null,
-                            tint = NaranjaAcento,
-                            modifier = Modifier.clickable {
-                                focusManager.clearFocus()
-                                mostrarTiposDoc = true
-                            }
+                            tint = NaranjaAcento
                         )
                     },
                     modifier = Modifier.fillMaxWidth().clickable {
@@ -233,6 +262,32 @@ fun EditarDatosPersonalesScreen(
                     fontSize = 14.sp
                 )
 
+                // 🟢 Campo Interactivo para Fecha de Nacimiento usando la función formatearFechaCorto de KMP
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = fechaNacimientoMilis?.let { formatearFechaCorto(it) } ?: "No registrada",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Fecha de Nacimiento", color = TextoSecundario) },
+                        trailingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.DateRange,
+                                contentDescription = "Seleccionar fecha",
+                                tint = NaranjaAcento
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            focusManager.clearFocus()
+                            mostrarDatePicker = true
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                            focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+                            focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta
+                        )
+                    )
+                }
+
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = tipoSangre,
@@ -243,11 +298,7 @@ fun EditarDatosPersonalesScreen(
                             Icon(
                                 imageVector = Icons.Default.ArrowDropDown,
                                 contentDescription = null,
-                                tint = NaranjaAcento,
-                                modifier = Modifier.clickable {
-                                    focusManager.clearFocus()
-                                    mostrarTiposSangre = true
-                                }
+                                tint = NaranjaAcento
                             )
                         },
                         modifier = Modifier.fillMaxWidth().clickable {

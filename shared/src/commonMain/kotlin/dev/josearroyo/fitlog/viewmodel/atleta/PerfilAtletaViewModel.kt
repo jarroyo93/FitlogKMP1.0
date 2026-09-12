@@ -93,7 +93,6 @@ class PerfilAtletaViewModel : ViewModel() {
                     "numeroDocumento" to numeroDocumento.trim(),
                     "telefono" to telefono.trim()
                 )
-
                 fechaNacimiento?.let { campos["fechaNacimiento"] = it }
                 tipoSangre?.let { campos["tipoSangre"] = it.trim() }
                 nacionalidad?.let { campos["nacionalidad"] = it.trim() }
@@ -104,20 +103,20 @@ class PerfilAtletaViewModel : ViewModel() {
                 }
 
                 _uiState.update { state ->
+                    val prev = state.usuarioLogueado
                     state.copy(
                         isSaving = false,
                         error = null,
                         guardadoExitoso = true,
-                        usuarioLogueado = state.usuarioLogueado?.copy(
+                        usuarioLogueado = prev?.copy(
                             nombres = nombres.trim(),
                             apellidos = apellidos.trim(),
                             tipoDocumento = tipoDocumento.trim(),
                             numeroDocumento = numeroDocumento.trim(),
                             telefono = telefono.trim(),
-                            // 🚀 CORREGIDO: Si es nulo, mantiene el que ya tenía en el estado, si no, usa 0L
-                            fechaNacimiento = fechaNacimiento ?: state.usuarioLogueado?.fechaNacimiento ?: 0L,
-                            tipoSangre = tipoSangre ?: state.usuarioLogueado?.tipoSangre ?: "",
-                            nacionalidad = nacionalidad ?: state.usuarioLogueado?.nacionalidad ?: ""
+                            fechaNacimiento = fechaNacimiento ?: prev.fechaNacimiento,
+                            tipoSangre = tipoSangre ?: prev.tipoSangre,
+                            nacionalidad = nacionalidad ?: prev.nacionalidad
                         )
                     )
                 }
