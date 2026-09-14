@@ -209,7 +209,7 @@ class AtletaProgresoRepository {
         }
     }
 
-    // 🟢 CORREGIDO: Expiración universal por fecha para cualquier tipo de ciclo
+    // 🟢 CORREGIDO: Sin orderBy en Firestore para evitar fallo de índice compuesto
     suspend fun registrarSesionYActualizarCiclo(
         atletaId: String,
         sesionProcesada: SesionEntrenamiento,
@@ -229,15 +229,12 @@ class AtletaProgresoRepository {
         val ciclosRef = db.collection("users").document(atletaId).collection("ciclos_entrenamiento")
         val rutinaRef = db.collection("users").document(atletaId).collection("rutinas_asignadas").document(rutinaIdReal)
 
-        val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true)
-            .orderBy("fechaInicio", Direction.DESCENDING)
-            .get()
+        val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true).get()
 
-        var cicloActivo = activeCyclesSnapshot.documents.firstOrNull()?.let { doc ->
-            doc.data<CicloEntrenamiento>().copy(id = doc.id)
-        }
+        var cicloActivo = activeCyclesSnapshot.documents
+            .map { doc -> doc.data<CicloEntrenamiento>().copy(id = doc.id) }
+            .maxByOrNull { it.fechaInicio }
 
-        // 🟢 Aplica para cualquier modo si la fecha actual es mayor a la fecha de cierre programada
         val cicloExpiradoPorFecha = cicloActivo != null && ahoraMilis > cicloActivo.fechaCierre
 
         db.runTransaction {
@@ -355,13 +352,11 @@ class AtletaProgresoRepository {
     suspend fun sincronizarCicloActivoConRutina(atletaId: String, rutinaActualizada: RutinaAsignada) {
         try {
             val ciclosRef = db.collection("users").document(atletaId).collection("ciclos_entrenamiento")
-            val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true)
-                .orderBy("fechaInicio", Direction.DESCENDING)
-                .get()
+            val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true).get()
 
-            val cicloActivo = activeCyclesSnapshot.documents.firstOrNull()?.let { doc ->
-                doc.data<CicloEntrenamiento>().copy(id = doc.id)
-            }
+            val cicloActivo = activeCyclesSnapshot.documents
+                .map { doc -> doc.data<CicloEntrenamiento>().copy(id = doc.id) }
+                .maxByOrNull { it.fechaInicio }
 
             if (cicloActivo != null) {
                 val nuevaMetaSesiones = rutinaActualizada.diasEntrenamiento.size
@@ -407,13 +402,11 @@ class AtletaProgresoRepository {
     suspend fun actualizarMetaCicloActivo(atletaId: String, nuevaMetaSesiones: Int, nuevasRepsMetaTotal: Int) {
         try {
             val ciclosRef = db.collection("users").document(atletaId).collection("ciclos_entrenamiento")
-            val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true)
-                .orderBy("fechaInicio", Direction.DESCENDING)
-                .get()
+            val activeCyclesSnapshot = ciclosRef.where("estaActivo", equalTo = true).get()
 
-            val cicloActivo = activeCyclesSnapshot.documents.firstOrNull()?.let { doc ->
-                doc.data<CicloEntrenamiento>().copy(id = doc.id)
-            }
+            val cicloActivo = activeCyclesSnapshot.documents
+                .map { doc -> doc.data<CicloEntrenamiento>().copy(id = doc.id) }
+                .maxByOrNull { it.fechaInicio }
 
             if (cicloActivo != null) {
                 val nuevoPorcentajeAsist = if (nuevaMetaSesiones > 0) {
