@@ -35,6 +35,7 @@ import dev.josearroyo.fitlog.data.model.ModoCiclo
 import dev.josearroyo.fitlog.data.model.PrescripcionSerie
 import dev.josearroyo.fitlog.data.model.TipoSerie
 import dev.josearroyo.fitlog.ui.components.EditorNotasLista
+import dev.josearroyo.fitlog.ui.components.EjercicioImageThumbnail
 import dev.josearroyo.fitlog.ui.components.ModoCicloSection
 import dev.josearroyo.fitlog.viewmodel.atleta.EditRutinaAsignadaViewModel
 import kotlinx.coroutines.launch
@@ -354,7 +355,20 @@ fun EditRutinaAsignadaScreen(
                                             Column(modifier = Modifier.padding(12.dp)) {
 
                                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                                    Text("${ejercicio.ordenSecuencia}. ${ejercicio.nombre}", fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
+                                                    // 🖼️ MINIATURA EN TARJETA DE EDICIÓN
+                                                    EjercicioImageThumbnail(
+                                                        nombreEjercicio = ejercicio.nombre,
+                                                        tamano = 38.dp
+                                                    )
+
+                                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                                    Text(
+                                                        "${ejercicio.ordenSecuencia}. ${ejercicio.nombre}",
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
 
                                                     IconButton(
                                                         onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, -1) },

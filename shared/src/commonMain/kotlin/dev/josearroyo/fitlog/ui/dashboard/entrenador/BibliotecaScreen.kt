@@ -23,6 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.Ejercicio
 import dev.josearroyo.fitlog.data.model.GrupoMuscular
 import dev.josearroyo.fitlog.data.model.PlantillaRutina
+import dev.josearroyo.fitlog.ui.components.EjercicioImageThumbnail
 import dev.josearroyo.fitlog.viewmodel.entrenador.BibliotecaViewModel
 
 private val FondoOscuro = Color(0xFF241B3C)
@@ -185,13 +186,32 @@ fun BibliotecaScreen(
 @Composable
 fun CardEjercicioRow(ejercicio: Ejercicio, onEdit: () -> Unit, onDelete: () -> Unit) {
     var menuOpen by rememberSaveable { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = FondoTarjeta), shape = RoundedCornerShape(12.dp)) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 🖼️ MINIATURA DE ILUSTRACIÓN
+            EjercicioImageThumbnail(
+                imagenRes = ejercicio.imagenRes,
+                nombreEjercicio = ejercicio.nombre,
+                tamano = 44.dp
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
             Column(Modifier.weight(1f)) {
                 Text(ejercicio.nombre, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                val grupoFormateado = remember(ejercicio.grupoMuscular) { ejercicio.grupoMuscular.name.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() } }
+                val grupoFormateado = remember(ejercicio.grupoMuscular) {
+                    ejercicio.grupoMuscular.name.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }
+                }
                 Text(grupoFormateado, color = NaranjaAcento, fontSize = 12.sp)
             }
+
             if (ejercicio.esPersonalizado) {
                 Box {
                     IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, null, tint = Color.White) }

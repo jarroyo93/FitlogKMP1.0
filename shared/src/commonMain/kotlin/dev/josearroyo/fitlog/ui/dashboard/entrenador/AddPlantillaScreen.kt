@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import dev.josearroyo.fitlog.ui.components.EjercicioImageThumbnail
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -126,6 +127,7 @@ fun AddPlantillaScreen(
     }
 
     // Reemplazar la sección del ModalBottomSheet en AddPlantillaScreen.kt
+    // Reemplazo exacto dentro de AddPlantillaScreen.kt
     if (showBottomSheet) {
         var searchQuery by rememberSaveable { mutableStateOf("") }
         val ejerciciosFiltrados = state.bibliotecaDisponible.filter { it.nombre.contains(searchQuery, ignoreCase = true) }
@@ -152,8 +154,9 @@ fun AddPlantillaScreen(
                 )
                 Spacer(Modifier.height(16.dp))
 
+                // 🟢 AQUÍ VA EL BLOQUE CON LA MINIATURA
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.heightIn(max = 320.dp)
                 ) {
                     itemsIndexed(ejerciciosFiltrados, key = { index, item -> "${item.id}_$index" }) { _, ejercicio ->
@@ -167,7 +170,18 @@ fun AddPlantillaScreen(
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                EjercicioImageThumbnail(
+                                    imagenRes = ejercicio.imagenRes,
+                                    nombreEjercicio = ejercicio.nombre,
+                                    tamano = 36.dp
+                                )
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
                                 Text(ejercicio.nombre, color = Color.White, fontWeight = FontWeight.Medium)
                             }
                         }
@@ -191,7 +205,21 @@ fun ElementoRutinaCard(
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = FondoTarjeta), shape = RoundedCornerShape(16.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(elemento.nombreEjercicio, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = NaranjaAcento, modifier = Modifier.weight(1f))
+                // 🖼️ MINIATURA ILUSTRATIVA
+                EjercicioImageThumbnail(
+                    nombreEjercicio = elemento.nombreEjercicio,
+                    tamano = 40.dp
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Text(
+                    elemento.nombreEjercicio,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = NaranjaAcento,
+                    modifier = Modifier.weight(1f)
+                )
 
                 IconButton(onClick = { onMove(-1) }, enabled = canMoveUp) { Icon(Icons.Default.ArrowUpward, null, tint = if(canMoveUp) NaranjaAcento else TextoSecundario) }
                 IconButton(onClick = { onMove(1) }, enabled = canMoveDown) { Icon(Icons.Default.ArrowDownward, null, tint = if(canMoveDown) NaranjaAcento else TextoSecundario) }
@@ -199,6 +227,7 @@ fun ElementoRutinaCard(
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = FondoOscuro)
+            // ... resto del componente
 
             EditorSeriesPrescritas(
                 seriesPrescritas = elemento.seriesPrescritas,

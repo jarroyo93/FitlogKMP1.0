@@ -30,6 +30,7 @@ import dev.josearroyo.fitlog.data.model.*
 import dev.josearroyo.fitlog.repository.AtletaProgresoRepository
 import dev.josearroyo.fitlog.viewmodel.atleta.EntrenarViewModel
 import dev.josearroyo.fitlog.formatearFechaCorto
+import dev.josearroyo.fitlog.ui.components.EjercicioImageThumbnail
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -394,6 +395,14 @@ fun EjercicioInteractivoCard(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
+                // 🖼️ MINIATURA DE GUÍA VISUAL PARA EL ATLETA
+                EjercicioImageThumbnail(
+                    nombreEjercicio = ejercicioAsignado.nombre,
+                    tamano = 48.dp
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
                 Text(
                     ejercicioAsignado.nombre,
                     style = MaterialTheme.typography.titleMedium,
@@ -403,7 +412,6 @@ fun EjercicioInteractivoCard(
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 🟢 ÍCONO 2: RECOMENDACIONES TÉCNICAS DEL EJERCICIO
                     if (ejercicioAsignado.notasEspecificas.isNotBlank()) {
                         IconButton(onClick = { mostrarModalNotasEspecificas = true }) {
                             Icon(
@@ -414,7 +422,6 @@ fun EjercicioInteractivoCard(
                         }
                     }
 
-                    // 🟢 ÍCONO 3: PRECRIPCIÓN DE SERIES Y DESCANSO (i)
                     IconButton(onClick = { mostrarInfoEntrenador = true }) {
                         Icon(
                             imageVector = Icons.Default.Info,
