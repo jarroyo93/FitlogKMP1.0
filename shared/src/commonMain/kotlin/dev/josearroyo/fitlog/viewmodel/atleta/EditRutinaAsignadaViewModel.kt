@@ -221,7 +221,7 @@ class EditRutinaAsignadaViewModel : ViewModel() {
     }
 
     fun actualizarNombreONotas(nombre: String, notas: String) {
-        _state.update { it.copy(rutina = it.rutina?.copy(nombreRutina = nombre, notasEntrenador = notas)) }
+        _state.update { it.copy(rutina = it.rutina?.copy(nombreRutina = nombre.uppercase(), notasEntrenador = notas)) }
     }
 
     fun guardarCambios(atletaId: String) {
@@ -233,12 +233,14 @@ class EditRutinaAsignadaViewModel : ViewModel() {
             return
         }
 
+        val rutinaFinal = actual.copy(nombreRutina = actual.nombreRutina.trim().uppercase())
+
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
-            val exito = repository.actualizarRutinaAsignada(atletaId, actual)
+            val exito = repository.actualizarRutinaAsignada(atletaId, rutinaFinal)
 
             if (exito) {
-                progresoRepository.sincronizarCicloActivoConRutina(atletaId, actual)
+                progresoRepository.sincronizarCicloActivoConRutina(atletaId, rutinaFinal)
             }
             _state.update { it.copy(isSaved = exito, isLoading = false) }
         }

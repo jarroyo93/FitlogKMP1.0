@@ -64,7 +64,9 @@ class AddPlantillaViewModel(
         }
     }
 
-    fun actualizarNombre(nuevoNombre: String) { _state.update { it.copy(nombrePlantilla = nuevoNombre) } }
+    fun actualizarNombre(nuevoNombre: String) {
+        _state.update { it.copy(nombrePlantilla = nuevoNombre.uppercase()) }
+    }
 
     fun agregarEjercicioAlCarrito(ejercicio: Ejercicio) {
         val nuevo = ElementoRutina(
@@ -110,7 +112,9 @@ class AddPlantillaViewModel(
 
     fun guardarPlantilla(entrenadorId: String) {
         val currentState = _state.value
-        if (currentState.nombrePlantilla.isBlank() || currentState.ejerciciosEnCarrito.isEmpty()) {
+        val nombreLimpio = currentState.nombrePlantilla.trim().uppercase()
+
+        if (nombreLimpio.isBlank() || currentState.ejerciciosEnCarrito.isEmpty()) {
             _state.update { it.copy(error = "Completa el nombre y añade al menos un ejercicio.") }
             return
         }
@@ -121,7 +125,7 @@ class AddPlantillaViewModel(
                 if (plantillaIdActual != null) {
                     val plantillaActualizada = PlantillaRutina(
                         id = plantillaIdActual!!,
-                        nombre = currentState.nombrePlantilla,
+                        nombre = nombreLimpio,
                         entrenadorId = entrenadorId,
                         ejercicios = currentState.ejerciciosEnCarrito,
                         activo = true
@@ -129,7 +133,7 @@ class AddPlantillaViewModel(
                     repository.actualizarPlantilla(plantillaActualizada)
                 } else {
                     val nuevaPlantilla = PlantillaRutina(
-                        nombre = currentState.nombrePlantilla,
+                        nombre = nombreLimpio,
                         entrenadorId = entrenadorId,
                         ejercicios = currentState.ejerciciosEnCarrito,
                         activo = true

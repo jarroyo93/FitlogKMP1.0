@@ -30,7 +30,7 @@ class AddEjercicioViewModel(
     private var ejercicioIdActual: String? = null
 
     fun actualizarNombre(nuevoNombre: String) {
-        _state.update { it.copy(nombre = nuevoNombre) }
+        _state.update { it.copy(nombre = nuevoNombre.uppercase()) }
     }
 
     fun actualizarGrupo(nuevoGrupo: GrupoMuscular) {
@@ -64,7 +64,9 @@ class AddEjercicioViewModel(
 
     fun guardarEjercicio(entrenadorId: String) {
         val currentState = _state.value
-        if (currentState.nombre.isBlank()) {
+        val nombreMayusculas = currentState.nombre.trim().uppercase()
+
+        if (nombreMayusculas.isBlank()) {
             _state.update { it.copy(error = "El nombre del ejercicio no puede estar vacío.") }
             return
         }
@@ -74,13 +76,13 @@ class AddEjercicioViewModel(
             try {
                 if (ejercicioIdActual != null) {
                     val datosActualizados = mapOf(
-                        "nombre" to currentState.nombre,
+                        "nombre" to nombreMayusculas,
                         "grupoMuscular" to currentState.grupoMuscular.name
                     )
                     repository.actualizarEjercicioPersonalizado(ejercicioIdActual!!, datosActualizados)
                 } else {
                     val nuevoEjercicio = Ejercicio(
-                        nombre = currentState.nombre,
+                        nombre = nombreMayusculas,
                         grupoMuscular = currentState.grupoMuscular,
                         esPersonalizado = true,
                         creadorId = entrenadorId,

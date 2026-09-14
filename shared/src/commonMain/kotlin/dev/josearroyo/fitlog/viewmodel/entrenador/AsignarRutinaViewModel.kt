@@ -50,7 +50,7 @@ class AsignarRutinaViewModel(
     }
 
     fun actualizarNombreRutina(nombre: String) {
-        _state.update { it.copy(nombreRutina = nombre) }
+        _state.update { it.copy(nombreRutina = nombre.uppercase()) }
     }
 
     fun actualizarNotasEntrenador(notas: String) {
@@ -109,9 +109,10 @@ class AsignarRutinaViewModel(
 
     fun construirYAsignarRutina(atletaId: String) {
         val currentState = _state.value
+        val nombreLimpio = currentState.nombreRutina.trim().uppercase()
         val duracionNumero = currentState.duracionTexto.toIntOrNull() ?: 0
 
-        if (currentState.nombreRutina.isBlank() || currentState.plantillasSeleccionadas.isEmpty()) {
+        if (nombreLimpio.isBlank() || currentState.plantillasSeleccionadas.isEmpty()) {
             _state.update { it.copy(error = "Debe asignar un nombre y agregar al menos un día al programa.") }
             return
         }
@@ -164,7 +165,7 @@ class AsignarRutinaViewModel(
                 }
 
                 val nuevaRutina = RutinaAsignada(
-                    nombreRutina = currentState.nombreRutina,
+                    nombreRutina = nombreLimpio,
                     notasEntrenador = currentState.notasEntrenador,
                     modoCiclo = currentState.modoCiclo,
                     duracionDias = duracionTotalDias,
