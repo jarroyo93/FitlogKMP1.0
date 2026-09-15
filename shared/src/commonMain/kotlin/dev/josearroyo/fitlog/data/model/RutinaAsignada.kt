@@ -11,7 +11,7 @@ data class RutinaAsignada(
     val estaActiva: Boolean = true,
     val notasEntrenador: String = "",
     val modoCiclo: ModoCiclo = ModoCiclo.CALENDARIO_SEMANAL,
-    val duracionDias: Int = 28, // 👈 Campo necesario para la duración dinámica en días
+    val duracionDias: Int = 28,
     val diasEntrenamiento: List<DiaEntrenamientoAsignado> = emptyList(),
     @Serializable(with = TimestampLongSerializer::class)
     val ultimaVezEjecutada: Long? = null
@@ -24,8 +24,6 @@ data class DiaEntrenamientoAsignado(
     val nombreDia: String = "",
     val ordenSecuencia: Int = 0,
     val ejercicios: List<EjercicioAsignado> = emptyList(),
-
-    // 🚀 SOLUCIÓN: Cambiado a Long? para días que nunca han sido ejecutados
     @Serializable(with = TimestampLongSerializer::class)
     val ultimaVezEjecutada: Long? = null
 )
@@ -38,5 +36,7 @@ data class EjercicioAsignado(
     val seriesPrescritas: List<PrescripcionSerie> = emptyList(),
     val descansoSegundos: Int = 0,
     val notasEspecificas: String = "",
-    val ordenSecuencia: Int = 0
+    val ordenSecuencia: Int = 0,
+    val bloqueId: String? = null,
+    val bloqueNombre: String? = null
 )
