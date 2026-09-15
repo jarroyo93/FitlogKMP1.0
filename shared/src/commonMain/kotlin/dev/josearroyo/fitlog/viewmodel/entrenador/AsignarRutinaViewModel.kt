@@ -107,6 +107,21 @@ class AsignarRutinaViewModel(
         }
     }
 
+    fun actualizarNotaEspecificaEjercicio(diaIndex: Int, ejercicioIndex: Int, nuevaNota: String) {
+        _state.update { currentState ->
+            val listaPlantillas = currentState.plantillasSeleccionadas.toMutableList()
+            val plantillaADias = listaPlantillas.getOrNull(diaIndex) ?: return@update currentState
+
+            val nuevosEjercicios = plantillaADias.ejercicios.toMutableList()
+            val ej = nuevosEjercicios.getOrNull(ejercicioIndex) ?: return@update currentState
+
+            nuevosEjercicios[ejercicioIndex] = ej.copy(notas = nuevaNota)
+            listaPlantillas[diaIndex] = plantillaADias.copy(ejercicios = nuevosEjercicios)
+
+            currentState.copy(plantillasSeleccionadas = listaPlantillas)
+        }
+    }
+
     fun construirYAsignarRutina(atletaId: String) {
         val currentState = _state.value
         val nombreLimpio = currentState.nombreRutina.trim().uppercase()
