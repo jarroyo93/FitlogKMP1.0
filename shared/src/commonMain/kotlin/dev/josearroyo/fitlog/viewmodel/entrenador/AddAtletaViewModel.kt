@@ -62,7 +62,6 @@ class AddAtletaViewModel(
 
     fun onEvent(event: AddAtletaEvent) {
         when (event) {
-            // 🟢 Al modificar cualquier campo del formulario, limpiamos el error acumulado
             is AddAtletaEvent.UpdateUsuario -> _state.update { it.copy(usuario = event.usuario, error = null) }
             is AddAtletaEvent.UpdateConfirmarCorreo -> _state.update { it.copy(confirmarCorreo = event.correo, error = null) }
             is AddAtletaEvent.UpdateValoracion -> _state.update { it.copy(valoracionFisica = event.valoracion, error = null) }
@@ -73,20 +72,28 @@ class AddAtletaViewModel(
             is AddAtletaEvent.UpdateFechaInicioPlan -> _state.update { it.copy(fechaInicioPlan = event.fecha, error = null) }
 
             AddAtletaEvent.NextStep -> {
+                // 🟢 BLOQUEO SÍNCRONO: Si está validando/guardando, ignora la acción
+                if (_state.value.isSaving) return
+
                 if (_state.value.currentStep == 1) {
                     validarPaso1YContinuar()
                 } else {
                     _state.update { it.copy(currentStep = it.currentStep + 1, error = null) }
                 }
             }
-            AddAtletaEvent.PrevStep -> _state.update { it.copy(currentStep = (it.currentStep - 1).coerceAtLeast(1), error = null) }
+            AddAtletaEvent.PrevStep -> {
+                if (_state.value.isSaving) return
+                _state.update { it.copy(currentStep = (it.currentStep - 1).coerceAtLeast(1), error = null) }
+            }
             AddAtletaEvent.SaveAtleta -> guardarAtleta()
             AddAtletaEvent.ResetState -> _state.update { AddAtletaState(fechaInicioPlan = getCurrentTimeMillis()) }
         }
     }
 
     private fun validarPaso1YContinuar() {
-        // 🟢 1. Limpiamos cualquier error previo en la primera línea
+        // 🔴 1. Bloqueo SÍNCRONO contra reentradas
+        if (_state.value.isSaving) return
+
         _state.update { it.copy(error = null) }
 
         val currentState = _state.value
@@ -95,24 +102,22 @@ class AddAtletaViewModel(
         val confirmar = currentState.confirmarCorreo.trim()
         val documento = usuario.numeroDocumento.trim()
 
-        // 2. Validaciones de campos obligatorios
         if (usuario.nombres.isBlank() || usuario.apellidos.isBlank() || documento.isBlank() || correo.isBlank()) {
             _state.update { it.copy(error = "Por favor, completa los campos obligatorios.") }
             return
         }
 
-        // 3. Documento mínimo de 6 dígitos
         if (documento.length < 6) {
             _state.update { it.copy(error = "El número de documento debe tener al menos 6 dígitos para la clave inicial.") }
             return
         }
 
-        // 4. Coincidencia de correos
         if (correo.lowercase() != confirmar.lowercase()) {
             _state.update { it.copy(error = "Los correos electrónicos ingresados no coinciden.") }
             return
         }
 
+        // 🔴 2. Cambiar estado a isSaving = true SÍNCRONAMENTE antes de la corrutina
         _state.update { it.copy(isSaving = true) }
 
         viewModelScope.launch {
@@ -137,22 +142,24 @@ class AddAtletaViewModel(
     }
 
     private fun guardarAtleta() {
+        // 🔴 1. Bloqueo SÍNCRONO contra reentradas
+        if (_state.value.isSaving) return
+
         val currentState = _state.value
         val correo = currentState.usuario.correo.trim().lowercase()
         val confirmar = currentState.confirmarCorreo.trim().lowercase()
 
-        // 1. Verificación de coincidencia de correo
         if (correo != confirmar) {
             _state.update { it.copy(error = "Los correos electrónicos no coinciden.") }
             return
         }
 
-        // 2. 🟢 PUNTO 3: Validar que los días sean al menos 1 si se eligió un plan personalizado
         if (currentState.planSeleccionado == TipoPlanSuscripcion.PERSONALIZADO && currentState.diasPersonalizados < 1) {
             _state.update { it.copy(error = "Para un plan personalizado, debes asignar al menos 1 día de duración.") }
             return
         }
 
+        // 🔴 2. Cambiar estado a isSaving = true SÍNCRONAMENTE antes de la corrutina
         _state.update { it.copy(isSaving = true, error = null) }
 
         viewModelScope.launch {
@@ -185,7 +192,6 @@ class AddAtletaViewModel(
                     estado = estadoPeriodoInicial
                 )
 
-                // 3. 🟢 PUNTO 4: Limpieza estricta (.trim()) en todos los campos de texto del usuario
                 val usuarioModificado = currentState.usuario.copy(
                     nombres = currentState.usuario.nombres.trim(),
                     apellidos = currentState.usuario.apellidos.trim(),
@@ -201,7 +207,6 @@ class AddAtletaViewModel(
                     fechaCreacion = ahoraMilis
                 )
 
-                // Como el Paso 1 ya garantizó que el documento tiene al menos 6 dígitos, la clave temporal es idéntica
                 val contrasenaTemporalSegura = usuarioModificado.numeroDocumento
 
                 atletaRepository.crearAtletaCompleto(

@@ -45,10 +45,15 @@ class AuthViewModel(
     }
 
     fun login(email: String, clave: String) {
+        // 🔴 1. Bloqueo SÍNCRONO: rechaza ejecuciones si ya se está procesando un inicio de sesión
+        if (_authState.value is AuthState.Loading) return
+
         if (email.isBlank() || clave.isBlank()) {
             _authState.update { AuthState.Error("El correo y la contraseña son obligatorios") }
             return
         }
+
+        // 🔴 2. Cambiar a Loading SÍNCRONAMENTE antes de lanzar la corrutina
         _authState.update { AuthState.Loading }
 
         viewModelScope.launch {
@@ -83,9 +88,18 @@ class AuthViewModel(
     }
 
     fun actualizarContrasenaPrimeraVez(uid: String, contrasena: String) {
-        viewModelScope.launch {
-            _activationState.update { it.copy(isLoading = true, error = null) }
+        // 🔴 1. Bloqueo SÍNCRONO contra ejecuciones duplicadas
+        if (_activationState.value.isLoading) return
 
+        if (contrasena.isBlank() || contrasena.length < 6) {
+            _activationState.update { it.copy(error = "La contraseña debe tener al menos 6 caracteres.") }
+            return
+        }
+
+        // 🔴 2. Establecer isLoading = true SÍNCRONAMENTE en el hilo principal
+        _activationState.update { it.copy(isLoading = true, error = null) }
+
+        viewModelScope.launch {
             authRepository.cambiarContrasenaPrimeraVez(contrasena)
                 .onSuccess {
                     val guardadoExitoso = userRepository.actualizarPerfilUsuario(
@@ -114,6 +128,8 @@ class AuthViewModel(
     }
 
     fun logout(onSuccess: () -> Unit) {
+        if (_activationState.value.isLoading || _authState.value is AuthState.Loading) return
+
         viewModelScope.launch {
             authRepository.logout()
             _authState.update { AuthState.Idle }

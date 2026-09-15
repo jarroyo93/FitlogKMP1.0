@@ -66,8 +66,15 @@ fun AddAtletaScreen(
             TopAppBar(
                 title = { Text("Registrar Nuevo Atleta", color = TextoPrincipal, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Regresar", tint = TextoPrincipal)
+                    IconButton(
+                        onClick = onNavigateBack,
+                        enabled = !state.isSaving // 🟢 Bloqueo de retroceso en TopBar durante guardado
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Regresar",
+                            tint = if (!state.isSaving) TextoPrincipal else TextoSecundario.copy(alpha = 0.3f)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FondoOscuro)
@@ -86,7 +93,9 @@ fun AddAtletaScreen(
                 .padding(16.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -147,14 +156,22 @@ fun AddAtletaScreen(
                     Button(
                         onClick = { viewModel.onEvent(AddAtletaEvent.PrevStep) },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = FondoTarjeta)
+                        enabled = !state.isSaving, // 🟢 Deshabilitado mientras se valida o guarda
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = FondoTarjeta,
+                            disabledContainerColor = FondoTarjeta.copy(alpha = 0.4f)
+                        )
                     ) {
-                        Text("Atrás", color = TextoPrincipal)
+                        Text(
+                            text = "Atrás",
+                            color = if (!state.isSaving) TextoPrincipal else TextoSecundario.copy(alpha = 0.3f)
+                        )
                     }
                 }
 
                 Button(
                     onClick = {
+                        focusManager.clearFocus()
                         if (state.currentStep < 4) {
                             viewModel.onEvent(AddAtletaEvent.NextStep)
                         } else {
@@ -162,8 +179,11 @@ fun AddAtletaScreen(
                         }
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = !state.isSaving,
-                    colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento)
+                    enabled = !state.isSaving, // 🟢 Deshabilitado durante la petición
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NaranjaAcento,
+                        disabledContainerColor = NaranjaAcento.copy(alpha = 0.5f)
+                    )
                 ) {
                     if (state.isSaving) {
                         CircularProgressIndicator(
@@ -172,7 +192,11 @@ fun AddAtletaScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text(if (state.currentStep == 4) "Guardar Atleta" else "Siguiente", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (state.currentStep == 4) "Guardar Atleta" else "Siguiente",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }

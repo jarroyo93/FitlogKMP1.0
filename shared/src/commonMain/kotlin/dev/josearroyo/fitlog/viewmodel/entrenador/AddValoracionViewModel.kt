@@ -13,7 +13,7 @@ data class AddValoracionState(
     val valoracion: ValoracionFisica = ValoracionFisica(),
     val isGuardado: Boolean = false,
     val isLoading: Boolean = false,
-    val error: String? = null // Agregado 🟢
+    val error: String? = null
 )
 
 class AddValoracionViewModel(
@@ -24,29 +24,31 @@ class AddValoracionViewModel(
     val state = _state.asStateFlow()
 
     fun actualizarValoracion(nueva: ValoracionFisica) {
-        _state.update { it.copy(valoracion = nueva) }
+        _state.update { it.copy(valoracion = nueva, error = null) }
     }
 
     fun guardar(atletaId: String) {
+        if (_state.value.isLoading) return
+
         val actual = _state.value.valoracion
         if (actual.pesoKg <= 0.0 || actual.alturaCm <= 0.0 || actual.objetivoInicial.isBlank()) {
             _state.update { it.copy(error = "Por favor, completa correctamente el peso, altura y objetivo.") }
             return
         }
 
+
+        _state.update { it.copy(isLoading = true, error = null) }
+
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
             try {
-                val exito = repository.guardarValoracion(atletaId, _state.value.valoracion)
+                val exito = repository.guardarValoracion(atletaId, actual)
                 if (exito) {
-                    _state.update { it.copy(isGuardado = true) }
+                    _state.update { it.copy(isLoading = false, isGuardado = true) }
                 } else {
-                    _state.update { it.copy(error = "No se pudieron almacenar los datos en el servidor.") }
+                    _state.update { it.copy(isLoading = false, error = "No se pudieron almacenar los datos en el servidor.") }
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(error = e.message ?: "Ocurrió un error inesperado de conexión.") }
-            } finally {
-                _state.update { it.copy(isLoading = false) }
+                _state.update { it.copy(isLoading = false, error = e.message ?: "Ocurrió un error inesperado de conexión.") }
             }
         }
     }

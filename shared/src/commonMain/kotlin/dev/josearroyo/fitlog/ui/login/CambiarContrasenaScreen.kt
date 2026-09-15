@@ -51,9 +51,11 @@ fun CambiarContrasenaScreen(
     val isButtonEnable = isValid && !state.isLoading
 
     val handleLogout = {
-        focusManager.clearFocus()
-        viewModel.logout {
-            onLogout()
+        if (!state.isLoading) {
+            focusManager.clearFocus()
+            viewModel.logout {
+                onLogout()
+            }
         }
     }
 
@@ -74,11 +76,14 @@ fun CambiarContrasenaScreen(
                     titleContentColor = Color.White
                 ),
                 actions = {
-                    IconButton(onClick = { handleLogout() }) {
+                    IconButton(
+                        onClick = { handleLogout() },
+                        enabled = !state.isLoading // 🟢 Deshabilita salir durante el cambio de contraseña
+                    ) {
                         Icon(
                             imageVector = Icons.Default.ExitToApp,
                             contentDescription = "Cerrar Sesión",
-                            tint = NaranjaAcento
+                            tint = if (!state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
                         )
                     }
                 }
@@ -113,6 +118,7 @@ fun CambiarContrasenaScreen(
                 label = { Text("Contraseña Nueva") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                enabled = !state.isLoading, // 🟢 Deshabilitado mientras se actualiza
                 isError = contrasenaCorta,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
@@ -121,11 +127,14 @@ fun CambiarContrasenaScreen(
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     val imagenIcono = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    IconButton(
+                        onClick = { passwordVisible = !passwordVisible },
+                        enabled = !state.isLoading
+                    ) {
                         Icon(
                             imageVector = imagenIcono,
                             contentDescription = null,
-                            tint = NaranjaAcento
+                            tint = if (!state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
                         )
                     }
                 },
@@ -158,6 +167,7 @@ fun CambiarContrasenaScreen(
                 label = { Text("Confirmar Contraseña") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                enabled = !state.isLoading, // 🟢 Deshabilitado mientras se actualiza
                 isError = noCoincide,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
@@ -174,11 +184,14 @@ fun CambiarContrasenaScreen(
                 visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     val imagenIcono = if (confirmPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
-                    IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                    IconButton(
+                        onClick = { confirmPasswordVisible = !confirmPasswordVisible },
+                        enabled = !state.isLoading
+                    ) {
                         Icon(
                             imageVector = imagenIcono,
                             contentDescription = null,
-                            tint = NaranjaAcento
+                            tint = if (!state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
                         )
                     }
                 },
@@ -231,7 +244,7 @@ fun CambiarContrasenaScreen(
                 shape = RoundedCornerShape(10.dp)
             ) {
                 if (state.isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = NaranjaAcento)
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = NaranjaAcento, strokeWidth = 2.dp)
                 } else {
                     Text(
                         text = "Guardar y Continuar",
@@ -241,10 +254,21 @@ fun CambiarContrasenaScreen(
                 }
             }
 
-            TextButton(onClick = { handleLogout() }) {
-                Icon(Icons.Default.ExitToApp, contentDescription = null, tint = TextoSecundario)
+            TextButton(
+                onClick = { handleLogout() },
+                enabled = !state.isLoading // 🟢 Bloquea cerrar sesión mientras guarda
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ExitToApp,
+                    contentDescription = null,
+                    tint = if (!state.isLoading) TextoSecundario else TextoSecundario.copy(alpha = 0.3f)
+                )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Cerrar Sesión", color = TextoSecundario, fontWeight = FontWeight.Medium)
+                Text(
+                    text = "Cerrar Sesión",
+                    color = if (!state.isLoading) TextoSecundario else TextoSecundario.copy(alpha = 0.3f),
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
     }

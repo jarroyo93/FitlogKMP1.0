@@ -43,7 +43,6 @@ private val TextoSecundario = Color(0xFFB3AEC6)
 @Composable
 fun AsignarPlanDialog(
     atletaNombre: String,
-    // 🟢 Recibe la lista de pares (fechaInicio, fechaFin) de los planes guardados
     periodosExistentes: List<Pair<Long, Long>> = emptyList(),
     onDismiss: () -> Unit,
     onConfirm: (
@@ -69,7 +68,6 @@ fun AsignarPlanDialog(
     var menuPlanExpandido by remember { mutableStateOf(false) }
     var diasPersonalizadosTexto by remember { mutableStateOf("30") }
 
-    // Obtenemos la última fecha de fin solo para sugerir el inicio por defecto si se desea encadenar al final
     val ultimaFechaFinCadena = remember(periodosExistentes) {
         periodosExistentes.maxOfOrNull { it.second } ?: getCurrentTimeMillis()
     }
@@ -102,12 +100,27 @@ fun AsignarPlanDialog(
         }
     }
 
-    // 🟢 CÁLCULO DE COLISIÓN REAL: Verifica traslape directo de rangos [inicio, fin]
     val hayColision = remember(fechaInicioMilis, fechaFinCalculada, periodosExistentes) {
         periodosExistentes.any { (inicioExistente, finExistente) ->
             fechaInicioMilis <= finExistente && fechaFinCalculada >= inicioExistente
         }
     }
+
+    // Configuración reutilizable de colores para campos con soporte a estado deshabilitado
+    val coloresCampoOscuro = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        disabledTextColor = Color.White.copy(alpha = 0.6f),
+        focusedBorderColor = NaranjaAcento,
+        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.3f),
+        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
+        focusedContainerColor = FondoOscuro,
+        unfocusedContainerColor = FondoOscuro,
+        disabledContainerColor = FondoOscuro,
+        focusedLabelColor = NaranjaAcento,
+        unfocusedLabelColor = TextoSecundario,
+        disabledLabelColor = TextoSecundario.copy(alpha = 0.6f)
+    )
 
     Dialog(
         onDismissRequest = {
@@ -165,14 +178,7 @@ fun AsignarPlanDialog(
                                 Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = NaranjaAcento)
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = NaranjaAcento,
-                                unfocusedBorderColor = TextoSecundario.copy(alpha = 0.3f),
-                                focusedContainerColor = FondoOscuro,
-                                unfocusedContainerColor = FondoOscuro
-                            ),
+                            colors = coloresCampoOscuro,
                             shape = RoundedCornerShape(10.dp)
                         )
                         Box(
@@ -210,7 +216,7 @@ fun AsignarPlanDialog(
                     OutlinedTextField(
                         value = diasPersonalizadosTexto,
                         onValueChange = { if (it.all { char -> char.isDigit() }) diasPersonalizadosTexto = it },
-                        label = { Text("Número de días", color = TextoSecundario) },
+                        label = { Text("Número de días") },
                         trailingIcon = {
                             IconButton(
                                 onClick = { ocultarTeclado() }
@@ -231,14 +237,7 @@ fun AsignarPlanDialog(
                         ),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = NaranjaAcento,
-                            unfocusedBorderColor = TextoSecundario.copy(alpha = 0.3f),
-                            focusedContainerColor = FondoOscuro,
-                            unfocusedContainerColor = FondoOscuro
-                        ),
+                        colors = coloresCampoOscuro,
                         shape = RoundedCornerShape(10.dp)
                     )
                 }
@@ -255,13 +254,9 @@ fun AsignarPlanDialog(
                                 Icon(Icons.Default.CalendarToday, contentDescription = "Elegir Fecha", tint = NaranjaAcento)
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = if (hayColision) Color(0xFFEF5350) else NaranjaAcento,
-                                unfocusedBorderColor = if (hayColision) Color(0xFFEF5350) else TextoSecundario.copy(alpha = 0.3f),
-                                focusedContainerColor = FondoOscuro,
-                                unfocusedContainerColor = FondoOscuro
+                            colors = coloresCampoOscuro.copy(
+                                focusedIndicatorColor = if (hayColision) Color(0xFFEF5350) else NaranjaAcento,
+                                unfocusedIndicatorColor = if (hayColision) Color(0xFFEF5350) else TextoSecundario.copy(alpha = 0.3f)
                             ),
                             shape = RoundedCornerShape(10.dp)
                         )
@@ -346,11 +341,13 @@ fun AsignarPlanDialog(
                                 fechaInicioMilis
                             )
                         },
-                        enabled = diasEfectivos > 0,
+                        enabled = diasEfectivos > 0 && !hayColision,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = NaranjaAcento,
-                            contentColor = FondoOscuro
+                            contentColor = FondoOscuro,
+                            disabledContainerColor = NaranjaAcento.copy(alpha = 0.4f),
+                            disabledContentColor = FondoOscuro.copy(alpha = 0.6f)
                         ),
                         shape = RoundedCornerShape(10.dp)
                     ) {

@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-
 data class AddEjercicioState(
     val nombre: String = "",
     val grupoMuscular: GrupoMuscular = GrupoMuscular.PECHO,
@@ -63,6 +62,9 @@ class AddEjercicioViewModel(
     }
 
     fun guardarEjercicio(entrenadorId: String) {
+        // 🔴 1. Bloqueo SÍNCRONO: Si ya está procesando, rechaza llamadas posteriores
+        if (_state.value.isLoading) return
+
         val currentState = _state.value
         val nombreMayusculas = currentState.nombre.trim().uppercase()
 
@@ -71,8 +73,10 @@ class AddEjercicioViewModel(
             return
         }
 
+        // 🔴 2. Cambiar estado SÍNCRONAMENTE a isLoading = true antes de lanzar la corrutina
+        _state.update { it.copy(isLoading = true, error = null) }
+
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
             try {
                 if (ejercicioIdActual != null) {
                     val datosActualizados = mapOf(

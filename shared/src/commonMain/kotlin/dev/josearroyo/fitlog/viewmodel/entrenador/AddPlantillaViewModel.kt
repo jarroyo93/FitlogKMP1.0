@@ -112,6 +112,9 @@ class AddPlantillaViewModel(
 
     fun guardarPlantilla(entrenadorId: String) {
         val currentState = _state.value
+
+        if (currentState.isLoading) return
+
         val nombreLimpio = currentState.nombrePlantilla.trim().uppercase()
 
         if (nombreLimpio.isBlank() || currentState.ejerciciosEnCarrito.isEmpty()) {
@@ -119,8 +122,9 @@ class AddPlantillaViewModel(
             return
         }
 
+        _state.update { it.copy(isLoading = true, error = null) }
+
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
             try {
                 if (plantillaIdActual != null) {
                     val plantillaActualizada = PlantillaRutina(

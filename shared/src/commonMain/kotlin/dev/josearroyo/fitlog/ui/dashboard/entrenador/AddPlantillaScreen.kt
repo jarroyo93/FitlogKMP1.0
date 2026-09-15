@@ -72,11 +72,26 @@ fun AddPlantillaScreen(
                     Button(
                         onClick = { viewModel.guardarPlantilla(entrenadorId) },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = NaranjaAcento,
+                            contentColor = FondoOscuro
+                        ),
                         shape = RoundedCornerShape(12.dp),
-                        enabled = state.nombrePlantilla.isNotBlank() && state.ejerciciosEnCarrito.isNotEmpty()
+                        enabled = !state.isLoading && state.nombrePlantilla.isNotBlank() && state.ejerciciosEnCarrito.isNotEmpty()
                     ) {
-                        Text(if (plantillaId == null) "Guardar Plantilla" else "Actualizar Plantilla", fontWeight = FontWeight.Bold)
+                        if (state.isLoading) {
+                            // 🟢 FEEDBACK VISUAL: Spinner dentro del botón
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = FondoOscuro,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(
+                                text = if (plantillaId == null) "Guardar Plantilla" else "Actualizar Plantilla",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }

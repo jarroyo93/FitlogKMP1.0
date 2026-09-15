@@ -50,6 +50,39 @@ fun SeleccionarPlantillaScreen(
     val state by viewModel.state.collectAsState()
     val focusManager = LocalFocusManager.current
 
+    // Colores para campos sobre tarjeta (FondoTarjeta)
+    val coloresCampoTarjeta = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        disabledTextColor = Color.White.copy(alpha = 0.6f),
+        focusedBorderColor = NaranjaAcento,
+        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
+        focusedContainerColor = FondoTarjeta,
+        unfocusedContainerColor = FondoTarjeta,
+        disabledContainerColor = FondoTarjeta, // 🟢 Mantiene el fondo oscuro de tarjeta
+        focusedLabelColor = NaranjaAcento,
+        unfocusedLabelColor = TextoSecundario,
+        disabledLabelColor = TextoSecundario.copy(alpha = 0.6f),
+        disabledPlaceholderColor = TextoSecundario.copy(alpha = 0.2f)
+    )
+
+    // Colores para campos sobre fondo principal (FondoOscuro)
+    val coloresCampoOscuro = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        disabledTextColor = Color.White.copy(alpha = 0.6f),
+        focusedBorderColor = NaranjaAcento,
+        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
+        focusedContainerColor = FondoOscuro,
+        unfocusedContainerColor = FondoOscuro,
+        disabledContainerColor = FondoOscuro, // 🟢 Mantiene el fondo oscuro principal
+        focusedLabelColor = NaranjaAcento,
+        unfocusedLabelColor = TextoSecundario,
+        disabledLabelColor = TextoSecundario.copy(alpha = 0.6f)
+    )
+
     LaunchedEffect(entrenadorId) { viewModel.cargarBiblioteca(entrenadorId) }
 
     LaunchedEffect(state.isSuccess) {
@@ -68,8 +101,15 @@ fun SeleccionarPlantillaScreen(
                 title = { Text("Planificar Bloque", color = Color.White, fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FondoOscuro),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = NaranjaAcento)
+                    IconButton(
+                        onClick = onBack,
+                        enabled = !state.isLoading // 🟢 Bloquea navegación durante el guardado
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Volver",
+                            tint = if (!state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
+                        )
                     }
                 }
             )
@@ -88,17 +128,30 @@ fun SeleccionarPlantillaScreen(
                             viewModel.construirYAsignarRutina(atletaId)
                         },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = NaranjaAcento,
+                            contentColor = FondoOscuro,
+                            disabledContainerColor = NaranjaAcento.copy(alpha = 0.5f)
+                        ),
                         shape = RoundedCornerShape(12.dp),
-                        enabled = esValido
+                        enabled = esValido && !state.isLoading // 🟢 Inhabilitado mientras guarda
                     ) {
-                        Text("Asignar Programa al Atleta", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        if (state.isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color = FondoOscuro,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text("Asignar Programa al Atleta", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
                     }
                 }
             }
         }
     ) { padding ->
-        if (state.isLoading) {
+        // 🟢 Carga inicial única cuando el catálogo aún está vacío
+        if (state.isLoading && state.plantillas.isEmpty()) {
             Box(Modifier.fillMaxSize().background(FondoOscuro), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = NaranjaAcento)
             }
@@ -126,23 +179,17 @@ fun SeleccionarPlantillaScreen(
                 OutlinedTextField(
                     value = state.nombreRutina,
                     onValueChange = { viewModel.actualizarNombreRutina(it) },
-                    label = { Text("Nombre del Bloque o Macrociclo", color = TextoSecundario) },
-                    placeholder = { Text("Ej: Hipertrofia Bloque 1", color = TextoSecundario.copy(alpha = 0.4f)) },
+                    label = { Text("Nombre del Bloque o Macrociclo") },
+                    placeholder = { Text("Ej: Hipertrofia Bloque 1") },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    enabled = !state.isLoading,
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = NaranjaAcento,
-                        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                        focusedContainerColor = FondoTarjeta,
-                        unfocusedContainerColor = FondoTarjeta
-                    ),
+                    colors = coloresCampoTarjeta,
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
                 )
 
-                // 2. Editor de Indicaciones Generales de la Rutina
+                // 2. Editor de Indicaciones Generales
                 EditorNotasLista(
                     titulo = "Indicaciones Generales de la Rutina (Opcional)",
                     placeholder = "Ej: RPE 8 general",
@@ -176,6 +223,7 @@ fun SeleccionarPlantillaScreen(
                         ) {
                             FilterChip(
                                 selected = state.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL,
+                                enabled = !state.isLoading,
                                 onClick = { viewModel.actualizarModoCiclo(ModoCiclo.CALENDARIO_SEMANAL) },
                                 label = { Text("Semanal", fontSize = 13.sp) },
                                 colors = FilterChipDefaults.filterChipColors(
@@ -187,7 +235,7 @@ fun SeleccionarPlantillaScreen(
                                 border = FilterChipDefaults.filterChipBorder(
                                     borderColor = TextoSecundario.copy(alpha = 0.3f),
                                     selectedBorderColor = NaranjaAcento,
-                                    enabled = true,
+                                    enabled = !state.isLoading,
                                     selected = state.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL
                                 ),
                                 modifier = Modifier.weight(1f)
@@ -195,6 +243,7 @@ fun SeleccionarPlantillaScreen(
 
                             FilterChip(
                                 selected = state.modoCiclo == ModoCiclo.SECUENCIAL_RODANTE,
+                                enabled = !state.isLoading,
                                 onClick = { viewModel.actualizarModoCiclo(ModoCiclo.SECUENCIAL_RODANTE) },
                                 label = { Text("Secuencial / Rodante", fontSize = 13.sp) },
                                 colors = FilterChipDefaults.filterChipColors(
@@ -206,7 +255,7 @@ fun SeleccionarPlantillaScreen(
                                 border = FilterChipDefaults.filterChipBorder(
                                     borderColor = TextoSecundario.copy(alpha = 0.3f),
                                     selectedBorderColor = NaranjaAcento,
-                                    enabled = true,
+                                    enabled = !state.isLoading,
                                     selected = state.modoCiclo == ModoCiclo.SECUENCIAL_RODANTE
                                 ),
                                 modifier = Modifier.weight(1f)
@@ -225,7 +274,8 @@ fun SeleccionarPlantillaScreen(
                         OutlinedTextField(
                             value = state.duracionTexto,
                             onValueChange = { viewModel.actualizarDuracion(it) },
-                            label = { Text(labelTexto, color = TextoSecundario) },
+                            enabled = !state.isLoading,
+                            label = { Text(labelTexto) },
                             supportingText = { Text(helperTexto, color = TextoSecundario.copy(alpha = 0.7f)) },
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Number,
@@ -233,14 +283,7 @@ fun SeleccionarPlantillaScreen(
                             ),
                             keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                             modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = NaranjaAcento,
-                                unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                                focusedContainerColor = FondoOscuro,
-                                unfocusedContainerColor = FondoOscuro
-                            ),
+                            colors = coloresCampoOscuro,
                             shape = RoundedCornerShape(10.dp),
                             singleLine = true
                         )
@@ -306,12 +349,12 @@ fun SeleccionarPlantillaScreen(
                                                 focusManager.clearFocus()
                                                 viewModel.moverPlantillaSeleccionada(index, -1)
                                             },
-                                            enabled = index > 0
+                                            enabled = index > 0 && !state.isLoading
                                         ) {
                                             Icon(
                                                 Icons.Default.KeyboardArrowUp,
                                                 contentDescription = "Subir",
-                                                tint = if (index > 0) Color.White else TextoSecundario.copy(alpha = 0.3f)
+                                                tint = if (index > 0 && !state.isLoading) Color.White else TextoSecundario.copy(alpha = 0.3f)
                                             )
                                         }
                                         IconButton(
@@ -319,19 +362,26 @@ fun SeleccionarPlantillaScreen(
                                                 focusManager.clearFocus()
                                                 viewModel.moverPlantillaSeleccionada(index, 1)
                                             },
-                                            enabled = index < state.plantillasSeleccionadas.size - 1
+                                            enabled = index < state.plantillasSeleccionadas.size - 1 && !state.isLoading
                                         ) {
                                             Icon(
                                                 Icons.Default.KeyboardArrowDown,
                                                 contentDescription = "Bajar",
-                                                tint = if (index < state.plantillasSeleccionadas.size - 1) Color.White else TextoSecundario.copy(alpha = 0.3f)
+                                                tint = if (index < state.plantillasSeleccionadas.size - 1 && !state.isLoading) Color.White else TextoSecundario.copy(alpha = 0.3f)
                                             )
                                         }
-                                        IconButton(onClick = {
-                                            focusManager.clearFocus()
-                                            viewModel.removerPlantillaSeleccionada(index)
-                                        }) {
-                                            Icon(Icons.Default.Clear, contentDescription = "Quitar", tint = Color(0xFFE57373))
+                                        IconButton(
+                                            onClick = {
+                                                focusManager.clearFocus()
+                                                viewModel.removerPlantillaSeleccionada(index)
+                                            },
+                                            enabled = !state.isLoading
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Clear,
+                                                contentDescription = "Quitar",
+                                                tint = if (!state.isLoading) Color(0xFFE57373) else TextoSecundario.copy(alpha = 0.3f)
+                                            )
                                         }
                                     }
                                 }
@@ -359,7 +409,7 @@ fun SeleccionarPlantillaScreen(
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
+                                .clickable(enabled = !state.isLoading) {
                                     focusManager.clearFocus()
                                     viewModel.agregarPlantilla(plantilla)
                                 },
@@ -381,7 +431,7 @@ fun SeleccionarPlantillaScreen(
                                     Text(
                                         text = "+ Tocar para anexar como nuevo día",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = NaranjaAcento,
+                                        color = if (!state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f),
                                         fontWeight = FontWeight.Medium
                                     )
                                 }

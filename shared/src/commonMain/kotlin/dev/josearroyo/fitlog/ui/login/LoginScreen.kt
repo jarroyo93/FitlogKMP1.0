@@ -48,9 +48,9 @@ fun LoginScreen(
     var email by remember { mutableStateOf(authViewModel.obtenerUltimoCorreo()) }
     var password by remember { mutableStateOf("") }
 
-    val isLoginEnable = email.isNotBlank() && password.isNotBlank() && authState !is AuthState.Loading
+    val isLoading = authState is AuthState.Loading
+    val isLoginEnable = email.isNotBlank() && password.isNotBlank() && !isLoading
 
-    // 🟢 Navegación limpia al tener éxito sin parpadeo de UI
     LaunchedEffect(authState) {
         if (authState is AuthState.Success) {
             val success = authState as AuthState.Success
@@ -58,7 +58,6 @@ fun LoginScreen(
         }
     }
 
-    // 🟢 Reseteo seguro del estado cuando la pantalla deja el árbol de composición (al salir)
     DisposableEffect(Unit) {
         onDispose {
             authViewModel.resetState()
@@ -80,12 +79,17 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        EmailField(email = email, onTextChange = { email = it })
+        EmailField(
+            email = email,
+            enabled = !isLoading, // 🟢 Inhabilita edición durante autenticación
+            onTextChange = { email = it }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Password(
             password = password,
+            enabled = !isLoading, // 🟢 Inhabilita edición durante autenticación
             onTextChange = { password = it },
             onDone = {
                 if (isLoginEnable) {
@@ -97,8 +101,8 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        if (authState is AuthState.Loading) {
-            CircularProgressIndicator(color = NaranjaAcento)
+        if (isLoading) {
+            CircularProgressIndicator(color = NaranjaAcento, strokeWidth = 2.dp)
         } else {
             BotonLogin(
                 isLoginEnable = isLoginEnable,
@@ -153,11 +157,13 @@ fun BotonLogin(
 @Composable
 fun EmailField(
     email: String,
+    enabled: Boolean,
     onTextChange: (String) -> Unit
 ) {
     TextField(
         value = email,
         onValueChange = onTextChange,
+        enabled = enabled,
         label = { Text("Correo electrónico", color = NaranjaAcento) },
         maxLines = 1,
         singleLine = true,
@@ -170,10 +176,16 @@ fun EmailField(
         colors = TextFieldDefaults.colors(
             focusedTextColor = NaranjaAcento,
             unfocusedTextColor = NaranjaAcento,
+            disabledTextColor = NaranjaAcento.copy(alpha = 0.6f), // 🟢 Evita texto blanco/gris por defecto
             focusedIndicatorColor = NaranjaAcento,
             unfocusedIndicatorColor = NaranjaAcento,
+            disabledIndicatorColor = NaranjaAcento.copy(alpha = 0.3f), // 🟢 Línea inferior atenuada
             focusedContainerColor = FondoOscuro,
             unfocusedContainerColor = FondoOscuro,
+            disabledContainerColor = FondoOscuro, // 🟢 Mantiene el fondo oscuro al deshabilitar
+            focusedLabelColor = NaranjaAcento,
+            unfocusedLabelColor = NaranjaAcento,
+            disabledLabelColor = NaranjaAcento.copy(alpha = 0.6f),
             cursorColor = NaranjaAcento
         )
     )
@@ -182,6 +194,7 @@ fun EmailField(
 @Composable
 fun Password(
     password: String,
+    enabled: Boolean,
     onTextChange: (String) -> Unit,
     onDone: () -> Unit
 ) {
@@ -190,6 +203,7 @@ fun Password(
     TextField(
         value = password,
         onValueChange = onTextChange,
+        enabled = enabled,
         label = { Text("Contraseña", color = NaranjaAcento) },
         maxLines = 1,
         singleLine = true,
@@ -204,19 +218,28 @@ fun Password(
         colors = TextFieldDefaults.colors(
             focusedTextColor = NaranjaAcento,
             unfocusedTextColor = NaranjaAcento,
+            disabledTextColor = NaranjaAcento.copy(alpha = 0.6f), // 🟢 Evita texto blanco/gris por defecto
             focusedIndicatorColor = NaranjaAcento,
             unfocusedIndicatorColor = NaranjaAcento,
+            disabledIndicatorColor = NaranjaAcento.copy(alpha = 0.3f), // 🟢 Línea inferior atenuada
             focusedContainerColor = FondoOscuro,
             unfocusedContainerColor = FondoOscuro,
+            disabledContainerColor = FondoOscuro, // 🟢 Mantiene el fondo oscuro al deshabilitar
+            focusedLabelColor = NaranjaAcento,
+            unfocusedLabelColor = NaranjaAcento,
+            disabledLabelColor = NaranjaAcento.copy(alpha = 0.6f),
             cursorColor = NaranjaAcento
         ),
         trailingIcon = {
             val imagen = if (passwordVisibility) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
-            IconButton(onClick = { passwordVisibility = !passwordVisibility }) {
+            IconButton(
+                onClick = { passwordVisibility = !passwordVisibility },
+                enabled = enabled
+            ) {
                 Icon(
                     imageVector = imagen,
                     contentDescription = "Mostrar contraseña",
-                    tint = NaranjaAcento
+                    tint = if (enabled) NaranjaAcento else NaranjaAcento.copy(alpha = 0.4f)
                 )
             }
         },

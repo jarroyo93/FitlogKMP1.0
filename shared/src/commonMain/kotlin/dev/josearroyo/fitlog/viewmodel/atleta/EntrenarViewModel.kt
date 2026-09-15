@@ -331,9 +331,11 @@ class EntrenarViewModel : ViewModel() {
     fun terminarEntrenamiento(authUid: String) {
         detenerCronometro()
         if (_state.value.isLoading) return
+
         val currentState = _state.value
         val rutinaActual = currentState.rutina
         val diaActual = currentState.diaActual
+
         if (rutinaActual == null || diaActual == null) {
             _state.update {
                 it.copy(
@@ -343,10 +345,13 @@ class EntrenarViewModel : ViewModel() {
             }
             return
         }
+
         val contieneMensajesNuevos = currentState.sesionEnProgreso.ejerciciosRealizados.any { it.notasAtleta.isNotBlank() }
 
+        // 🟢 BLOQUEO SÍNCRONO: Cambiar a isLoading = true antes de la corrutina para rechazar clics duplicados en el instante
+        _state.update { it.copy(isLoading = true, error = null) }
+
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
             try {
                 val usuario = userRepository.obtenerUsuario(authUid)
                 if (usuario != null) {

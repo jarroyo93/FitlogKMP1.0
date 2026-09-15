@@ -35,7 +35,7 @@ class EditRutinaAsignadaViewModel : ViewModel() {
 
     fun cargarRutinaYBiblioteca(atletaId: String, rutinaId: String, entrenadorId: String) {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true) }
+            _state.update { it.copy(isLoading = true, error = null) }
             try {
                 val rut = repository.obtenerRutinaAsignada(atletaId, rutinaId)
                 val listaEjercicios = exerciseRepository.obtenerBibliotecaCompleta(entrenadorId)
@@ -225,6 +225,9 @@ class EditRutinaAsignadaViewModel : ViewModel() {
     }
 
     fun guardarCambios(atletaId: String) {
+        // 🔴 1. Bloqueo SÍNCRONO contra reentradas
+        if (_state.value.isLoading) return
+
         val actual = _state.value.rutina ?: return
         val duracionNumero = _state.value.duracionTexto.toIntOrNull() ?: 0
 
@@ -235,26 +238,42 @@ class EditRutinaAsignadaViewModel : ViewModel() {
 
         val rutinaFinal = actual.copy(nombreRutina = actual.nombreRutina.trim().uppercase())
 
-        viewModelScope.launch {
-            _state.update { it.copy(isLoading = true) }
-            val exito = repository.actualizarRutinaAsignada(atletaId, rutinaFinal)
+        // 🔴 2. Establecer isLoading = true SÍNCRONAMENTE antes de lanzar la corrutina
+        _state.update { it.copy(isLoading = true, error = null) }
 
-            if (exito) {
-                progresoRepository.sincronizarCicloActivoConRutina(atletaId, rutinaFinal)
+        viewModelScope.launch {
+            try {
+                val exito = repository.actualizarRutinaAsignada(atletaId, rutinaFinal)
+
+                if (exito) {
+                    progresoRepository.sincronizarCicloActivoConRutina(atletaId, rutinaFinal)
+                }
+                _state.update { it.copy(isSaved = exito, isLoading = false) }
+            } catch (e: Exception) {
+                _state.update { it.copy(isLoading = false, error = e.message ?: "Error al actualizar la rutina.") }
             }
-            _state.update { it.copy(isSaved = exito, isLoading = false) }
         }
     }
 
     fun eliminarRutinaCompleta(atletaId: String) {
+        // 🔴 1. Bloqueo SÍNCRONO contra reentradas
+        if (_state.value.isLoading) return
+
         val actual = _state.value.rutina ?: return
+
+        // 🔴 2. Establecer isLoading = true SÍNCRONAMENTE antes de lanzar la corrutina
+        _state.update { it.copy(isLoading = true, error = null) }
+
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true) }
-            val exito = repository.eliminarRutinaAsignada(atletaId, actual.id)
-            if (exito) {
-                progresoRepository.forzarCierreCicloActivo(atletaId)
+            try {
+                val exito = repository.eliminarRutinaAsignada(atletaId, actual.id)
+                if (exito) {
+                    progresoRepository.forzarCierreCicloActivo(atletaId)
+                }
+                _state.update { it.copy(isDeleted = exito, isLoading = false) }
+            } catch (e: Exception) {
+                _state.update { it.copy(isLoading = false, error = e.message ?: "Error al eliminar la rutina.") }
             }
-            _state.update { it.copy(isDeleted = exito, isLoading = false) }
         }
     }
 

@@ -79,8 +79,15 @@ fun FacturacionScreen(
             TopAppBar(
                 title = { Text("Facturación & Suscripciones", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 20.sp) },
                 actions = {
-                    IconButton(onClick = onNavigateToInformeGlobal) {
-                        Icon(Icons.Default.ReceiptLong, contentDescription = "Reporte general", tint = NaranjaAcento)
+                    IconButton(
+                        onClick = onNavigateToInformeGlobal,
+                        enabled = !state.isLoading
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ReceiptLong,
+                            contentDescription = "Reporte general",
+                            tint = if (!state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FondoOscuro)
@@ -95,23 +102,30 @@ fun FacturacionScreen(
                 OutlinedTextField(
                     value = state.searchQuery,
                     onValueChange = { viewModel.onSearchQueryChanged(it) },
+                    enabled = !state.isLoading,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    placeholder = { Text("Buscar atleta...", color = TextoSecundario) },
-                    leadingIcon = { Icon(Icons.Default.Search, null, tint = TextoSecundario) },
+                    placeholder = { Text("Buscar atleta...", color = TextoSecundario.copy(alpha = 0.6f)) },
+                    leadingIcon = { Icon(Icons.Default.Search, null, tint = if (!state.isLoading) TextoSecundario else TextoSecundario.copy(alpha = 0.3f)) },
                     trailingIcon = {
                         if (state.searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
+                            IconButton(
+                                onClick = { viewModel.onSearchQueryChanged("") },
+                                enabled = !state.isLoading
+                            ) {
                                 Icon(Icons.Default.Clear, null, tint = TextoSecundario)
                             }
                         }
                     },
                     colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        disabledTextColor = Color.White.copy(alpha = 0.6f),
                         focusedBorderColor = NaranjaAcento,
                         unfocusedBorderColor = FondoTarjeta,
+                        disabledBorderColor = FondoTarjeta.copy(alpha = 0.5f),
                         focusedContainerColor = FondoTarjeta,
                         unfocusedContainerColor = FondoTarjeta,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        disabledContainerColor = FondoTarjeta
                     ),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
@@ -125,6 +139,7 @@ fun FacturacionScreen(
                         val esSeleccionado = state.filtroActual == filtro
                         FilterChip(
                             selected = esSeleccionado,
+                            enabled = !state.isLoading,
                             onClick = { viewModel.onFiltroChanged(filtro) },
                             label = { Text(filtro.etiqueta) },
                             colors = FilterChipDefaults.filterChipColors(
@@ -138,7 +153,7 @@ fun FacturacionScreen(
                     }
                 }
 
-                if (state.isLoading) {
+                if (state.isLoading && state.atletas.isEmpty()) {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = NaranjaAcento)
                     }
@@ -155,6 +170,7 @@ fun FacturacionScreen(
                         items(items = state.atletasFiltrados, key = { it.id }) { atleta ->
                             AtletaFacturacionItem(
                                 atleta = atleta,
+                                enabled = !state.isLoading,
                                 onHistory = { onNavigateToHistorial(atleta.id) },
                                 onPause = { atletaSeleccionadoParaPausar = atleta },
                                 onResume = { viewModel.reactivarAtleta(atleta.id, entrenadorId) },
@@ -165,7 +181,7 @@ fun FacturacionScreen(
                 }
             }
 
-            // 🟢 DIÁLOGO UNIFICADO PARA RENOVAR / VENDER PLAN CON MAPPING DE PERÍODOS
+            // DIÁLOGO UNIFICADO PARA RENOVAR / VENDER PLAN
             atletaSeleccionadoParaRenovar?.let { atleta ->
                 val ahora = getCurrentTimeMillis()
                 val periodosExistentes = remember(atleta) {
@@ -259,6 +275,7 @@ fun EstadisticasRapidas(atletas: List<Usuario>) {
 @Composable
 fun AtletaFacturacionItem(
     atleta: Usuario,
+    enabled: Boolean = true,
     onHistory: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
@@ -349,7 +366,11 @@ fun AtletaFacturacionItem(
             ) {
                 TextButton(
                     onClick = onHistory,
-                    colors = ButtonDefaults.textButtonColors(contentColor = NaranjaAcento)
+                    enabled = enabled,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = NaranjaAcento,
+                        disabledContentColor = TextoSecundario.copy(alpha = 0.3f)
+                    )
                 ) {
                     Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
@@ -361,7 +382,13 @@ fun AtletaFacturacionItem(
                         EstadoSuscripcion.ACTIVO -> {
                             Button(
                                 onClick = onPause,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB74D).copy(alpha = 0.15f), contentColor = Color(0xFFFFB74D)),
+                                enabled = enabled,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFFFB74D).copy(alpha = 0.15f),
+                                    contentColor = Color(0xFFFFB74D),
+                                    disabledContainerColor = Color(0xFFFFB74D).copy(alpha = 0.05f),
+                                    disabledContentColor = Color(0xFFFFB74D).copy(alpha = 0.3f)
+                                ),
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                             ) {
@@ -372,7 +399,13 @@ fun AtletaFacturacionItem(
 
                             Button(
                                 onClick = onRenew,
-                                colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
+                                enabled = enabled,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = NaranjaAcento,
+                                    contentColor = FondoOscuro,
+                                    disabledContainerColor = NaranjaAcento.copy(alpha = 0.4f),
+                                    disabledContentColor = FondoOscuro.copy(alpha = 0.6f)
+                                ),
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                             ) {
@@ -384,7 +417,12 @@ fun AtletaFacturacionItem(
                         EstadoSuscripcion.DIFERIDO -> {
                             Button(
                                 onClick = onRenew,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF64B5F6), contentColor = FondoOscuro),
+                                enabled = enabled,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF64B5F6),
+                                    contentColor = FondoOscuro,
+                                    disabledContainerColor = Color(0xFF64B5F6).copy(alpha = 0.4f)
+                                ),
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                             ) {
@@ -396,7 +434,12 @@ fun AtletaFacturacionItem(
                         EstadoSuscripcion.SUSPENDIDO -> {
                             Button(
                                 onClick = onResume,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF81C784), contentColor = FondoOscuro),
+                                enabled = enabled,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF81C784),
+                                    contentColor = FondoOscuro,
+                                    disabledContainerColor = Color(0xFF81C784).copy(alpha = 0.4f)
+                                ),
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                             ) {
@@ -408,7 +451,12 @@ fun AtletaFacturacionItem(
                         EstadoSuscripcion.VENCIDO, EstadoSuscripcion.HUERFANO -> {
                             Button(
                                 onClick = onRenew,
-                                colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
+                                enabled = enabled,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = NaranjaAcento,
+                                    contentColor = FondoOscuro,
+                                    disabledContainerColor = NaranjaAcento.copy(alpha = 0.4f)
+                                ),
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                             ) {
@@ -504,8 +552,8 @@ fun DialogoPausar(
                     OutlinedTextField(
                         value = motivoInput,
                         onValueChange = { motivoInput = it },
-                        label = { Text("Motivo de la pausa", color = TextoSecundario) },
-                        placeholder = { Text("Ej: Lesión médica, vacaciones...", color = TextoSecundario.copy(alpha = 0.5f)) },
+                        label = { Text("Motivo de la pausa") },
+                        placeholder = { Text("Ej: Lesión médica, vacaciones...") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Text,
@@ -515,10 +563,20 @@ fun DialogoPausar(
                             onDone = { ocultarTeclado() }
                         ),
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            disabledTextColor = Color.White.copy(alpha = 0.6f),
                             focusedBorderColor = Color(0xFFFFB74D),
                             unfocusedBorderColor = FondoOscuro,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            disabledBorderColor = FondoOscuro.copy(alpha = 0.5f),
+                            focusedContainerColor = FondoTarjeta,
+                            unfocusedContainerColor = FondoTarjeta,
+                            disabledContainerColor = FondoTarjeta,
+                            focusedLabelColor = Color(0xFFFFB74D),
+                            unfocusedLabelColor = TextoSecundario,
+                            disabledLabelColor = TextoSecundario.copy(alpha = 0.6f),
+                            focusedPlaceholderColor = TextoSecundario.copy(alpha = 0.5f),
+                            unfocusedPlaceholderColor = TextoSecundario.copy(alpha = 0.5f)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )

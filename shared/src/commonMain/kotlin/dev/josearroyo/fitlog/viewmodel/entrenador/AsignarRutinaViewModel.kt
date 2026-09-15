@@ -42,15 +42,19 @@ class AsignarRutinaViewModel(
     val state: StateFlow<AsignarRutinaState> = _state.asStateFlow()
 
     fun cargarBiblioteca(entrenadorId: String) {
+        _state.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true) }
-            val lista = exerciseRepo.obtenerPlantillasDelEntrenador(entrenadorId)
-            _state.update { it.copy(plantillas = lista, isLoading = false) }
+            try {
+                val lista = exerciseRepo.obtenerPlantillasDelEntrenador(entrenadorId)
+                _state.update { it.copy(plantillas = lista, isLoading = false) }
+            } catch (e: Exception) {
+                _state.update { it.copy(isLoading = false, error = e.message ?: "Error al cargar biblioteca") }
+            }
         }
     }
 
     fun actualizarNombreRutina(nombre: String) {
-        _state.update { it.copy(nombreRutina = nombre.uppercase()) }
+        _state.update { it.copy(nombreRutina = nombre.uppercase(), error = null) }
     }
 
     fun actualizarNotasEntrenador(notas: String) {
@@ -74,7 +78,7 @@ class AsignarRutinaViewModel(
 
     fun actualizarDuracion(duracion: String) {
         if (duracion.all { it.isDigit() }) {
-            _state.update { it.copy(duracionTexto = duracion) }
+            _state.update { it.copy(duracionTexto = duracion, error = null) }
         }
     }
 
@@ -82,7 +86,7 @@ class AsignarRutinaViewModel(
         _state.update { currentState ->
             val actual = currentState.plantillasSeleccionadas.toMutableList()
             actual.add(plantilla)
-            currentState.copy(plantillasSeleccionadas = actual)
+            currentState.copy(plantillasSeleccionadas = actual, error = null)
         }
     }
 
@@ -108,6 +112,9 @@ class AsignarRutinaViewModel(
     }
 
     fun construirYAsignarRutina(atletaId: String) {
+        // 🔴 1. Bloqueo SÍNCRONO contra reentradas
+        if (_state.value.isLoading) return
+
         val currentState = _state.value
         val nombreLimpio = currentState.nombreRutina.trim().uppercase()
         val duracionNumero = currentState.duracionTexto.toIntOrNull() ?: 0
@@ -122,8 +129,10 @@ class AsignarRutinaViewModel(
             return
         }
 
+        // 🔴 2. Cambiar isLoading = true SÍNCRONAMENTE en el hilo principal
+        _state.update { it.copy(isLoading = true, error = null) }
+
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
             try {
                 val rutinasActivas = atletaRepo.obtenerRutinasActivas(atletaId)
                 if (rutinasActivas.isNotEmpty()) {

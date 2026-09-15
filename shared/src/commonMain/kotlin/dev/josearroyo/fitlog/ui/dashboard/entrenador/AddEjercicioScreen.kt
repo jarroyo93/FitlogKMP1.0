@@ -2,6 +2,7 @@ package dev.josearroyo.fitlog.ui.dashboard.entrenador
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,15 +16,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.GrupoMuscular
 import dev.josearroyo.fitlog.viewmodel.entrenador.AddEjercicioViewModel
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalFocusManager
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -42,6 +42,23 @@ fun AddEjercicioScreen(
 
     var expanded by rememberSaveable { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+
+    // Configuración de colores reutilizable para los campos de texto
+    val coloresCampoTexto = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        disabledTextColor = Color.White.copy(alpha = 0.6f),
+        focusedBorderColor = NaranjaAcento,
+        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
+        focusedContainerColor = FondoTarjeta,
+        unfocusedContainerColor = FondoTarjeta,
+        disabledContainerColor = FondoTarjeta, // 🟢 Mantiene el fondo oscuro de la tarjeta al desactivar
+        focusedLabelColor = NaranjaAcento,
+        unfocusedLabelColor = TextoSecundario,
+        disabledLabelColor = TextoSecundario.copy(alpha = 0.6f),
+        disabledTrailingIconColor = NaranjaAcento.copy(alpha = 0.4f)
+    )
 
     LaunchedEffect(ejercicioId) {
         viewModel.cargarEjercicioSiExiste(ejercicioId)
@@ -64,14 +81,22 @@ fun AddEjercicioScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FondoOscuro),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = NaranjaAcento)
+                    IconButton(
+                        onClick = onBack,
+                        enabled = !state.isLoading // 🟢 Bloquea el botón atrás mientras se guarda
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Volver",
+                            tint = if (!state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
+                        )
                     }
                 }
             )
         }
     ) { padding ->
-        if (state.isLoading) {
+        // Si se está cargando la información inicial al editar, mostramos el indicador de carga principal
+        if (state.isLoading && state.nombre.isBlank() && ejercicioId != null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -95,20 +120,14 @@ fun AddEjercicioScreen(
                 OutlinedTextField(
                     value = state.nombre,
                     onValueChange = viewModel::actualizarNombre,
-                    label = { Text("Nombre del Ejercicio", color = TextoSecundario) },
+                    label = { Text("Nombre del Ejercicio") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = NaranjaAcento,
-                        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                        focusedContainerColor = FondoTarjeta,
-                        unfocusedContainerColor = FondoTarjeta
-                    )
+                    enabled = !state.isLoading,
+                    colors = coloresCampoTexto
                 )
 
-                // 🟢 DESPLEGABLE KMP SEGURO (Reemplaza ExposedDropdownMenuBox)
+                // DESPLEGABLE KMP SEGURO
                 val grupoFormateado = remember(state.grupoMuscular) {
                     state.grupoMuscular.name.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }
                 }
@@ -118,30 +137,24 @@ fun AddEjercicioScreen(
                         value = grupoFormateado,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Grupo Muscular", color = TextoSecundario) },
+                        enabled = !state.isLoading,
+                        label = { Text("Grupo Muscular") },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
                             Icon(
                                 imageVector = Icons.Default.ArrowDropDown,
                                 contentDescription = "Desplegar",
-                                tint = NaranjaAcento
+                                tint = if (!state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
                             )
                         },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = NaranjaAcento,
-                            unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                            focusedContainerColor = FondoTarjeta,
-                            unfocusedContainerColor = FondoTarjeta
-                        )
+                        colors = coloresCampoTexto
                     )
 
                     // Capa transparente que captura el clic para abrir el menú
                     Box(
                         modifier = Modifier
                             .matchParentSize()
-                            .clickable { expanded = !expanded }
+                            .clickable(enabled = !state.isLoading) { expanded = !expanded }
                     )
 
                     DropdownMenu(
@@ -183,14 +196,30 @@ fun AddEjercicioScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
-                    onClick = { viewModel.guardarEjercicio(entrenadorId) },
+                    onClick = {
+                        focusManager.clearFocus()
+                        viewModel.guardarEjercicio(entrenadorId)
+                    },
+                    enabled = !state.isLoading && state.nombre.isNotBlank(), // 🟢 Inhabilitado mientras guarda
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NaranjaAcento,
+                        contentColor = FondoOscuro,
+                        disabledContainerColor = NaranjaAcento.copy(alpha = 0.5f)
+                    )
                 ) {
-                    Text("Guardar Cambios", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    if (state.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = FondoOscuro,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Guardar Cambios", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
                 }
             }
         }

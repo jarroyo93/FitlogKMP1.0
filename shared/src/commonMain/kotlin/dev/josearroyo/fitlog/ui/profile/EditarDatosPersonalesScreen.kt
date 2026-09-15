@@ -80,7 +80,24 @@ fun EditarDatosPersonalesScreen(
 
     val esAtleta = usuarioActual.rol == RolUsuario.ATLETA
 
-    // 🟢 DatePicker multiplatform-safe con normalización de Timezone UTC local
+    // Configuración de colores reutilizable para los campos de texto
+    val coloresCampoTexto = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        disabledTextColor = Color.White.copy(alpha = 0.6f),
+        focusedBorderColor = NaranjaAcento,
+        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
+        focusedContainerColor = FondoTarjeta,
+        unfocusedContainerColor = FondoTarjeta,
+        disabledContainerColor = FondoTarjeta, // 🟢 Mantiene el fondo de tarjeta oscuro al desactivar
+        focusedLabelColor = NaranjaAcento,
+        unfocusedLabelColor = TextoSecundario,
+        disabledLabelColor = TextoSecundario.copy(alpha = 0.6f),
+        disabledLeadingIconColor = NaranjaAcento.copy(alpha = 0.4f),
+        disabledTrailingIconColor = NaranjaAcento.copy(alpha = 0.4f)
+    )
+
     if (mostrarDatePicker) {
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = fechaNacimientoMilis ?: getCurrentTimeMillis()
@@ -122,8 +139,15 @@ fun EditarDatosPersonalesScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FondoOscuro),
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = NaranjaAcento)
+                    IconButton(
+                        onClick = onBack,
+                        enabled = !isSaving // 🟢 Bloquea navegación hacia atrás durante el guardado
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Volver",
+                            tint = if (!isSaving) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
+                        )
                     }
                 }
             )
@@ -150,29 +174,23 @@ fun EditarDatosPersonalesScreen(
             OutlinedTextField(
                 value = nombres,
                 onValueChange = { nombres = it },
-                label = { Text("Nombres", color = TextoSecundario) },
+                label = { Text("Nombres") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                enabled = !isSaving,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                    focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                    focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta
-                )
+                colors = coloresCampoTexto
             )
 
             OutlinedTextField(
                 value = apellidos,
                 onValueChange = { apellidos = it },
-                label = { Text("Apellidos", color = TextoSecundario) },
+                label = { Text("Apellidos") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                enabled = !isSaving,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                    focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                    focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta
-                )
+                colors = coloresCampoTexto
             )
 
             // Selector Tipo de Documento
@@ -181,23 +199,22 @@ fun EditarDatosPersonalesScreen(
                     value = tipoDocumento,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Tipo de Documento", color = TextoSecundario) },
+                    enabled = !isSaving,
+                    label = { Text("Tipo de Documento") },
                     trailingIcon = {
                         Icon(
                             imageVector = Icons.Default.ArrowDropDown,
                             contentDescription = null,
-                            tint = NaranjaAcento
+                            tint = if (!isSaving) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
                         )
                     },
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        focusManager.clearFocus()
-                        mostrarTiposDoc = true
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                        focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                        focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta
-                    )
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !isSaving) {
+                            focusManager.clearFocus()
+                            mostrarTiposDoc = true
+                        },
+                    colors = coloresCampoTexto
                 )
                 DropdownMenu(
                     expanded = mostrarTiposDoc,
@@ -219,26 +236,24 @@ fun EditarDatosPersonalesScreen(
             OutlinedTextField(
                 value = numeroDocumento,
                 onValueChange = { numeroDocumento = it },
-                label = { Text("Número de Documento", color = TextoSecundario) },
+                label = { Text("Número de Documento") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                enabled = !isSaving,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                     imeAction = ImeAction.Next
                 ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                    focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                    focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta
-                )
+                colors = coloresCampoTexto
             )
 
             OutlinedTextField(
                 value = telefono,
                 onValueChange = { telefono = it },
-                label = { Text("Teléfono de Contacto", color = TextoSecundario) },
+                label = { Text("Teléfono de Contacto") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                enabled = !isSaving,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Phone,
                     imeAction = if (esAtleta) ImeAction.Next else ImeAction.Done
@@ -246,11 +261,7 @@ fun EditarDatosPersonalesScreen(
                 keyboardActions = KeyboardActions(
                     onDone = { focusManager.clearFocus() }
                 ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                    focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                    focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta
-                )
+                colors = coloresCampoTexto
             )
 
             if (esAtleta) {
@@ -262,29 +273,27 @@ fun EditarDatosPersonalesScreen(
                     fontSize = 14.sp
                 )
 
-                // 🟢 Campo Interactivo para Fecha de Nacimiento usando la función formatearFechaCorto de KMP
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = fechaNacimientoMilis?.let { formatearFechaCorto(it) } ?: "No registrada",
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Fecha de Nacimiento", color = TextoSecundario) },
+                        enabled = !isSaving,
+                        label = { Text("Fecha de Nacimiento") },
                         trailingIcon = {
                             Icon(
                                 imageVector = Icons.Default.DateRange,
                                 contentDescription = "Seleccionar fecha",
-                                tint = NaranjaAcento
+                                tint = if (!isSaving) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
                             )
                         },
-                        modifier = Modifier.fillMaxWidth().clickable {
-                            focusManager.clearFocus()
-                            mostrarDatePicker = true
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                            focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                            focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta
-                        )
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isSaving) {
+                                focusManager.clearFocus()
+                                mostrarDatePicker = true
+                            },
+                        colors = coloresCampoTexto
                     )
                 }
 
@@ -293,23 +302,22 @@ fun EditarDatosPersonalesScreen(
                         value = tipoSangre,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Tipo de Sangre", color = TextoSecundario) },
+                        enabled = !isSaving,
+                        label = { Text("Tipo de Sangre") },
                         trailingIcon = {
                             Icon(
                                 imageVector = Icons.Default.ArrowDropDown,
                                 contentDescription = null,
-                                tint = NaranjaAcento
+                                tint = if (!isSaving) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
                             )
                         },
-                        modifier = Modifier.fillMaxWidth().clickable {
-                            focusManager.clearFocus()
-                            mostrarTiposSangre = true
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                            focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                            focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta
-                        )
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isSaving) {
+                                focusManager.clearFocus()
+                                mostrarTiposSangre = true
+                            },
+                        colors = coloresCampoTexto
                     )
                     DropdownMenu(
                         expanded = mostrarTiposSangre,
@@ -331,16 +339,13 @@ fun EditarDatosPersonalesScreen(
                 OutlinedTextField(
                     value = nacionalidad,
                     onValueChange = { nacionalidad = it },
-                    label = { Text("Nacionalidad", color = TextoSecundario) },
+                    label = { Text("Nacionalidad") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    enabled = !isSaving,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White, unfocusedTextColor = Color.White,
-                        focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                        focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta
-                    )
+                    colors = coloresCampoTexto
                 )
             }
 
@@ -378,12 +383,16 @@ fun EditarDatosPersonalesScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = NaranjaAcento,
+                    contentColor = FondoOscuro,
+                    disabledContainerColor = NaranjaAcento.copy(alpha = 0.5f)
+                ),
                 shape = RoundedCornerShape(12.dp),
                 enabled = !isSaving && formValido
             ) {
                 if (isSaving) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = FondoOscuro)
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = FondoOscuro, strokeWidth = 2.dp)
                 } else {
                     Text("Guardar Cambios", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }

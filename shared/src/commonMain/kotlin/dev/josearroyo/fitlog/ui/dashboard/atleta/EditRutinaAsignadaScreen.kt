@@ -69,6 +69,38 @@ fun EditRutinaAsignadaScreen(
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
 
+    // Configuraciones reutilizables de color para campos de texto con soporte a estado deshabilitado
+    val coloresCampoTarjeta = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        disabledTextColor = Color.White.copy(alpha = 0.6f),
+        focusedBorderColor = NaranjaAcento,
+        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
+        focusedContainerColor = FondoTarjeta,
+        unfocusedContainerColor = FondoTarjeta,
+        disabledContainerColor = FondoTarjeta, // 🟢 Mantiene el fondo oscuro de la tarjeta
+        focusedLabelColor = NaranjaAcento,
+        unfocusedLabelColor = TextoSecundario,
+        disabledLabelColor = TextoSecundario.copy(alpha = 0.6f)
+    )
+
+    val coloresCampoOscuro = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        disabledTextColor = Color.White.copy(alpha = 0.6f),
+        focusedBorderColor = NaranjaAcento,
+        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
+        focusedContainerColor = FondoOscuro,
+        unfocusedContainerColor = FondoOscuro,
+        disabledContainerColor = FondoOscuro, // 🟢 Mantiene el fondo oscuro principal
+        focusedLabelColor = NaranjaAcento,
+        unfocusedLabelColor = TextoSecundario,
+        disabledLabelColor = TextoSecundario.copy(alpha = 0.6f),
+        disabledLeadingIconColor = NaranjaAcento.copy(alpha = 0.4f)
+    )
+
     val rutina = state.rutina
     val esProgramaValido = remember(rutina, state.duracionTexto) {
         rutina != null &&
@@ -117,17 +149,34 @@ fun EditRutinaAsignadaScreen(
     if (showDialogBorrar) {
         AlertDialog(
             containerColor = FondoTarjeta,
-            onDismissRequest = { showDialogBorrar = false },
+            onDismissRequest = { if (!state.isLoading) showDialogBorrar = false },
             title = { Text("Eliminar Programa", color = Color.White, fontWeight = FontWeight.Bold) },
             text = { Text("¿Seguro de eliminar este programa completamente?", color = TextoSecundario) },
             confirmButton = {
                 Button(
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE57373), contentColor = FondoOscuro),
-                    onClick = { showDialogBorrar = false; viewModel.eliminarRutinaCompleta(atletaId) }
-                ) { Text("Eliminar", fontWeight = FontWeight.Bold) }
+                    enabled = !state.isLoading,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFE57373),
+                        contentColor = FondoOscuro,
+                        disabledContainerColor = Color(0xFFE57373).copy(alpha = 0.4f)
+                    ),
+                    onClick = {
+                        showDialogBorrar = false
+                        viewModel.eliminarRutinaCompleta(atletaId)
+                    }
+                ) {
+                    if (state.isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), color = FondoOscuro, strokeWidth = 2.dp)
+                    } else {
+                        Text("Eliminar", fontWeight = FontWeight.Bold)
+                    }
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showDialogBorrar = false }) { Text("Cancelar", color = NaranjaAcento) }
+                TextButton(
+                    enabled = !state.isLoading,
+                    onClick = { showDialogBorrar = false }
+                ) { Text("Cancelar", color = NaranjaAcento) }
             }
         )
     }
@@ -153,20 +202,13 @@ fun EditRutinaAsignadaScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = { Text("Buscar ejercicio...", color = TextoSecundario) },
+                    label = { Text("Buscar ejercicio...") },
                     leadingIcon = { Icon(Icons.Default.Search, null, tint = NaranjaAcento) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = NaranjaAcento,
-                        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                        focusedContainerColor = FondoOscuro,
-                        unfocusedContainerColor = FondoOscuro
-                    )
+                    colors = coloresCampoOscuro
                 )
                 Spacer(Modifier.height(16.dp))
 
@@ -223,11 +265,25 @@ fun EditRutinaAsignadaScreen(
             TopAppBar(
                 title = { Text("Editar Programa", color = Color.White, fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FondoOscuro),
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Volver", tint = NaranjaAcento) } },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onBack,
+                        enabled = !state.isLoading
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Volver",
+                            tint = if (!state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
+                        )
+                    }
+                },
                 actions = {
                     if (rutina != null) {
                         IconButton(
-                            onClick = { viewModel.guardarCambios(atletaId) },
+                            onClick = {
+                                focusManager.clearFocus()
+                                viewModel.guardarCambios(atletaId)
+                            },
                             enabled = esProgramaValido && !state.isLoading
                         ) {
                             Icon(
@@ -237,7 +293,16 @@ fun EditRutinaAsignadaScreen(
                             )
                         }
 
-                        IconButton(onClick = { showDialogBorrar = true }) { Icon(Icons.Default.Delete, "Borrar", tint = Color(0xFFE57373)) }
+                        IconButton(
+                            onClick = { showDialogBorrar = true },
+                            enabled = !state.isLoading
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Borrar",
+                                tint = if (!state.isLoading) Color(0xFFE57373) else TextoSecundario.copy(alpha = 0.3f)
+                            )
+                        }
                     }
                 }
             )
@@ -263,8 +328,11 @@ fun EditRutinaAsignadaScreen(
             }
         }
     ) { padding ->
-        if (state.isLoading || rutina == null) {
-            Box(Modifier.fillMaxSize().background(FondoOscuro), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = NaranjaAcento) }
+        // Smart-Cast garantizado de 'rutina' a no nulo dentro del 'else'
+        if (rutina == null || (state.isLoading && rutina.diasEntrenamiento.isEmpty())) {
+            Box(Modifier.fillMaxSize().background(FondoOscuro), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = NaranjaAcento)
+            }
         } else {
             Column(
                 modifier = Modifier
@@ -281,17 +349,11 @@ fun EditRutinaAsignadaScreen(
                 OutlinedTextField(
                     value = rutina.nombreRutina,
                     onValueChange = { viewModel.actualizarNombreONotas(it, rutina.notasEntrenador) },
-                    label = { Text("Nombre del Programa", color = TextoSecundario) },
+                    label = { Text("Nombre del Programa") },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = NaranjaAcento,
-                        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-                        focusedContainerColor = FondoTarjeta,
-                        unfocusedContainerColor = FondoTarjeta
-                    )
+                    enabled = !state.isLoading,
+                    colors = coloresCampoTarjeta
                 )
 
                 EditorNotasLista(
@@ -324,27 +386,30 @@ fun EditRutinaAsignadaScreen(
 
                                     IconButton(
                                         onClick = { viewModel.moverDia(visualDiaIndex, -1) },
-                                        enabled = visualDiaIndex > 0
+                                        enabled = visualDiaIndex > 0 && !state.isLoading
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.ArrowUpward,
                                             contentDescription = "Subir Día",
-                                            tint = if (visualDiaIndex > 0) NaranjaAcento else TextoSecundario.copy(alpha = 0.2f)
+                                            tint = if (visualDiaIndex > 0 && !state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.2f)
                                         )
                                     }
 
                                     IconButton(
                                         onClick = { viewModel.moverDia(visualDiaIndex, 1) },
-                                        enabled = visualDiaIndex < diasOrdenados.size - 1
+                                        enabled = visualDiaIndex < diasOrdenados.size - 1 && !state.isLoading
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.ArrowDownward,
                                             contentDescription = "Bajar Día",
-                                            tint = if (visualDiaIndex < diasOrdenados.size - 1) NaranjaAcento else TextoSecundario.copy(alpha = 0.2f)
+                                            tint = if (visualDiaIndex < diasOrdenados.size - 1 && !state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.2f)
                                         )
                                     }
 
-                                    IconButton(onClick = { viewModel.eliminarDia(visualDiaIndex) }) { Icon(Icons.Default.Delete, null, tint = Color(0xFFE57373)) }
+                                    IconButton(
+                                        onClick = { viewModel.eliminarDia(visualDiaIndex) },
+                                        enabled = !state.isLoading
+                                    ) { Icon(Icons.Default.Delete, null, tint = if (!state.isLoading) Color(0xFFE57373) else TextoSecundario.copy(alpha = 0.2f)) }
                                 }
 
                                 val ejerciciosOrdenados = dia.ejercicios.sortedBy { it.ordenSecuencia }
@@ -355,7 +420,6 @@ fun EditRutinaAsignadaScreen(
                                             Column(modifier = Modifier.padding(12.dp)) {
 
                                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                                    // 🖼️ MINIATURA EN TARJETA DE EDICIÓN
                                                     EjercicioImageThumbnail(
                                                         nombreEjercicio = ejercicio.nombre,
                                                         tamano = 38.dp
@@ -372,35 +436,39 @@ fun EditRutinaAsignadaScreen(
 
                                                     IconButton(
                                                         onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, -1) },
-                                                        enabled = visualEjIndex > 0
+                                                        enabled = visualEjIndex > 0 && !state.isLoading
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Default.ArrowUpward,
                                                             contentDescription = "Subir Ejercicio",
-                                                            tint = if (visualEjIndex > 0) TextoSecundario else TextoSecundario.copy(alpha = 0.2f),
+                                                            tint = if (visualEjIndex > 0 && !state.isLoading) TextoSecundario else TextoSecundario.copy(alpha = 0.2f),
                                                             modifier = Modifier.size(18.dp)
                                                         )
                                                     }
 
                                                     IconButton(
                                                         onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, 1) },
-                                                        enabled = visualEjIndex < ejerciciosOrdenados.size - 1
+                                                        enabled = visualEjIndex < ejerciciosOrdenados.size - 1 && !state.isLoading
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Default.ArrowDownward,
                                                             contentDescription = "Bajar Ejercicio",
-                                                            tint = if (visualEjIndex < ejerciciosOrdenados.size - 1) TextoSecundario else TextoSecundario.copy(alpha = 0.2f),
+                                                            tint = if (visualEjIndex < ejerciciosOrdenados.size - 1 && !state.isLoading) TextoSecundario else TextoSecundario.copy(alpha = 0.2f),
                                                             modifier = Modifier.size(18.dp)
                                                         )
                                                     }
 
-                                                    IconButton(onClick = { viewModel.eliminarEjercicio(visualDiaIndex, visualEjIndex) }) { Icon(Icons.Default.Clear, null, tint = TextoSecundario) }
+                                                    IconButton(
+                                                        onClick = { viewModel.eliminarEjercicio(visualDiaIndex, visualEjIndex) },
+                                                        enabled = !state.isLoading
+                                                    ) { Icon(Icons.Default.Clear, null, tint = if (!state.isLoading) TextoSecundario else TextoSecundario.copy(alpha = 0.2f)) }
                                                 }
 
                                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = FondoTarjeta)
 
                                                 EditorSeriesPrescritas(
                                                     seriesPrescritas = ejercicio.seriesPrescritas,
+                                                    enabled = !state.isLoading,
                                                     onSeriesUpdate = { nuevaLista ->
                                                         viewModel.actualizarEjercicio(visualDiaIndex, visualEjIndex, ejercicio.copy(seriesPrescritas = nuevaLista))
                                                     }
@@ -425,14 +493,15 @@ fun EditRutinaAsignadaScreen(
                                                 OutlinedTextField(
                                                     value = if (ejercicio.descansoSegundos == 0) "" else ejercicio.descansoSegundos.toString(),
                                                     onValueChange = { nv -> if (nv.all { it.isDigit() }) viewModel.actualizarEjercicio(visualDiaIndex, visualEjIndex, ejercicio.copy(descansoSegundos = nv.toIntOrNull() ?: 0)) },
-                                                    label = { Text("Descanso sugerido (segundos)", color = TextoSecundario) },
+                                                    label = { Text("Descanso sugerido (segundos)") },
                                                     keyboardOptions = KeyboardOptions(
                                                         keyboardType = KeyboardType.Number,
                                                         imeAction = ImeAction.Done
                                                     ),
                                                     keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                                                     modifier = Modifier.fillMaxWidth(), singleLine = true,
-                                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta)
+                                                    enabled = !state.isLoading,
+                                                    colors = coloresCampoTarjeta
                                                 )
                                             }
                                         }
@@ -441,6 +510,7 @@ fun EditRutinaAsignadaScreen(
 
                                 OutlinedButton(
                                     onClick = { diaSeleccionadoParaEjercicio = visualDiaIndex; showBottomSheetEjercicios = true },
+                                    enabled = !state.isLoading,
                                     modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = NaranjaAcento),
                                     border = androidx.compose.foundation.BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.5f)), shape = RoundedCornerShape(10.dp)
                                 ) {
@@ -455,6 +525,7 @@ fun EditRutinaAsignadaScreen(
 
                 OutlinedButton(
                     onClick = { showBottomSheetPlantillas = true },
+                    enabled = !state.isLoading,
                     modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
                     border = androidx.compose.foundation.BorderStroke(1.dp, TextoSecundario.copy(alpha = 0.4f)), shape = RoundedCornerShape(12.dp)
                 ) {
@@ -470,9 +541,23 @@ fun EditRutinaAsignadaScreen(
 @Composable
 fun EditorSeriesPrescritas(
     seriesPrescritas: List<PrescripcionSerie>,
+    enabled: Boolean = true,
     onSeriesUpdate: (List<PrescripcionSerie>) -> Unit
 ) {
     val focusManager = LocalFocusManager.current
+
+    val coloresCampoSerie = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        disabledTextColor = Color.White.copy(alpha = 0.6f),
+        focusedBorderColor = NaranjaAcento,
+        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
+        focusedContainerColor = FondoTarjeta,
+        unfocusedContainerColor = FondoTarjeta,
+        disabledContainerColor = FondoTarjeta
+    )
+
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier
@@ -525,18 +610,21 @@ fun EditorSeriesPrescritas(
                     Box(modifier = Modifier.weight(1.2f).padding(horizontal = 2.dp)) {
                         Surface(
                             onClick = {
-                                val todosLosEnums = TipoSerie.entries
-                                val siguienteOrdinal = (serie.tipo.ordinal + 1) % todosLosEnums.size
-                                val nuevoTipoEnum = todosLosEnums[siguienteOrdinal]
-                                val nuevaLista = seriesPrescritas.toMutableList()
-                                nuevaLista[index] = serie.copy(tipo = nuevoTipoEnum)
-                                onSeriesUpdate(nuevaLista)
+                                if (enabled) {
+                                    val todosLosEnums = TipoSerie.entries
+                                    val siguienteOrdinal = (serie.tipo.ordinal + 1) % todosLosEnums.size
+                                    val nuevoTipoEnum = todosLosEnums[siguienteOrdinal]
+                                    val nuevaLista = seriesPrescritas.toMutableList()
+                                    nuevaLista[index] = serie.copy(tipo = nuevoTipoEnum)
+                                    onSeriesUpdate(nuevaLista)
+                                }
                             },
+                            enabled = enabled,
                             shape = RoundedCornerShape(8.dp),
-                            color = colorClave.copy(alpha = 0.15f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, colorClave)
+                            color = colorClave.copy(alpha = if (enabled) 0.15f else 0.08f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, if (enabled) colorClave else colorClave.copy(alpha = 0.3f))
                         ) {
-                            Text(text = etiquetaUi, color = colorClave, fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp), textAlign = TextAlign.Center)
+                            Text(text = etiquetaUi, color = if (enabled) colorClave else colorClave.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp), textAlign = TextAlign.Center)
                         }
                     }
 
@@ -555,10 +643,11 @@ fun EditorSeriesPrescritas(
                                 )
                                 onSeriesUpdate(nuevaLista)
                             },
+                            enabled = enabled,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
                             singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 12.sp),
-                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta),
+                            colors = coloresCampoSerie,
                             modifier = Modifier.fillMaxWidth().height(46.dp)
                         )
                     }
@@ -578,18 +667,32 @@ fun EditorSeriesPrescritas(
                                 )
                                 onSeriesUpdate(nuevaLista)
                             },
+                            enabled = enabled,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                             singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 12.sp),
-                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta),
+                            colors = coloresCampoSerie,
                             modifier = Modifier.fillMaxWidth().height(46.dp)
                         )
                     }
 
                     Box(modifier = Modifier.weight(0.4f), contentAlignment = Alignment.Center) {
-                        IconButton(onClick = { val nuevaLista = seriesPrescritas.toMutableList(); nuevaLista.removeAt(index); onSeriesUpdate(nuevaLista) }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Delete, null, tint = Color(0xFFE57373).copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
+                        IconButton(
+                            onClick = {
+                                val nuevaLista = seriesPrescritas.toMutableList()
+                                nuevaLista.removeAt(index)
+                                onSeriesUpdate(nuevaLista)
+                            },
+                            enabled = enabled,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Eliminar Serie",
+                                tint = if (enabled) Color(0xFFE57373).copy(alpha = 0.8f) else TextoSecundario.copy(alpha = 0.2f),
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
                 }
@@ -601,9 +704,10 @@ fun EditorSeriesPrescritas(
                 val nuevaSerie = PrescripcionSerie(numeroSerie = seriesPrescritas.size + 1, repsMin = 8, repsMax = 12, repeticiones = 0, tipo = TipoSerie.EFECTIVA)
                 onSeriesUpdate(seriesPrescritas + nuevaSerie)
             },
+            enabled = enabled,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = NaranjaAcento),
-            border = androidx.compose.foundation.BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.6f)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (enabled) NaranjaAcento.copy(alpha = 0.6f) else TextoSecundario.copy(alpha = 0.2f)),
             shape = RoundedCornerShape(10.dp)
         ) {
             Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))

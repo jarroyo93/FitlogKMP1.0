@@ -239,20 +239,30 @@ fun EntrenarScreen(
                 if (mostrarConfirmacion) {
                     AlertDialog(
                         containerColor = FondoTarjeta,
-                        onDismissRequest = { mostrarConfirmacion = false },
+                        onDismissRequest = { if (!state.isLoading) mostrarConfirmacion = false },
                         title = { Text("Finalizar Entrenamiento", fontWeight = FontWeight.Bold, color = Color.White) },
                         text = { Text("¿Estás seguro de que deseas terminar y guardar este entrenamiento? Revisa que todos los pesos y repeticiones estén correctos.", color = TextoSecundario) },
                         confirmButton = {
                             Button(
+                                enabled = !state.isLoading,
                                 colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
                                 onClick = {
                                     mostrarConfirmacion = false
                                     viewModel.terminarEntrenamiento(atletaId)
                                 }
-                            ) { Text("Sí, terminar", fontWeight = FontWeight.Bold) }
+                            ) {
+                                if (state.isLoading) {
+                                    CircularProgressIndicator(color = FondoOscuro, modifier = Modifier.size(20.dp))
+                                } else {
+                                    Text("Sí, terminar", fontWeight = FontWeight.Bold)
+                                }
+                            }
                         },
                         dismissButton = {
-                            TextButton(onClick = { mostrarConfirmacion = false }) {
+                            TextButton(
+                                enabled = !state.isLoading,
+                                onClick = { mostrarConfirmacion = false }
+                            ) {
                                 Text("Revisar de nuevo", color = NaranjaAcento)
                             }
                         }
