@@ -45,6 +45,14 @@ private val NaranjaAcento = Color(0xFFFF9F6D)
 private val FondoTarjeta = Color(0xFF2F254E)
 private val TextoSecundario = Color(0xFFB3AEC6)
 
+
+fun obtenerTituloBloque(letraBloque: String, cantidadEjercicios: Int): String {
+    return when (cantidadEjercicios) {
+        2 -> "BISERIE $letraBloque"
+        3 -> "TRISERIE $letraBloque"
+        else -> "SERIE GIGANTE $letraBloque"
+    }
+}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditRutinaAsignadaScreen(
@@ -217,6 +225,9 @@ fun EditRutinaAsignadaScreen(
         }
     }
 
+    var diaConSeleccion by remember { mutableStateOf(-1) }
+    var indicesSeleccionados by remember { mutableStateOf(setOf<Int>()) }
+
     Scaffold(
         containerColor = FondoOscuro,
         topBar = {
@@ -241,6 +252,67 @@ fun EditRutinaAsignadaScreen(
                     }
                 }
             )
+        },
+        // 🟢 BARRA FLOTANTE INFERIOR PARA ACCIONES DE AGRUPACIÓN (BISERIE / TRISERIE / DESAGRUPAR)
+        bottomBar = {
+            if (diaConSeleccion != -1 && indicesSeleccionados.size >= 2) {
+                Surface(
+                    shadowElevation = 8.dp,
+                    color = FondoTarjeta,
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${indicesSeleccionados.size} seleccionados",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val diaObj = rutina?.diasEntrenamiento?.getOrNull(diaConSeleccion)
+                            val ejs = diaObj?.ejercicios?.sortedBy { it.ordenSecuencia } ?: emptyList()
+                            val bloquesSelec = indicesSeleccionados.mapNotNull { ejs.getOrNull(it)?.bloqueId }.distinct()
+
+                            val esMismoBloqueCompleto = bloquesSelec.size == 1 &&
+                                    indicesSeleccionados.size == ejs.count { it.bloqueId == bloquesSelec.first() }
+
+                            if (esMismoBloqueCompleto) {
+                                Button(
+                                    onClick = {
+                                        viewModel.desagruparBloque(diaConSeleccion, bloquesSelec.first())
+                                        indicesSeleccionados = emptySet()
+                                        diaConSeleccion = -1
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE57373), contentColor = FondoOscuro)
+                                ) {
+                                    Text("Desagrupar", fontWeight = FontWeight.Bold)
+                                }
+                            } else {
+                                Button(
+                                    onClick = {
+                                        viewModel.agruparEjercicios(diaConSeleccion, indicesSeleccionados.toList())
+                                        indicesSeleccionados = emptySet()
+                                        diaConSeleccion = -1
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro)
+                                ) {
+                                    val titulo = when (indicesSeleccionados.size) {
+                                        2 -> "Agrupar Biserie"
+                                        3 -> "Agrupar Triserie"
+                                        else -> "Agrupar Serie Gigante"
+                                    }
+                                    Text(titulo, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         },
         floatingActionButton = {
             if (rutina != null) {
@@ -350,11 +422,64 @@ fun EditRutinaAsignadaScreen(
                                 val ejerciciosOrdenados = dia.ejercicios.sortedBy { it.ordenSecuencia }
 
                                 ejerciciosOrdenados.forEachIndexed { visualEjIndex, ejercicio ->
+                                    val estaSeleccionado = (diaConSeleccion == visualDiaIndex) && indicesSeleccionados.contains(visualEjIndex)
+                                    val estaEnBloque = ejercicio.bloqueId != null
+
                                     key(ejercicio.ordenSecuencia) {
-                                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = FondoOscuro), shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, FondoTarjeta)) {
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = FondoOscuro),
+                                            shape = RoundedCornerShape(12.dp),
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                width = if (estaSeleccionado || estaEnBloque) 1.5.dp else 1.dp,
+                                                color = when {
+                                                    estaSeleccionado -> NaranjaAcento
+                                                    estaEnBloque -> NaranjaAcento.copy(alpha = 0.6f)
+                                                    else -> FondoTarjeta
+                                                }
+                                            )
+                                        ) {
                                             Column(modifier = Modifier.padding(12.dp)) {
 
                                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                                    // 🟢 1. CHECKBOX PARA SELECCIÓN MÚLTIPLE
+                                                    Checkbox(
+                                                        checked = estaSeleccionado,
+                                                        onCheckedChange = { checked ->
+                                                            if (diaConSeleccion != visualDiaIndex) {
+                                                                diaConSeleccion = visualDiaIndex
+                                                                indicesSeleccionados = setOf(visualEjIndex)
+                                                            } else {
+                                                                indicesSeleccionados = if (checked) {
+                                                                    indicesSeleccionados + visualEjIndex
+                                                                } else {
+                                                                    indicesSeleccionados - visualEjIndex
+                                                                }
+                                                                if (indicesSeleccionados.isEmpty()) {
+                                                                    diaConSeleccion = -1
+                                                                }
+                                                            }
+                                                        },
+                                                        colors = CheckboxDefaults.colors(checkedColor = NaranjaAcento, uncheckedColor = TextoSecundario)
+                                                    )
+
+                                                    // 🟢 2. BADGE VISUAL DE BLOQUE (A1, A2, B1...)
+                                                    ejercicio.bloqueNombre?.let { badge ->
+                                                        Surface(
+                                                            color = NaranjaAcento,
+                                                            shape = RoundedCornerShape(4.dp),
+                                                            modifier = Modifier.padding(end = 6.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = badge,
+                                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                                fontSize = 10.sp,
+                                                                fontWeight = FontWeight.Black,
+                                                                color = FondoOscuro
+                                                            )
+                                                        }
+                                                    }
+
                                                     // 🖼️ MINIATURA EN TARJETA DE EDICIÓN
                                                     EjercicioImageThumbnail(
                                                         nombreEjercicio = ejercicio.nombre,
