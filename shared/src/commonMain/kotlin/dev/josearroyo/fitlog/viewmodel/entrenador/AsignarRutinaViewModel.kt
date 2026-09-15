@@ -151,7 +151,9 @@ class AsignarRutinaViewModel(
                             seriesPrescritas = ej.seriesPrescritas,
                             descansoSegundos = ej.descansoSegundos,
                             notasEspecificas = ej.notas,
-                            ordenSecuencia = indexEj + 1
+                            ordenSecuencia = indexEj + 1,
+                            bloqueId = ej.bloqueId,
+                            bloqueNombre = ej.bloqueNombre
                         )
                     }
 

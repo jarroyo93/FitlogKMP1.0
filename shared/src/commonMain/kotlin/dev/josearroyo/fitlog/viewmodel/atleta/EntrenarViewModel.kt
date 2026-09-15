@@ -235,11 +235,14 @@ class EntrenarViewModel : ViewModel() {
                 )
             }
 
+
             EjercicioRealizado(
                 ejercicioGlobalId = ejAsignado.ejercicioGlobalId,
                 nombreEjercicio = ejAsignado.nombre,
                 ordenSecuencia = ejAsignado.ordenSecuencia,
-                seriesRealizadas = listaSeries
+                seriesRealizadas = listaSeries,
+                bloqueId = ejAsignado.bloqueId,
+                bloqueNombre = ejAsignado.bloqueNombre
             )
         }
 
@@ -534,7 +537,9 @@ class EntrenarViewModel : ViewModel() {
                 existente.copy(
                     ordenSecuencia = ejAsignado.ordenSecuencia,
                     nombreEjercicio = ejAsignado.nombre,
-                    ejercicioGlobalId = ejAsignado.ejercicioGlobalId
+                    ejercicioGlobalId = ejAsignado.ejercicioGlobalId,
+                    bloqueId = ejAsignado.bloqueId,
+                    bloqueNombre = ejAsignado.bloqueNombre
                 )
             } else {
                 val registroPrevioObj = historialPrevio[ejAsignado.ejercicioGlobalId] ?: historialPrevio[ejAsignado.nombre]
@@ -565,5 +570,34 @@ class EntrenarViewModel : ViewModel() {
         }
 
         return borrador.copy(ejerciciosRealizados = nuevosEjerciciosRealizados)
+    }
+
+    /**
+     * Evalúa si se debe activar el temporizador de descanso.
+     * En agrupaciones, solo se dispara cuando el ejercicio completado es el ÚLTIMO del bloque.
+     */
+    fun completarSerieYEvaluarDescanso(
+        ejercicioIndex: Int,
+        serieIndex: Int,
+        peso: Double,
+        reps: Int,
+        descansoSegundos: Int
+    ) {
+        actualizarSerie(ejercicioIndex, serieIndex, peso, reps)
+
+        val sesion = _state.value.sesionEnProgreso
+        val ejercicios = sesion.ejerciciosRealizados
+        val ejActual = ejercicios.getOrNull(ejercicioIndex) ?: return
+
+        if (ejActual.bloqueId != null) {
+            val ejerciciosDelBloque = ejercicios.filter { it.bloqueId == ejActual.bloqueId }
+            val esUltimoDelBloque = ejerciciosDelBloque.lastOrNull()?.ejercicioGlobalId == ejActual.ejercicioGlobalId
+
+            if (esUltimoDelBloque) {
+                iniciarCronometro(descansoSegundos)
+            }
+        } else {
+            iniciarCronometro(descansoSegundos)
+        }
     }
 }
