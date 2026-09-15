@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -441,8 +442,13 @@ fun EditRutinaAsignadaScreen(
                                         ) {
                                             Column(modifier = Modifier.padding(12.dp)) {
 
-                                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                                    // 🟢 1. CHECKBOX PARA SELECCIÓN MÚLTIPLE
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(vertical = 4.dp)
+                                                ) {
+                                                    // 1. Checkbox compacto
                                                     Checkbox(
                                                         checked = estaSeleccionado,
                                                         onCheckedChange = { checked ->
@@ -460,10 +466,16 @@ fun EditRutinaAsignadaScreen(
                                                                 }
                                                             }
                                                         },
-                                                        colors = CheckboxDefaults.colors(checkedColor = NaranjaAcento, uncheckedColor = TextoSecundario)
+                                                        colors = CheckboxDefaults.colors(
+                                                            checkedColor = NaranjaAcento,
+                                                            uncheckedColor = TextoSecundario
+                                                        ),
+                                                        modifier = Modifier.size(28.dp) // Reducido para no acaparar 48dp
                                                     )
 
-                                                    // 🟢 2. BADGE VISUAL DE BLOQUE (A1, A2, B1...)
+                                                    Spacer(modifier = Modifier.width(6.dp))
+
+                                                    // 2. Badge visual de Bloque (A1, A2...)
                                                     ejercicio.bloqueNombre?.let { badge ->
                                                         Surface(
                                                             color = NaranjaAcento,
@@ -472,7 +484,7 @@ fun EditRutinaAsignadaScreen(
                                                         ) {
                                                             Text(
                                                                 text = badge,
-                                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                                                                 fontSize = 10.sp,
                                                                 fontWeight = FontWeight.Black,
                                                                 color = FondoOscuro
@@ -480,46 +492,70 @@ fun EditRutinaAsignadaScreen(
                                                         }
                                                     }
 
-                                                    // 🖼️ MINIATURA EN TARJETA DE EDICIÓN
+                                                    // 3. Miniatura
                                                     EjercicioImageThumbnail(
                                                         nombreEjercicio = ejercicio.nombre,
-                                                        tamano = 38.dp
+                                                        tamano = 34.dp
                                                     )
 
-                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Spacer(modifier = Modifier.width(8.dp))
 
+                                                    // 4. Nombre del Ejercicio (Espacio flexible con límite de 2 líneas)
                                                     Text(
-                                                        "${ejercicio.ordenSecuencia}. ${ejercicio.nombre}",
+                                                        text = "${ejercicio.ordenSecuencia}. ${ejercicio.nombre}",
                                                         fontWeight = FontWeight.Bold,
                                                         color = Color.White,
-                                                        modifier = Modifier.weight(1f)
+                                                        fontSize = 13.sp,
+                                                        maxLines = 2, // Evita colapso vertical
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        modifier = Modifier.weight(1f) // Absorbe todo el espacio central
                                                     )
 
-                                                    IconButton(
-                                                        onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, -1) },
-                                                        enabled = visualEjIndex > 0
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.ArrowUpward,
-                                                            contentDescription = "Subir Ejercicio",
-                                                            tint = if (visualEjIndex > 0) TextoSecundario else TextoSecundario.copy(alpha = 0.2f),
-                                                            modifier = Modifier.size(18.dp)
-                                                        )
-                                                    }
+                                                    Spacer(modifier = Modifier.width(4.dp))
 
-                                                    IconButton(
-                                                        onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, 1) },
-                                                        enabled = visualEjIndex < ejerciciosOrdenados.size - 1
+                                                    // 5. Botonera de control compacta (Derecha)
+                                                    Row(
+                                                        horizontalArrangement = Arrangement.spacedBy(0.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.ArrowDownward,
-                                                            contentDescription = "Bajar Ejercicio",
-                                                            tint = if (visualEjIndex < ejerciciosOrdenados.size - 1) TextoSecundario else TextoSecundario.copy(alpha = 0.2f),
-                                                            modifier = Modifier.size(18.dp)
-                                                        )
-                                                    }
+                                                        IconButton(
+                                                            onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, -1) },
+                                                            enabled = visualEjIndex > 0,
+                                                            modifier = Modifier.size(28.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.ArrowUpward,
+                                                                contentDescription = "Subir Ejercicio",
+                                                                tint = if (visualEjIndex > 0) TextoSecundario else TextoSecundario.copy(alpha = 0.2f),
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
 
-                                                    IconButton(onClick = { viewModel.eliminarEjercicio(visualDiaIndex, visualEjIndex) }) { Icon(Icons.Default.Clear, null, tint = TextoSecundario) }
+                                                        IconButton(
+                                                            onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, 1) },
+                                                            enabled = visualEjIndex < ejerciciosOrdenados.size - 1,
+                                                            modifier = Modifier.size(28.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.ArrowDownward,
+                                                                contentDescription = "Bajar Ejercicio",
+                                                                tint = if (visualEjIndex < ejerciciosOrdenados.size - 1) TextoSecundario else TextoSecundario.copy(alpha = 0.2f),
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
+
+                                                        IconButton(
+                                                            onClick = { viewModel.eliminarEjercicio(visualDiaIndex, visualEjIndex) },
+                                                            modifier = Modifier.size(28.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Clear,
+                                                                contentDescription = "Eliminar Ejercicio",
+                                                                tint = TextoSecundario,
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
+                                                    }
                                                 }
 
                                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = FondoTarjeta)
