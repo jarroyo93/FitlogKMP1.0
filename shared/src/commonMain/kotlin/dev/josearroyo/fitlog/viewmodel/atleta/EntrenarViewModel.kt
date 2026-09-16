@@ -235,11 +235,14 @@ class EntrenarViewModel : ViewModel() {
                 )
             }
 
+
             EjercicioRealizado(
                 ejercicioGlobalId = ejAsignado.ejercicioGlobalId,
                 nombreEjercicio = ejAsignado.nombre,
                 ordenSecuencia = ejAsignado.ordenSecuencia,
-                seriesRealizadas = listaSeries
+                seriesRealizadas = listaSeries,
+                bloqueId = ejAsignado.bloqueId,
+                bloqueNombre = ejAsignado.bloqueNombre
             )
         }
 
@@ -326,6 +329,9 @@ class EntrenarViewModel : ViewModel() {
             currentState.copy(sesionEnProgreso = sesionActualizada)
         }
         sesionGuardar?.let { BorradorLocalManager.guardarBorradorLocal(it) }
+
+        // ⏱️ Evalúa disparar el descanso si este era el último campo que faltaba
+        evaluarYDispararDescanso(ejercicioIndex, serieIndex)
     }
 
     fun terminarEntrenamiento(authUid: String) {
@@ -416,9 +422,13 @@ class EntrenarViewModel : ViewModel() {
     // ⏱️ CRONÓMETRO DE DESCANSO (Sincronización basada en reloj real)
     fun iniciarCronometro(segundos: Int) {
         if (segundos <= 0) return
-        ReproductorAudio.detenerSonido()
-        cancelarNotificacionTimer()
-        programarNotificacionTimer(segundos)
+
+        // 🔒 Protegemos llamadas de plataforma para evitar que un fallo en audio/notificación bloquee la UI en iOS
+        try { ReproductorAudio.detenerSonido() } catch (e: Exception) {}
+        try {
+            cancelarNotificacionTimer()
+            programarNotificacionTimer(segundos)
+        } catch (e: Exception) {}
 
         val ahoraMs = getCurrentTimeMillis()
         targetEndTimeMs = ahoraMs + (segundos * 1000L)
@@ -436,7 +446,7 @@ class EntrenarViewModel : ViewModel() {
 
         timerJob = viewModelScope.launch {
             while (_state.value.cronometroActivo) {
-                delay(200L) // Polling rápido para respuesta instantánea al reanudar la app
+                delay(200L)
                 if (!_state.value.cronometroEnPausa) {
                     val ahora = getCurrentTimeMillis()
                     val diferenciaMs = targetEndTimeMs - ahora
@@ -444,8 +454,8 @@ class EntrenarViewModel : ViewModel() {
 
                     if (segundosRestantesCalculados == 0) {
                         if (!_state.value.estaSonandoAlarma) {
-                            ReproductorAudio.reproducirSonidoFinTiempo()
-                            vibrarDispositivo()
+                            try { ReproductorAudio.reproducirSonidoFinTiempo() } catch (e: Exception) {}
+                            try { vibrarDispositivo() } catch (e: Exception) {}
                         }
                         _state.update {
                             it.copy(
@@ -454,7 +464,7 @@ class EntrenarViewModel : ViewModel() {
                                 estaSonandoAlarma = true
                             )
                         }
-                        break // Finaliza el bucle una vez llegada la meta
+                        break
                     } else {
                         _state.update {
                             it.copy(
@@ -497,8 +507,8 @@ class EntrenarViewModel : ViewModel() {
     }
 
     fun detenerCronometro() {
-        ReproductorAudio.detenerSonido()
-        cancelarNotificacionTimer()
+        try { ReproductorAudio.detenerSonido() } catch (e: Exception) {}
+        try { cancelarNotificacionTimer() } catch (e: Exception) {}
         timerJob?.cancel()
         timerJob = null
         targetEndTimeMs = 0L
@@ -515,8 +525,8 @@ class EntrenarViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        ReproductorAudio.detenerSonido()
-        cancelarNotificacionTimer()
+        try { ReproductorAudio.detenerSonido() } catch (e: Exception) {}
+        try { cancelarNotificacionTimer() } catch (e: Exception) {}
         timerJob?.cancel()
     }
 
@@ -539,7 +549,9 @@ class EntrenarViewModel : ViewModel() {
                 existente.copy(
                     ordenSecuencia = ejAsignado.ordenSecuencia,
                     nombreEjercicio = ejAsignado.nombre,
-                    ejercicioGlobalId = ejAsignado.ejercicioGlobalId
+                    ejercicioGlobalId = ejAsignado.ejercicioGlobalId,
+                    bloqueId = ejAsignado.bloqueId,
+                    bloqueNombre = ejAsignado.bloqueNombre
                 )
             } else {
                 val registroPrevioObj = historialPrevio[ejAsignado.ejercicioGlobalId] ?: historialPrevio[ejAsignado.nombre]
@@ -570,5 +582,45 @@ class EntrenarViewModel : ViewModel() {
         }
 
         return borrador.copy(ejerciciosRealizados = nuevosEjerciciosRealizados)
+    }
+    fun completarSerieYEvaluarDescanso(
+        ejercicioIndex: Int,
+        serieIndex: Int,
+        peso: Double,
+        reps: Int,
+        descansoSegundos: Int
+    ) {
+        actualizarSerie(ejercicioIndex, serieIndex, peso, reps)
+        evaluarYDispararDescanso(ejercicioIndex, serieIndex)
+    }
+
+    private fun evaluarYDispararDescanso(ejercicioIndex: Int, serieIndex: Int) {
+        val stateVal = _state.value
+        val sesion = stateVal.sesionEnProgreso
+        val ejercicios = sesion.ejerciciosRealizados
+        val ejActual = ejercicios.getOrNull(ejercicioIndex) ?: return
+        val serieActual = ejActual.seriesRealizadas.getOrNull(serieIndex) ?: return
+
+        // 🔒 REQUISITO TRIPLE: Solo es válida si tiene Peso, Repeticiones y RPE
+        val serieCompletamenteLlena = serieActual.pesoKg > 0.0 &&
+                serieActual.repeticionesLogradas > 0 &&
+                serieActual.rpe != null
+
+        if (!serieCompletamenteLlena) return
+
+        val ejAsignado = stateVal.diaActual?.ejercicios?.getOrNull(ejercicioIndex)
+        val descansoSegundos = ejAsignado?.descansoSegundos ?: 60
+
+        if (ejActual.bloqueId != null) {
+            val ejerciciosDelBloque = ejercicios.filter { it.bloqueId == ejActual.bloqueId }
+            val esUltimoDelBloque = ejerciciosDelBloque.lastOrNull()?.ejercicioGlobalId == ejActual.ejercicioGlobalId ||
+                    ejerciciosDelBloque.lastOrNull()?.nombreEjercicio == ejActual.nombreEjercicio
+
+            if (esUltimoDelBloque) {
+                iniciarCronometro(descansoSegundos)
+            }
+        } else {
+            iniciarCronometro(descansoSegundos)
+        }
     }
 }

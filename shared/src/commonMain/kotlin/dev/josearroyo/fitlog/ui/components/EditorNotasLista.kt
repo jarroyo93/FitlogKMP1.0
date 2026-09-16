@@ -16,10 +16,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -36,6 +38,7 @@ fun EditorNotasLista(
 ) {
     var nuevoTexto by remember { mutableStateOf("") }
     var indexEditando by remember { mutableStateOf<Int?>(null) }
+    val focusManager = LocalFocusManager.current
 
     val listaItems = remember(notasTexto) {
         notasTexto.lines()
@@ -55,6 +58,7 @@ fun EditorNotasLista(
             onNotasChanged(nuevaLista.joinToString("\n") { "• $it" })
             nuevoTexto = ""
             indexEditando = null
+            focusManager.clearFocus(force = true)
         }
     }
 

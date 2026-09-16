@@ -111,6 +111,21 @@ class AsignarRutinaViewModel(
         }
     }
 
+    fun actualizarNotaEspecificaEjercicio(diaIndex: Int, ejercicioIndex: Int, nuevaNota: String) {
+        _state.update { currentState ->
+            val listaPlantillas = currentState.plantillasSeleccionadas.toMutableList()
+            val plantillaADias = listaPlantillas.getOrNull(diaIndex) ?: return@update currentState
+
+            val nuevosEjercicios = plantillaADias.ejercicios.toMutableList()
+            val ej = nuevosEjercicios.getOrNull(ejercicioIndex) ?: return@update currentState
+
+            nuevosEjercicios[ejercicioIndex] = ej.copy(notas = nuevaNota)
+            listaPlantillas[diaIndex] = plantillaADias.copy(ejercicios = nuevosEjercicios)
+
+            currentState.copy(plantillasSeleccionadas = listaPlantillas)
+        }
+    }
+
     fun construirYAsignarRutina(atletaId: String) {
         // 🔴 1. Bloqueo SÍNCRONO contra reentradas
         if (_state.value.isLoading) return
@@ -160,7 +175,9 @@ class AsignarRutinaViewModel(
                             seriesPrescritas = ej.seriesPrescritas,
                             descansoSegundos = ej.descansoSegundos,
                             notasEspecificas = ej.notas,
-                            ordenSecuencia = indexEj + 1
+                            ordenSecuencia = indexEj + 1,
+                            bloqueId = ej.bloqueId,
+                            bloqueNombre = ej.bloqueNombre
                         )
                     }
 

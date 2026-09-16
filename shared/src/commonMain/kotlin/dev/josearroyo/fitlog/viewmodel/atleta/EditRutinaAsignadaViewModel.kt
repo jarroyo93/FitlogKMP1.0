@@ -308,6 +308,141 @@ class EditRutinaAsignadaViewModel : ViewModel() {
         }
     }
 
+    // ==========================================
+// MÉTODOS DE AGRUPACIÓN (N EJERCIOS)
+// ==========================================
+
+    /**
+     * Agrupa N ejercicios contiguos en un bloque (Biserie, Triserie, Serie Gigante).
+     */
+    fun agruparEjercicios(diaIndex: Int, indicesSeleccionados: List<Int>) {
+        _state.update { state ->
+            val actual = state.rutina ?: return@update state
+            val dias = actual.diasEntrenamiento.sortedBy { it.ordenSecuencia }.toMutableList()
+            if (diaIndex !in dias.indices) return@update state
+
+            val dia = dias[diaIndex]
+            val ejercicios = dia.ejercicios.sortedBy { it.ordenSecuencia }.toMutableList()
+
+            if (indicesSeleccionados.size < 2) {
+                return@update state.copy(error = "Debes seleccionar al menos 2 ejercicios para agrupar.")
+            }
+
+            val indicesOrdenados = indicesSeleccionados.sorted()
+            val esContiguo = indicesOrdenados.zipWithNext().all { (a, b) -> b == a + 1 }
+            if (!esContiguo) {
+                return@update state.copy(error = "Los ejercicios seleccionados deben ser contiguos en la lista.")
+            }
+
+            val nuevoBloqueId = Uuid.random().toString()
+
+            // Asignar temporalmente el bloque id a los seleccionados
+            indicesOrdenados.forEach { ejIndex ->
+                val ej = ejercicios[ejIndex]
+                ejercicios[ejIndex] = ej.copy(bloqueId = nuevoBloqueId)
+            }
+
+            val ejerciciosRecalculados = recalcularEtiquetasBloques(ejercicios)
+            dias[diaIndex] = dia.copy(ejercicios = ejerciciosRecalculados)
+            state.copy(rutina = actual.copy(diasEntrenamiento = dias), error = null)
+        }
+    }
+
+    /**
+     * Elimina la agrupación de un bloque completo dentro de un día.
+     */
+    fun desagruparBloque(diaIndex: Int, bloqueId: String) {
+        _state.update { state ->
+            val actual = state.rutina ?: return@update state
+            val dias = actual.diasEntrenamiento.sortedBy { it.ordenSecuencia }.toMutableList()
+            if (diaIndex !in dias.indices) return@update state
+
+            val dia = dias[diaIndex]
+            val ejercicios = dia.ejercicios.map { ej ->
+                if (ej.bloqueId == bloqueId) ej.copy(bloqueId = null, bloqueNombre = null) else ej
+            }
+
+            val ejerciciosRecalculados = recalcularEtiquetasBloques(ejercicios)
+            dias[diaIndex] = dia.copy(ejercicios = ejerciciosRecalculados)
+            state.copy(rutina = actual.copy(diasEntrenamiento = dias))
+        }
+    }
+
+    // Modificación en eliminarEjercicio para limpiar grupos inconsistentes al borrar
+    fun eliminarEjercicioConReajuste(diaIndex: Int, ejercicioIndex: Int) {
+        _state.update { state ->
+            val actual = state.rutina ?: return@update state
+            val dias = actual.diasEntrenamiento.sortedBy { it.ordenSecuencia }.toMutableList()
+            if (diaIndex !in dias.indices) return@update state
+            val dia = dias[diaIndex]
+            val ejercicios = dia.ejercicios.sortedBy { it.ordenSecuencia }.toMutableList()
+            if (ejercicioIndex !in ejercicios.indices) return@update state
+
+            ejercicios.removeAt(ejercicioIndex)
+            val ejReorganizados = ejercicios.mapIndexed { index, ej -> ej.copy(ordenSecuencia = index + 1) }
+            val ejerciciosFinales = recalcularEtiquetasBloques(ejReorganizados)
+
+            dias[diaIndex] = dia.copy(ejercicios = ejerciciosFinales)
+            state.copy(rutina = actual.copy(diasEntrenamiento = dias))
+        }
+    }
+
+    // Modificación en moverEjercicio para mantener la integridad de las etiquetas
+    fun moverEjercicioConReajuste(diaIndex: Int, ejercicioIndex: Int, direccion: Int) {
+        _state.update { state ->
+            val actual = state.rutina ?: return@update state
+            val dias = actual.diasEntrenamiento.sortedBy { it.ordenSecuencia }.toMutableList()
+            if (diaIndex !in dias.indices) return@update state
+            val dia = dias[diaIndex]
+            val ejercicios = dia.ejercicios.sortedBy { it.ordenSecuencia }.toMutableList()
+            val nuevoIndex = ejercicioIndex + direccion
+
+            if (ejercicioIndex in ejercicios.indices && nuevoIndex in ejercicios.indices) {
+                val temp = ejercicios[ejercicioIndex]
+                ejercicios[ejercicioIndex] = ejercicios[nuevoIndex]
+                ejercicios[nuevoIndex] = temp
+
+                val ejReorganizados = ejercicios.mapIndexed { index, ej -> ej.copy(ordenSecuencia = index + 1) }
+                val ejerciciosFinales = recalcularEtiquetasBloques(ejReorganizados)
+
+                dias[diaIndex] = dia.copy(ejercicios = ejerciciosFinales)
+                state.copy(rutina = actual.copy(diasEntrenamiento = dias))
+            } else state
+        }
+    }
+
+    private fun recalcularEtiquetasBloques(ejercicios: List<EjercicioAsignado>): List<EjercicioAsignado> {
+        // 1. Contar cuántos ejercicios hay por cada bloqueId
+        val conteoPorBloque = ejercicios.mapNotNull { it.bloqueId }.groupingBy { it }.eachCount()
+
+        // 2. Desagrupar si un bloque quedó con solo 1 ejercicio
+        val ejerciciosSaneados = ejercicios.map { ej ->
+            if (ej.bloqueId != null && (conteoPorBloque[ej.bloqueId] ?: 0) < 2) {
+                ej.copy(bloqueId = null, bloqueNombre = null)
+            } else ej
+        }
+
+        // 3. Asignar letras secuenciales (A, B, C...) a los bloques válidos
+        val bloquesUnicos = ejerciciosSaneados.mapNotNull { it.bloqueId }.distinct()
+        val abecedario = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        val mapaLetras = bloquesUnicos.mapIndexed { index, bId ->
+            bId to abecedario.getOrElse(index) { 'A' }.toString()
+        }.toMap()
+
+        val contadorPosicion = mutableMapOf<String, Int>()
+
+        return ejerciciosSaneados.map { ej ->
+            if (ej.bloqueId != null) {
+                val letra = mapaLetras[ej.bloqueId] ?: "A"
+                val pos = (contadorPosicion[ej.bloqueId] ?: 0) + 1
+                contadorPosicion[ej.bloqueId!!] = pos
+                ej.copy(bloqueNombre = "$letra$pos")
+            } else {
+                ej.copy(bloqueId = null, bloqueNombre = null)
+            }
+        }
+    }
+
     fun clearError() {
         _state.update { it.copy(error = null) }
     }

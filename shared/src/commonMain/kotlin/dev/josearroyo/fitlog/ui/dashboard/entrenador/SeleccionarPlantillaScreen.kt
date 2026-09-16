@@ -12,9 +12,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,9 +27,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.ModoCiclo
+import dev.josearroyo.fitlog.data.model.PlantillaRutina
 import dev.josearroyo.fitlog.ui.components.EditorNotasLista
 import dev.josearroyo.fitlog.viewmodel.entrenador.AsignarRutinaViewModel
 import androidx.navigation.NavController
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -50,38 +50,10 @@ fun SeleccionarPlantillaScreen(
     val state by viewModel.state.collectAsState()
     val focusManager = LocalFocusManager.current
 
-    // Colores para campos sobre tarjeta (FondoTarjeta)
-    val coloresCampoTarjeta = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        disabledTextColor = Color.White.copy(alpha = 0.6f),
-        focusedBorderColor = NaranjaAcento,
-        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
-        focusedContainerColor = FondoTarjeta,
-        unfocusedContainerColor = FondoTarjeta,
-        disabledContainerColor = FondoTarjeta, // 🟢 Mantiene el fondo oscuro de tarjeta
-        focusedLabelColor = NaranjaAcento,
-        unfocusedLabelColor = TextoSecundario,
-        disabledLabelColor = TextoSecundario.copy(alpha = 0.6f),
-        disabledPlaceholderColor = TextoSecundario.copy(alpha = 0.2f)
-    )
+    var mostrarCatalogoSheet by remember { mutableStateOf(false) }
+    var indiceDiaEdicionNotas by remember { mutableStateOf<Int?>(null) }
 
-    // Colores para campos sobre fondo principal (FondoOscuro)
-    val coloresCampoOscuro = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        disabledTextColor = Color.White.copy(alpha = 0.6f),
-        focusedBorderColor = NaranjaAcento,
-        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
-        focusedContainerColor = FondoOscuro,
-        unfocusedContainerColor = FondoOscuro,
-        disabledContainerColor = FondoOscuro, // 🟢 Mantiene el fondo oscuro principal
-        focusedLabelColor = NaranjaAcento,
-        unfocusedLabelColor = TextoSecundario,
-        disabledLabelColor = TextoSecundario.copy(alpha = 0.6f)
-    )
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(entrenadorId) { viewModel.cargarBiblioteca(entrenadorId) }
 
@@ -101,15 +73,8 @@ fun SeleccionarPlantillaScreen(
                 title = { Text("Planificar Bloque", color = Color.White, fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FondoOscuro),
                 navigationIcon = {
-                    IconButton(
-                        onClick = onBack,
-                        enabled = !state.isLoading // 🟢 Bloquea navegación durante el guardado
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Volver",
-                            tint = if (!state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
-                        )
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = NaranjaAcento)
                     }
                 }
             )
@@ -128,316 +93,425 @@ fun SeleccionarPlantillaScreen(
                             viewModel.construirYAsignarRutina(atletaId)
                         },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = NaranjaAcento,
-                            contentColor = FondoOscuro,
-                            disabledContainerColor = NaranjaAcento.copy(alpha = 0.5f)
-                        ),
+                        colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
                         shape = RoundedCornerShape(12.dp),
-                        enabled = esValido && !state.isLoading // 🟢 Inhabilitado mientras guarda
+                        enabled = esValido
                     ) {
-                        if (state.isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                color = FondoOscuro,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text("Asignar Programa al Atleta", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        }
+                        Text("Asignar Programa al Atleta", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                 }
             }
         }
     ) { padding ->
-        // 🟢 Carga inicial única cuando el catálogo aún está vacío
-        if (state.isLoading && state.plantillas.isEmpty()) {
+        if (state.isLoading) {
             Box(Modifier.fillMaxSize().background(FondoOscuro), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = NaranjaAcento)
             }
         } else {
-            Column(
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(FondoOscuro)
                     .padding(padding)
                     .pointerInput(Unit) {
                         detectTapGestures(onTap = { focusManager.clearFocus() })
-                    }
-                    .padding(horizontal = 16.dp)
+                    },
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (state.error != null) {
-                    Text(
-                        text = state.error!!,
-                        color = Color(0xFFE57373),
-                        modifier = Modifier.padding(bottom = 8.dp),
-                        fontWeight = FontWeight.Bold
-                    )
+                    item {
+                        Text(
+                            text = state.error!!,
+                            color = Color(0xFFE57373),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 // 1. Nombre del Bloque
-                OutlinedTextField(
-                    value = state.nombreRutina,
-                    onValueChange = { viewModel.actualizarNombreRutina(it) },
-                    label = { Text("Nombre del Bloque o Macrociclo") },
-                    placeholder = { Text("Ej: Hipertrofia Bloque 1") },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    enabled = !state.isLoading,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp),
-                    colors = coloresCampoTarjeta,
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
+                item {
+                    OutlinedTextField(
+                        value = state.nombreRutina,
+                        onValueChange = { viewModel.actualizarNombreRutina(it) },
+                        label = { Text("Nombre del Bloque o Macrociclo", color = TextoSecundario) },
+                        placeholder = { Text("Ej: Hipertrofia Bloque 1", color = TextoSecundario.copy(alpha = 0.4f)) },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = NaranjaAcento,
+                            unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+                            focusedContainerColor = FondoTarjeta,
+                            unfocusedContainerColor = FondoTarjeta
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                }
 
-                // 2. Editor de Indicaciones Generales
-                EditorNotasLista(
-                    titulo = "Indicaciones Generales de la Rutina (Opcional)",
-                    placeholder = "Ej: RPE 8 general",
-                    notasTexto = state.notasEntrenador,
-                    onNotasChanged = { nuevasNotas ->
-                        viewModel.actualizarNotasEntrenador(nuevasNotas)
-                    },
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
+                // 2. Indicaciones Generales de la Rutina
+                item {
+                    EditorNotasLista(
+                        titulo = "Indicaciones Generales de la Rutina (Opcional)",
+                        placeholder = "Ej: RPE 8 general",
+                        notasTexto = state.notasEntrenador,
+                        onNotasChanged = { nuevasNotas ->
+                            viewModel.actualizarNotasEntrenador(nuevasNotas)
+                        }
+                    )
+                }
 
-                // 3. Configuración del Modo de Ciclo y Duración
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = FondoTarjeta)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                // 3. Configuración Modo y Duración
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = FondoTarjeta)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "Modo de Entrenamiento:",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FilterChip(
+                                    selected = state.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL,
+                                    onClick = { viewModel.actualizarModoCiclo(ModoCiclo.CALENDARIO_SEMANAL) },
+                                    label = { Text("Semanal", fontSize = 13.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = NaranjaAcento,
+                                        selectedLabelColor = FondoOscuro,
+                                        containerColor = FondoOscuro,
+                                        labelColor = TextoSecundario
+                                    ),
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                FilterChip(
+                                    selected = state.modoCiclo == ModoCiclo.SECUENCIAL_RODANTE,
+                                    onClick = { viewModel.actualizarModoCiclo(ModoCiclo.SECUENCIAL_RODANTE) },
+                                    label = { Text("Secuencial / Rodante", fontSize = 13.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = NaranjaAcento,
+                                        selectedLabelColor = FondoOscuro,
+                                        containerColor = FondoOscuro,
+                                        labelColor = TextoSecundario
+                                    ),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            val esSemanal = state.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL
+                            val duracionInt = state.duracionTexto.toIntOrNull() ?: 0
+                            val labelTexto = if (esSemanal) "Duración (Semanas)" else "Duración (Días exactos)"
+                            val helperTexto = if (esSemanal) "Equivale a ${duracionInt * 7} días continuos" else "Ciclo continuo de $duracionInt días"
+
+                            OutlinedTextField(
+                                value = state.duracionTexto,
+                                onValueChange = { viewModel.actualizarDuracion(it) },
+                                label = { Text(labelTexto, color = TextoSecundario) },
+                                supportingText = { Text(helperTexto, color = TextoSecundario.copy(alpha = 0.7f)) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = NaranjaAcento,
+                                    unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+                                    focusedContainerColor = FondoOscuro,
+                                    unfocusedContainerColor = FondoOscuro
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                singleLine = true
+                            )
+                        }
+                    }
+                }
+
+                // 4. Encabezado y Botón para agregar Plantillas
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Modo de Entrenamiento:",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
+                            text = "Estructura del Programa:",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Black,
                             color = Color.White
                         )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        FilledTonalButton(
+                            onClick = { mostrarCatalogoSheet = true },
+                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = NaranjaAcento.copy(alpha = 0.15f), contentColor = NaranjaAcento),
+                            shape = RoundedCornerShape(8.dp)
                         ) {
-                            FilterChip(
-                                selected = state.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL,
-                                enabled = !state.isLoading,
-                                onClick = { viewModel.actualizarModoCiclo(ModoCiclo.CALENDARIO_SEMANAL) },
-                                label = { Text("Semanal", fontSize = 13.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = NaranjaAcento,
-                                    selectedLabelColor = FondoOscuro,
-                                    containerColor = FondoOscuro,
-                                    labelColor = TextoSecundario
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    borderColor = TextoSecundario.copy(alpha = 0.3f),
-                                    selectedBorderColor = NaranjaAcento,
-                                    enabled = !state.isLoading,
-                                    selected = state.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            FilterChip(
-                                selected = state.modoCiclo == ModoCiclo.SECUENCIAL_RODANTE,
-                                enabled = !state.isLoading,
-                                onClick = { viewModel.actualizarModoCiclo(ModoCiclo.SECUENCIAL_RODANTE) },
-                                label = { Text("Secuencial / Rodante", fontSize = 13.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = NaranjaAcento,
-                                    selectedLabelColor = FondoOscuro,
-                                    containerColor = FondoOscuro,
-                                    labelColor = TextoSecundario
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    borderColor = TextoSecundario.copy(alpha = 0.3f),
-                                    selectedBorderColor = NaranjaAcento,
-                                    enabled = !state.isLoading,
-                                    selected = state.modoCiclo == ModoCiclo.SECUENCIAL_RODANTE
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Añadir Día", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
-
-                        val esSemanal = state.modoCiclo == ModoCiclo.CALENDARIO_SEMANAL
-                        val duracionInt = state.duracionTexto.toIntOrNull() ?: 0
-                        val labelTexto = if (esSemanal) "Duración (Semanas)" else "Duración (Días exactos)"
-                        val helperTexto = if (esSemanal) {
-                            "Equivale a ${duracionInt * 7} días continuos de ciclo"
-                        } else {
-                            "Ciclo continuo de $duracionInt días"
-                        }
-
-                        OutlinedTextField(
-                            value = state.duracionTexto,
-                            onValueChange = { viewModel.actualizarDuracion(it) },
-                            enabled = !state.isLoading,
-                            label = { Text(labelTexto) },
-                            supportingText = { Text(helperTexto, color = TextoSecundario.copy(alpha = 0.7f)) },
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Number,
-                                imeAction = ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = coloresCampoOscuro,
-                            shape = RoundedCornerShape(10.dp),
-                            singleLine = true
-                        )
                     }
                 }
 
-                // 4. Secuencia de Plantillas Seleccionadas
-                Text(
-                    text = "Secuencia del Programa:",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Black,
-                    color = Color.White
-                )
-
+                // 5. Secuencia de Plantillas Agregadas
                 if (state.plantillasSeleccionadas.isEmpty()) {
-                    Box(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Selecciona días del catálogo inferior para estructurar la rutina.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextoSecundario,
-                            modifier = Modifier.padding(24.dp)
-                        )
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = FondoTarjeta.copy(alpha = 0.4f)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "Presiona '+ Añadir Día' para seleccionar plantillas del catálogo.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextoSecundario
+                                )
+                            }
+                        }
                     }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(vertical = 8.dp)
-                    ) {
-                        itemsIndexed(
-                            items = state.plantillasSeleccionadas,
-                            key = { index, plantilla -> "${plantilla.id}_$index" }
-                        ) { index, plantilla ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = FondoTarjeta)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Día ${index + 1}: ${plantilla.nombre}",
-                                            fontWeight = FontWeight.Bold,
-                                            color = NaranjaAcento
-                                        )
-                                        Text(
-                                            text = "${plantilla.ejercicios.size} movimientos configurados",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = TextoSecundario
-                                        )
-                                    }
+                    itemsIndexed(
+                        items = state.plantillasSeleccionadas,
+                        key = { index, plantilla -> "${plantilla.id}_$index" }
+                    ) { index, plantilla ->
+                        TarjetaDiaEstructurado(
+                            index = index,
+                            totalCount = state.plantillasSeleccionadas.size,
+                            plantilla = plantilla,
+                            onMover = { direccion -> viewModel.moverPlantillaSeleccionada(index, direccion) },
+                            onEditarEjercicios = { indiceDiaEdicionNotas = index },
+                            onEliminar = { viewModel.removerPlantillaSeleccionada(index) }
+                        )
+                    }
+                }
+            }
 
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        IconButton(
-                                            onClick = {
-                                                focusManager.clearFocus()
-                                                viewModel.moverPlantillaSeleccionada(index, -1)
-                                            },
-                                            enabled = index > 0 && !state.isLoading
-                                        ) {
-                                            Icon(
-                                                Icons.Default.KeyboardArrowUp,
-                                                contentDescription = "Subir",
-                                                tint = if (index > 0 && !state.isLoading) Color.White else TextoSecundario.copy(alpha = 0.3f)
-                                            )
+            // 🟢 MODAL 1: CATÁLOGO DE PLANTILLAS DISPONIBLES
+            if (mostrarCatalogoSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = { mostrarCatalogoSheet = false },
+                    containerColor = FondoTarjeta
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                            .navigationBarsPadding()
+                    ) {
+                        Text(
+                            text = "Seleccionar Plantilla de la Biblioteca",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.heightIn(max = 400.dp)
+                        ) {
+                            items(state.plantillas, key = { it.id }) { plantilla ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            viewModel.agregarPlantilla(plantilla)
+                                            mostrarCatalogoSheet = false
+                                        },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = CardDefaults.cardColors(containerColor = FondoOscuro)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column {
+                                            Text(plantilla.nombre, fontWeight = FontWeight.Bold, color = Color.White)
+                                            Text("${plantilla.ejercicios.size} ejercicios prescritos", style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
                                         }
-                                        IconButton(
-                                            onClick = {
-                                                focusManager.clearFocus()
-                                                viewModel.moverPlantillaSeleccionada(index, 1)
-                                            },
-                                            enabled = index < state.plantillasSeleccionadas.size - 1 && !state.isLoading
-                                        ) {
-                                            Icon(
-                                                Icons.Default.KeyboardArrowDown,
-                                                contentDescription = "Bajar",
-                                                tint = if (index < state.plantillasSeleccionadas.size - 1 && !state.isLoading) Color.White else TextoSecundario.copy(alpha = 0.3f)
-                                            )
-                                        }
-                                        IconButton(
-                                            onClick = {
-                                                focusManager.clearFocus()
-                                                viewModel.removerPlantillaSeleccionada(index)
-                                            },
-                                            enabled = !state.isLoading
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Clear,
-                                                contentDescription = "Quitar",
-                                                tint = if (!state.isLoading) Color(0xFFE57373) else TextoSecundario.copy(alpha = 0.3f)
-                                            )
-                                        }
+                                        Icon(Icons.Default.AddCircle, contentDescription = "Anexar", tint = NaranjaAcento)
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
 
-                HorizontalDivider(color = FondoTarjeta, modifier = Modifier.padding(vertical = 12.dp))
-
-                // 5. Catálogo de Plantillas
-                Text(
-                    text = "Catálogo de Plantillas Disponibles:",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Black,
-                    color = Color.White
-                )
-
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp)
-                ) {
-                    items(state.plantillas, key = { it.id }) { plantilla ->
-                        Card(
+            // 🟢 MODAL 2: EDICIÓN RÁPIDA DE NOTAS TÉCNICAS POR EJERCICIO ANTES DE ASIGNAR
+            // 🟢 MODAL 2: EDICIÓN INTERACTIVA DE RECOMENDACIONES TÉCNICAS (VIÑETA POR VIÑETA)
+            // 🟢 MODAL 2: EDICIÓN DE RECOMENDACIONES TÉCNICAS CON CONTROL DE TECLADO
+            indiceDiaEdicionNotas?.let { index ->
+                val plantilla = state.plantillasSeleccionadas.getOrNull(index)
+                if (plantilla != null) {
+                    ModalBottomSheet(
+                        onDismissRequest = {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                            indiceDiaEdicionNotas = null
+                        },
+                        containerColor = FondoTarjeta
+                    ) {
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable(enabled = !state.isLoading) {
-                                    focusManager.clearFocus()
-                                    viewModel.agregarPlantilla(plantilla)
-                                },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = FondoTarjeta.copy(alpha = 0.5f)),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, FondoTarjeta)
+                                .padding(horizontal = 20.dp, vertical = 8.dp)
+                                .navigationBarsPadding()
+                                // 🟢 Oculta el teclado al tocar espacios vacíos del modal sin cerrarlo
+                                .pointerInput(Unit) {
+                                    detectTapGestures(onTap = {
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                    })
+                                }
                         ) {
                             Row(
-                                modifier = Modifier.padding(16.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
-                                    Text(
-                                        text = plantilla.nombre,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                    Text(
-                                        text = "+ Tocar para anexar como nuevo día",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (!state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f),
-                                        fontWeight = FontWeight.Medium
+                                Text(
+                                    text = "Recomendaciones - Día ${index + 1}: ${plantilla.nombre}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = NaranjaAcento,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                // 🟢 Botón explícito para bajar el teclado
+                                IconButton(
+                                    onClick = {
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Ocultar teclado",
+                                        tint = TextoSecundario
                                     )
                                 }
                             }
+
+                            Spacer(Modifier.height(12.dp))
+
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.weight(1f, fill = false)
+                            ) {
+                                itemsIndexed(plantilla.ejercicios) { ejIndex, ejPrescrito ->
+                                    EditorNotasLista(
+                                        titulo = ejPrescrito.nombreEjercicio,
+                                        placeholder = "Ej: Tempo 3-0-1-0",
+                                        notasTexto = ejPrescrito.notas,
+                                        onNotasChanged = { nuevasNotas ->
+                                            viewModel.actualizarNotaEspecificaEjercicio(index, ejIndex, nuevasNotas)
+                                        }
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(16.dp))
+                            Button(
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    keyboardController?.hide()
+                                    indiceDiaEdicionNotas = null
+                                },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("Guardar Cambios del Día", fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TarjetaDiaEstructurado(
+    index: Int,
+    totalCount: Int,
+    plantilla: PlantillaRutina,
+    onMover: (Int) -> Unit,
+    onEditarEjercicios: () -> Unit,
+    onEliminar: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = FondoTarjeta)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Día ${index + 1}: ${plantilla.nombre}",
+                    fontWeight = FontWeight.Bold,
+                    color = NaranjaAcento
+                )
+                Text(
+                    text = "${plantilla.ejercicios.size} movimientos configurados",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextoSecundario
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onEditarEjercicios) {
+                    Icon(
+                        imageVector = Icons.Default.EditNote,
+                        contentDescription = "Notas por ejercicio",
+                        tint = NaranjaAcento
+                    )
+                }
+
+                IconButton(
+                    onClick = { onMover(-1) },
+                    enabled = index > 0
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowUp,
+                        contentDescription = "Subir",
+                        tint = if (index > 0) Color.White else TextoSecundario.copy(alpha = 0.3f)
+                    )
+                }
+
+                IconButton(
+                    onClick = { onMover(1) },
+                    enabled = index < totalCount - 1
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Bajar",
+                        tint = if (index < totalCount - 1) Color.White else TextoSecundario.copy(alpha = 0.3f)
+                    )
+                }
+
+                IconButton(onClick = onEliminar) {
+                    Icon(Icons.Default.Clear, contentDescription = "Quitar", tint = Color(0xFFE57373))
                 }
             }
         }

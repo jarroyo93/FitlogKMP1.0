@@ -31,6 +31,7 @@ import dev.josearroyo.fitlog.repository.AtletaProgresoRepository
 import dev.josearroyo.fitlog.viewmodel.atleta.EntrenarViewModel
 import dev.josearroyo.fitlog.formatearFechaCorto
 import dev.josearroyo.fitlog.ui.components.EjercicioImageThumbnail
+import dev.josearroyo.fitlog.ui.dashboard.obtenerTituloBloque
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -340,28 +341,75 @@ fun EntrenarScreen(
                             }
                         }
 
-                        itemsIndexed(ejerciciosOrdenados, key = { index, ej -> "${ej.ordenSecuencia}_$index" }) { _, asignado ->
-                            val realIndex = remember(diaActual.ejercicios, asignado) {
-                                diaActual.ejercicios.indexOf(asignado)
-                            }
+                        // Reemplazar la sección itemsIndexed en EntrenarScreen por:
+                        val gruposBloque = ejerciciosOrdenados.groupBy { it.bloqueId }
 
-                            val realizado = sesion.ejerciciosRealizados.getOrNull(realIndex)
-                            if (realizado != null) {
-                                val registroPrevioObj = state.historialPrevioEjercicios[asignado.ejercicioGlobalId]
-                                    ?: state.historialPrevioEjercicios[asignado.nombre]
+                        gruposBloque.forEach { (bloqueId, ejerciciosDelGrupo) ->
+                            if (bloqueId != null && ejerciciosDelGrupo.size >= 2) {
+                                item(key = bloqueId) {
+                                    val letra = ejerciciosDelGrupo.first().bloqueNombre?.take(1) ?: "A"
+                                    val tituloGrupo = obtenerTituloBloque(letra, ejerciciosDelGrupo.size)
 
-                                EjercicioInteractivoCard(
-                                    ejercicioAsignado = asignado,
-                                    ejercicioRealizado = realizado,
-                                    registroPrevioObj = registroPrevioObj,
-                                    onActualizarSerie = { serieIndex, peso, reps ->
-                                        viewModel.actualizarSerie(realIndex, serieIndex, peso, reps)
-                                    },
-                                    onActualizarRpe = { serieIndex, rpe -> viewModel.actualizarRpe(realIndex, serieIndex, rpe) },
-                                    onActualizarNota = { nota -> viewModel.actualizarNotaAtleta(realIndex, nota) },
-                                    onToggleSaltar = { fue, just -> viewModel.toggleSaltarEjercicio(realIndex, fue, just) },
-                                    onIniciarDescanso = { segundos -> viewModel.iniciarCronometro(segundos) }
-                                )
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                        colors = CardDefaults.cardColors(containerColor = FondoTarjeta),
+                                        shape = RoundedCornerShape(16.dp),
+                                        border = androidx.compose.foundation.BorderStroke(2.dp, NaranjaAcento)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(tituloGrupo, fontWeight = FontWeight.Black, color = NaranjaAcento, fontSize = 16.sp)
+                                                Text("Descanso solo al terminar la ronda", style = MaterialTheme.typography.labelSmall, color = TextoSecundario)
+                                            }
+
+                                            ejerciciosDelGrupo.forEach { asignado ->
+                                                val realIndex = diaActual.ejercicios.indexOf(asignado)
+                                                val realizado = sesion.ejerciciosRealizados.getOrNull(realIndex)
+                                                if (realizado != null) {
+                                                    val registroPrevioObj = state.historialPrevioEjercicios[asignado.ejercicioGlobalId] ?: state.historialPrevioEjercicios[asignado.nombre]
+                                                    EjercicioInteractivoCard(
+                                                        ejercicioAsignado = asignado,
+                                                        ejercicioRealizado = realizado,
+                                                        registroPrevioObj = registroPrevioObj,
+                                                        onActualizarSerie = { sIndex, peso, reps ->
+                                                            viewModel.completarSerieYEvaluarDescanso(realIndex, sIndex, peso, reps, asignado.descansoSegundos)
+                                                        },
+                                                        onActualizarRpe = { sIndex, rpe -> viewModel.actualizarRpe(realIndex, sIndex, rpe) },
+                                                        onActualizarNota = { nota -> viewModel.actualizarNotaAtleta(realIndex, nota) },
+                                                        onToggleSaltar = { fue, just -> viewModel.toggleSaltarEjercicio(realIndex, fue, just) },
+                                                        onIniciarDescanso = { segs -> viewModel.iniciarCronometro(segs) }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                ejerciciosDelGrupo.forEach { asignado ->
+                                    item(key = asignado.idInterno.ifBlank { asignado.nombre }) {
+                                        val realIndex = diaActual.ejercicios.indexOf(asignado)
+                                        val realizado = sesion.ejerciciosRealizados.getOrNull(realIndex)
+                                        if (realizado != null) {
+                                            val registroPrevioObj = state.historialPrevioEjercicios[asignado.ejercicioGlobalId] ?: state.historialPrevioEjercicios[asignado.nombre]
+                                            EjercicioInteractivoCard(
+                                                ejercicioAsignado = asignado,
+                                                ejercicioRealizado = realizado,
+                                                registroPrevioObj = registroPrevioObj,
+                                                onActualizarSerie = { sIndex, peso, reps ->
+                                                    viewModel.completarSerieYEvaluarDescanso(realIndex, sIndex, peso, reps, asignado.descansoSegundos)
+                                                },
+                                                onActualizarRpe = { sIndex, rpe -> viewModel.actualizarRpe(realIndex, sIndex, rpe) },
+                                                onActualizarNota = { nota -> viewModel.actualizarNotaAtleta(realIndex, nota) },
+                                                onToggleSaltar = { fue, just -> viewModel.toggleSaltarEjercicio(realIndex, fue, just) },
+                                                onIniciarDescanso = { segs -> viewModel.iniciarCronometro(segs) }
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -413,13 +461,30 @@ fun EjercicioInteractivoCard(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                Text(
-                    ejercicioAsignado.nombre,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = NaranjaAcento,
-                    modifier = Modifier.weight(1f)
-                )
+                // 🟢 TÍTULO CON BADGE DE BLOQUE (A1, A2, B1...)
+                Column(modifier = Modifier.weight(1f)) {
+                    ejercicioAsignado.bloqueNombre?.let { badge ->
+                        Surface(
+                            color = NaranjaAcento,
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        ) {
+                            Text(
+                                text = badge,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black,
+                                color = FondoOscuro
+                            )
+                        }
+                    }
+                    Text(
+                        text = ejercicioAsignado.nombre,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = NaranjaAcento
+                    )
+                }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (ejercicioAsignado.notasEspecificas.isNotBlank()) {

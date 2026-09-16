@@ -38,7 +38,9 @@ data class EjercicioRealizado(
     val seriesRealizadas: List<SerieRealizada> = listOf(),
     val notasAtleta: String = "",
     val fueSaltado: Boolean = false,
-    val justificacionSalto: String = ""
+    val justificacionSalto: String = "",
+    val bloqueId: String? = null,
+    val bloqueNombre: String? = null
 )
 
 @Serializable

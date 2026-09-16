@@ -27,13 +27,12 @@ class EntrenadorDashboardViewModel(
     val uiState: StateFlow<SemaforoDashboardUiState> = _uiState.asStateFlow()
 
     fun cargarDashboard(entrenadorId: String, forzarRecarga: Boolean = false) {
-        // ⚡ CACHÉ EN MEMORIA: Evita re-consultar a la red si la lista ya existe y no se forzó recarga
-        if (!forzarRecarga && _uiState.value.atletasTotales.isNotEmpty()) {
-            return
-        }
-
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            val esPrimeraCarga = _uiState.value.atletasTotales.isEmpty()
+            if (esPrimeraCarga || forzarRecarga) {
+                _uiState.update { it.copy(isLoading = esPrimeraCarga, error = null) }
+            }
+
             try {
                 val atletas = semaforoRepository.obtenerEvaluacionAtletas(entrenadorId)
                 val resumen = semaforoRepository.calcularResumenGerencial(atletas)

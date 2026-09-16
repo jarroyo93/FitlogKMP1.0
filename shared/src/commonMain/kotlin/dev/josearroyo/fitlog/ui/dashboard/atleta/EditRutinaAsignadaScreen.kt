@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -45,6 +46,14 @@ private val NaranjaAcento = Color(0xFFFF9F6D)
 private val FondoTarjeta = Color(0xFF2F254E)
 private val TextoSecundario = Color(0xFFB3AEC6)
 
+
+fun obtenerTituloBloque(letraBloque: String, cantidadEjercicios: Int): String {
+    return when (cantidadEjercicios) {
+        2 -> "BISERIE $letraBloque"
+        3 -> "TRISERIE $letraBloque"
+        else -> "SERIE GIGANTE $letraBloque"
+    }
+}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditRutinaAsignadaScreen(
@@ -68,38 +77,6 @@ fun EditRutinaAsignadaScreen(
 
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
-
-    // Configuraciones reutilizables de color para campos de texto con soporte a estado deshabilitado
-    val coloresCampoTarjeta = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        disabledTextColor = Color.White.copy(alpha = 0.6f),
-        focusedBorderColor = NaranjaAcento,
-        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
-        focusedContainerColor = FondoTarjeta,
-        unfocusedContainerColor = FondoTarjeta,
-        disabledContainerColor = FondoTarjeta, // 🟢 Mantiene el fondo oscuro de la tarjeta
-        focusedLabelColor = NaranjaAcento,
-        unfocusedLabelColor = TextoSecundario,
-        disabledLabelColor = TextoSecundario.copy(alpha = 0.6f)
-    )
-
-    val coloresCampoOscuro = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        disabledTextColor = Color.White.copy(alpha = 0.6f),
-        focusedBorderColor = NaranjaAcento,
-        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
-        focusedContainerColor = FondoOscuro,
-        unfocusedContainerColor = FondoOscuro,
-        disabledContainerColor = FondoOscuro, // 🟢 Mantiene el fondo oscuro principal
-        focusedLabelColor = NaranjaAcento,
-        unfocusedLabelColor = TextoSecundario,
-        disabledLabelColor = TextoSecundario.copy(alpha = 0.6f),
-        disabledLeadingIconColor = NaranjaAcento.copy(alpha = 0.4f)
-    )
 
     val rutina = state.rutina
     val esProgramaValido = remember(rutina, state.duracionTexto) {
@@ -149,34 +126,17 @@ fun EditRutinaAsignadaScreen(
     if (showDialogBorrar) {
         AlertDialog(
             containerColor = FondoTarjeta,
-            onDismissRequest = { if (!state.isLoading) showDialogBorrar = false },
+            onDismissRequest = { showDialogBorrar = false },
             title = { Text("Eliminar Programa", color = Color.White, fontWeight = FontWeight.Bold) },
             text = { Text("¿Seguro de eliminar este programa completamente?", color = TextoSecundario) },
             confirmButton = {
                 Button(
-                    enabled = !state.isLoading,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFE57373),
-                        contentColor = FondoOscuro,
-                        disabledContainerColor = Color(0xFFE57373).copy(alpha = 0.4f)
-                    ),
-                    onClick = {
-                        showDialogBorrar = false
-                        viewModel.eliminarRutinaCompleta(atletaId)
-                    }
-                ) {
-                    if (state.isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), color = FondoOscuro, strokeWidth = 2.dp)
-                    } else {
-                        Text("Eliminar", fontWeight = FontWeight.Bold)
-                    }
-                }
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE57373), contentColor = FondoOscuro),
+                    onClick = { showDialogBorrar = false; viewModel.eliminarRutinaCompleta(atletaId) }
+                ) { Text("Eliminar", fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(
-                    enabled = !state.isLoading,
-                    onClick = { showDialogBorrar = false }
-                ) { Text("Cancelar", color = NaranjaAcento) }
+                TextButton(onClick = { showDialogBorrar = false }) { Text("Cancelar", color = NaranjaAcento) }
             }
         )
     }
@@ -202,13 +162,20 @@ fun EditRutinaAsignadaScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = { Text("Buscar ejercicio...") },
+                    label = { Text("Buscar ejercicio...", color = TextoSecundario) },
                     leadingIcon = { Icon(Icons.Default.Search, null, tint = NaranjaAcento) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    colors = coloresCampoOscuro
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = NaranjaAcento,
+                        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+                        focusedContainerColor = FondoOscuro,
+                        unfocusedContainerColor = FondoOscuro
+                    )
                 )
                 Spacer(Modifier.height(16.dp))
 
@@ -259,31 +226,20 @@ fun EditRutinaAsignadaScreen(
         }
     }
 
+    var diaConSeleccion by remember { mutableStateOf(-1) }
+    var indicesSeleccionados by remember { mutableStateOf(setOf<Int>()) }
+
     Scaffold(
         containerColor = FondoOscuro,
         topBar = {
             TopAppBar(
                 title = { Text("Editar Programa", color = Color.White, fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FondoOscuro),
-                navigationIcon = {
-                    IconButton(
-                        onClick = onBack,
-                        enabled = !state.isLoading
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Volver",
-                            tint = if (!state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.3f)
-                        )
-                    }
-                },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Volver", tint = NaranjaAcento) } },
                 actions = {
                     if (rutina != null) {
                         IconButton(
-                            onClick = {
-                                focusManager.clearFocus()
-                                viewModel.guardarCambios(atletaId)
-                            },
+                            onClick = { viewModel.guardarCambios(atletaId) },
                             enabled = esProgramaValido && !state.isLoading
                         ) {
                             Icon(
@@ -293,19 +249,71 @@ fun EditRutinaAsignadaScreen(
                             )
                         }
 
-                        IconButton(
-                            onClick = { showDialogBorrar = true },
-                            enabled = !state.isLoading
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Borrar",
-                                tint = if (!state.isLoading) Color(0xFFE57373) else TextoSecundario.copy(alpha = 0.3f)
-                            )
-                        }
+                        IconButton(onClick = { showDialogBorrar = true }) { Icon(Icons.Default.Delete, "Borrar", tint = Color(0xFFE57373)) }
                     }
                 }
             )
+        },
+        // 🟢 BARRA FLOTANTE INFERIOR PARA ACCIONES DE AGRUPACIÓN (BISERIE / TRISERIE / DESAGRUPAR)
+        bottomBar = {
+            if (diaConSeleccion != -1 && indicesSeleccionados.size >= 2) {
+                Surface(
+                    shadowElevation = 8.dp,
+                    color = FondoTarjeta,
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${indicesSeleccionados.size} seleccionados",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val diaObj = rutina?.diasEntrenamiento?.getOrNull(diaConSeleccion)
+                            val ejs = diaObj?.ejercicios?.sortedBy { it.ordenSecuencia } ?: emptyList()
+                            val bloquesSelec = indicesSeleccionados.mapNotNull { ejs.getOrNull(it)?.bloqueId }.distinct()
+
+                            val esMismoBloqueCompleto = bloquesSelec.size == 1 &&
+                                    indicesSeleccionados.size == ejs.count { it.bloqueId == bloquesSelec.first() }
+
+                            if (esMismoBloqueCompleto) {
+                                Button(
+                                    onClick = {
+                                        viewModel.desagruparBloque(diaConSeleccion, bloquesSelec.first())
+                                        indicesSeleccionados = emptySet()
+                                        diaConSeleccion = -1
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE57373), contentColor = FondoOscuro)
+                                ) {
+                                    Text("Desagrupar", fontWeight = FontWeight.Bold)
+                                }
+                            } else {
+                                Button(
+                                    onClick = {
+                                        viewModel.agruparEjercicios(diaConSeleccion, indicesSeleccionados.toList())
+                                        indicesSeleccionados = emptySet()
+                                        diaConSeleccion = -1
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro)
+                                ) {
+                                    val titulo = when (indicesSeleccionados.size) {
+                                        2 -> "Agrupar Biserie"
+                                        3 -> "Agrupar Triserie"
+                                        else -> "Agrupar Serie Gigante"
+                                    }
+                                    Text(titulo, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         },
         floatingActionButton = {
             if (rutina != null) {
@@ -328,11 +336,8 @@ fun EditRutinaAsignadaScreen(
             }
         }
     ) { padding ->
-        // Smart-Cast garantizado de 'rutina' a no nulo dentro del 'else'
-        if (rutina == null || (state.isLoading && rutina.diasEntrenamiento.isEmpty())) {
-            Box(Modifier.fillMaxSize().background(FondoOscuro), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = NaranjaAcento)
-            }
+        if (state.isLoading || rutina == null) {
+            Box(Modifier.fillMaxSize().background(FondoOscuro), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = NaranjaAcento) }
         } else {
             Column(
                 modifier = Modifier
@@ -349,11 +354,17 @@ fun EditRutinaAsignadaScreen(
                 OutlinedTextField(
                     value = rutina.nombreRutina,
                     onValueChange = { viewModel.actualizarNombreONotas(it, rutina.notasEntrenador) },
-                    label = { Text("Nombre del Programa") },
+                    label = { Text("Nombre del Programa", color = TextoSecundario) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !state.isLoading,
-                    colors = coloresCampoTarjeta
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = NaranjaAcento,
+                        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
+                        focusedContainerColor = FondoTarjeta,
+                        unfocusedContainerColor = FondoTarjeta
+                    )
                 )
 
                 EditorNotasLista(
@@ -386,89 +397,171 @@ fun EditRutinaAsignadaScreen(
 
                                     IconButton(
                                         onClick = { viewModel.moverDia(visualDiaIndex, -1) },
-                                        enabled = visualDiaIndex > 0 && !state.isLoading
+                                        enabled = visualDiaIndex > 0
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.ArrowUpward,
                                             contentDescription = "Subir Día",
-                                            tint = if (visualDiaIndex > 0 && !state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.2f)
+                                            tint = if (visualDiaIndex > 0) NaranjaAcento else TextoSecundario.copy(alpha = 0.2f)
                                         )
                                     }
 
                                     IconButton(
                                         onClick = { viewModel.moverDia(visualDiaIndex, 1) },
-                                        enabled = visualDiaIndex < diasOrdenados.size - 1 && !state.isLoading
+                                        enabled = visualDiaIndex < diasOrdenados.size - 1
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.ArrowDownward,
                                             contentDescription = "Bajar Día",
-                                            tint = if (visualDiaIndex < diasOrdenados.size - 1 && !state.isLoading) NaranjaAcento else TextoSecundario.copy(alpha = 0.2f)
+                                            tint = if (visualDiaIndex < diasOrdenados.size - 1) NaranjaAcento else TextoSecundario.copy(alpha = 0.2f)
                                         )
                                     }
 
-                                    IconButton(
-                                        onClick = { viewModel.eliminarDia(visualDiaIndex) },
-                                        enabled = !state.isLoading
-                                    ) { Icon(Icons.Default.Delete, null, tint = if (!state.isLoading) Color(0xFFE57373) else TextoSecundario.copy(alpha = 0.2f)) }
+                                    IconButton(onClick = { viewModel.eliminarDia(visualDiaIndex) }) { Icon(Icons.Default.Delete, null, tint = Color(0xFFE57373)) }
                                 }
 
                                 val ejerciciosOrdenados = dia.ejercicios.sortedBy { it.ordenSecuencia }
 
                                 ejerciciosOrdenados.forEachIndexed { visualEjIndex, ejercicio ->
+                                    val estaSeleccionado = (diaConSeleccion == visualDiaIndex) && indicesSeleccionados.contains(visualEjIndex)
+                                    val estaEnBloque = ejercicio.bloqueId != null
+
                                     key(ejercicio.ordenSecuencia) {
-                                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = FondoOscuro), shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, FondoTarjeta)) {
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = FondoOscuro),
+                                            shape = RoundedCornerShape(12.dp),
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                width = if (estaSeleccionado || estaEnBloque) 1.5.dp else 1.dp,
+                                                color = when {
+                                                    estaSeleccionado -> NaranjaAcento
+                                                    estaEnBloque -> NaranjaAcento.copy(alpha = 0.6f)
+                                                    else -> FondoTarjeta
+                                                }
+                                            )
+                                        ) {
                                             Column(modifier = Modifier.padding(12.dp)) {
 
-                                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(vertical = 4.dp)
+                                                ) {
+                                                    // 1. Checkbox compacto
+                                                    Checkbox(
+                                                        checked = estaSeleccionado,
+                                                        onCheckedChange = { checked ->
+                                                            if (diaConSeleccion != visualDiaIndex) {
+                                                                diaConSeleccion = visualDiaIndex
+                                                                indicesSeleccionados = setOf(visualEjIndex)
+                                                            } else {
+                                                                indicesSeleccionados = if (checked) {
+                                                                    indicesSeleccionados + visualEjIndex
+                                                                } else {
+                                                                    indicesSeleccionados - visualEjIndex
+                                                                }
+                                                                if (indicesSeleccionados.isEmpty()) {
+                                                                    diaConSeleccion = -1
+                                                                }
+                                                            }
+                                                        },
+                                                        colors = CheckboxDefaults.colors(
+                                                            checkedColor = NaranjaAcento,
+                                                            uncheckedColor = TextoSecundario
+                                                        ),
+                                                        modifier = Modifier.size(28.dp) // Reducido para no acaparar 48dp
+                                                    )
+
+                                                    Spacer(modifier = Modifier.width(6.dp))
+
+                                                    // 2. Badge visual de Bloque (A1, A2...)
+                                                    ejercicio.bloqueNombre?.let { badge ->
+                                                        Surface(
+                                                            color = NaranjaAcento,
+                                                            shape = RoundedCornerShape(4.dp),
+                                                            modifier = Modifier.padding(end = 6.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = badge,
+                                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                                                fontSize = 10.sp,
+                                                                fontWeight = FontWeight.Black,
+                                                                color = FondoOscuro
+                                                            )
+                                                        }
+                                                    }
+
+                                                    // 3. Miniatura
                                                     EjercicioImageThumbnail(
                                                         nombreEjercicio = ejercicio.nombre,
-                                                        tamano = 38.dp
+                                                        tamano = 34.dp
                                                     )
 
-                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Spacer(modifier = Modifier.width(8.dp))
 
+                                                    // 4. Nombre del Ejercicio (Espacio flexible con límite de 2 líneas)
                                                     Text(
-                                                        "${ejercicio.ordenSecuencia}. ${ejercicio.nombre}",
+                                                        text = "${ejercicio.ordenSecuencia}. ${ejercicio.nombre}",
                                                         fontWeight = FontWeight.Bold,
                                                         color = Color.White,
-                                                        modifier = Modifier.weight(1f)
+                                                        fontSize = 13.sp,
+                                                        maxLines = 2, // Evita colapso vertical
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        modifier = Modifier.weight(1f) // Absorbe todo el espacio central
                                                     )
 
-                                                    IconButton(
-                                                        onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, -1) },
-                                                        enabled = visualEjIndex > 0 && !state.isLoading
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.ArrowUpward,
-                                                            contentDescription = "Subir Ejercicio",
-                                                            tint = if (visualEjIndex > 0 && !state.isLoading) TextoSecundario else TextoSecundario.copy(alpha = 0.2f),
-                                                            modifier = Modifier.size(18.dp)
-                                                        )
-                                                    }
+                                                    Spacer(modifier = Modifier.width(4.dp))
 
-                                                    IconButton(
-                                                        onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, 1) },
-                                                        enabled = visualEjIndex < ejerciciosOrdenados.size - 1 && !state.isLoading
+                                                    // 5. Botonera de control compacta (Derecha)
+                                                    Row(
+                                                        horizontalArrangement = Arrangement.spacedBy(0.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.ArrowDownward,
-                                                            contentDescription = "Bajar Ejercicio",
-                                                            tint = if (visualEjIndex < ejerciciosOrdenados.size - 1 && !state.isLoading) TextoSecundario else TextoSecundario.copy(alpha = 0.2f),
-                                                            modifier = Modifier.size(18.dp)
-                                                        )
-                                                    }
+                                                        IconButton(
+                                                            onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, -1) },
+                                                            enabled = visualEjIndex > 0,
+                                                            modifier = Modifier.size(28.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.ArrowUpward,
+                                                                contentDescription = "Subir Ejercicio",
+                                                                tint = if (visualEjIndex > 0) TextoSecundario else TextoSecundario.copy(alpha = 0.2f),
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
 
-                                                    IconButton(
-                                                        onClick = { viewModel.eliminarEjercicio(visualDiaIndex, visualEjIndex) },
-                                                        enabled = !state.isLoading
-                                                    ) { Icon(Icons.Default.Clear, null, tint = if (!state.isLoading) TextoSecundario else TextoSecundario.copy(alpha = 0.2f)) }
+                                                        IconButton(
+                                                            onClick = { viewModel.moverEjercicio(visualDiaIndex, visualEjIndex, 1) },
+                                                            enabled = visualEjIndex < ejerciciosOrdenados.size - 1,
+                                                            modifier = Modifier.size(28.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.ArrowDownward,
+                                                                contentDescription = "Bajar Ejercicio",
+                                                                tint = if (visualEjIndex < ejerciciosOrdenados.size - 1) TextoSecundario else TextoSecundario.copy(alpha = 0.2f),
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
+
+                                                        IconButton(
+                                                            onClick = { viewModel.eliminarEjercicio(visualDiaIndex, visualEjIndex) },
+                                                            modifier = Modifier.size(28.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Clear,
+                                                                contentDescription = "Eliminar Ejercicio",
+                                                                tint = TextoSecundario,
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
+                                                    }
                                                 }
 
                                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = FondoTarjeta)
 
                                                 EditorSeriesPrescritas(
                                                     seriesPrescritas = ejercicio.seriesPrescritas,
-                                                    enabled = !state.isLoading,
                                                     onSeriesUpdate = { nuevaLista ->
                                                         viewModel.actualizarEjercicio(visualDiaIndex, visualEjIndex, ejercicio.copy(seriesPrescritas = nuevaLista))
                                                     }
@@ -493,15 +586,14 @@ fun EditRutinaAsignadaScreen(
                                                 OutlinedTextField(
                                                     value = if (ejercicio.descansoSegundos == 0) "" else ejercicio.descansoSegundos.toString(),
                                                     onValueChange = { nv -> if (nv.all { it.isDigit() }) viewModel.actualizarEjercicio(visualDiaIndex, visualEjIndex, ejercicio.copy(descansoSegundos = nv.toIntOrNull() ?: 0)) },
-                                                    label = { Text("Descanso sugerido (segundos)") },
+                                                    label = { Text("Descanso sugerido (segundos)", color = TextoSecundario) },
                                                     keyboardOptions = KeyboardOptions(
                                                         keyboardType = KeyboardType.Number,
                                                         imeAction = ImeAction.Done
                                                     ),
                                                     keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                                                     modifier = Modifier.fillMaxWidth(), singleLine = true,
-                                                    enabled = !state.isLoading,
-                                                    colors = coloresCampoTarjeta
+                                                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta)
                                                 )
                                             }
                                         }
@@ -510,7 +602,6 @@ fun EditRutinaAsignadaScreen(
 
                                 OutlinedButton(
                                     onClick = { diaSeleccionadoParaEjercicio = visualDiaIndex; showBottomSheetEjercicios = true },
-                                    enabled = !state.isLoading,
                                     modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = NaranjaAcento),
                                     border = androidx.compose.foundation.BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.5f)), shape = RoundedCornerShape(10.dp)
                                 ) {
@@ -525,7 +616,6 @@ fun EditRutinaAsignadaScreen(
 
                 OutlinedButton(
                     onClick = { showBottomSheetPlantillas = true },
-                    enabled = !state.isLoading,
                     modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
                     border = androidx.compose.foundation.BorderStroke(1.dp, TextoSecundario.copy(alpha = 0.4f)), shape = RoundedCornerShape(12.dp)
                 ) {
@@ -541,23 +631,9 @@ fun EditRutinaAsignadaScreen(
 @Composable
 fun EditorSeriesPrescritas(
     seriesPrescritas: List<PrescripcionSerie>,
-    enabled: Boolean = true,
     onSeriesUpdate: (List<PrescripcionSerie>) -> Unit
 ) {
     val focusManager = LocalFocusManager.current
-
-    val coloresCampoSerie = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = Color.White,
-        unfocusedTextColor = Color.White,
-        disabledTextColor = Color.White.copy(alpha = 0.6f),
-        focusedBorderColor = NaranjaAcento,
-        unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f),
-        disabledBorderColor = TextoSecundario.copy(alpha = 0.2f),
-        focusedContainerColor = FondoTarjeta,
-        unfocusedContainerColor = FondoTarjeta,
-        disabledContainerColor = FondoTarjeta
-    )
-
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier
@@ -610,21 +686,18 @@ fun EditorSeriesPrescritas(
                     Box(modifier = Modifier.weight(1.2f).padding(horizontal = 2.dp)) {
                         Surface(
                             onClick = {
-                                if (enabled) {
-                                    val todosLosEnums = TipoSerie.entries
-                                    val siguienteOrdinal = (serie.tipo.ordinal + 1) % todosLosEnums.size
-                                    val nuevoTipoEnum = todosLosEnums[siguienteOrdinal]
-                                    val nuevaLista = seriesPrescritas.toMutableList()
-                                    nuevaLista[index] = serie.copy(tipo = nuevoTipoEnum)
-                                    onSeriesUpdate(nuevaLista)
-                                }
+                                val todosLosEnums = TipoSerie.entries
+                                val siguienteOrdinal = (serie.tipo.ordinal + 1) % todosLosEnums.size
+                                val nuevoTipoEnum = todosLosEnums[siguienteOrdinal]
+                                val nuevaLista = seriesPrescritas.toMutableList()
+                                nuevaLista[index] = serie.copy(tipo = nuevoTipoEnum)
+                                onSeriesUpdate(nuevaLista)
                             },
-                            enabled = enabled,
                             shape = RoundedCornerShape(8.dp),
-                            color = colorClave.copy(alpha = if (enabled) 0.15f else 0.08f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, if (enabled) colorClave else colorClave.copy(alpha = 0.3f))
+                            color = colorClave.copy(alpha = 0.15f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, colorClave)
                         ) {
-                            Text(text = etiquetaUi, color = if (enabled) colorClave else colorClave.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp), textAlign = TextAlign.Center)
+                            Text(text = etiquetaUi, color = colorClave, fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp), textAlign = TextAlign.Center)
                         }
                     }
 
@@ -643,11 +716,10 @@ fun EditorSeriesPrescritas(
                                 )
                                 onSeriesUpdate(nuevaLista)
                             },
-                            enabled = enabled,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
                             singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 12.sp),
-                            colors = coloresCampoSerie,
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta),
                             modifier = Modifier.fillMaxWidth().height(46.dp)
                         )
                     }
@@ -667,32 +739,18 @@ fun EditorSeriesPrescritas(
                                 )
                                 onSeriesUpdate(nuevaLista)
                             },
-                            enabled = enabled,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                             singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, fontSize = 12.sp),
-                            colors = coloresCampoSerie,
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = NaranjaAcento, unfocusedBorderColor = TextoSecundario.copy(alpha = 0.4f), focusedContainerColor = FondoTarjeta, unfocusedContainerColor = FondoTarjeta),
                             modifier = Modifier.fillMaxWidth().height(46.dp)
                         )
                     }
 
                     Box(modifier = Modifier.weight(0.4f), contentAlignment = Alignment.Center) {
-                        IconButton(
-                            onClick = {
-                                val nuevaLista = seriesPrescritas.toMutableList()
-                                nuevaLista.removeAt(index)
-                                onSeriesUpdate(nuevaLista)
-                            },
-                            enabled = enabled,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Eliminar Serie",
-                                tint = if (enabled) Color(0xFFE57373).copy(alpha = 0.8f) else TextoSecundario.copy(alpha = 0.2f),
-                                modifier = Modifier.size(18.dp)
-                            )
+                        IconButton(onClick = { val nuevaLista = seriesPrescritas.toMutableList(); nuevaLista.removeAt(index); onSeriesUpdate(nuevaLista) }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Delete, null, tint = Color(0xFFE57373).copy(alpha = 0.8f), modifier = Modifier.size(18.dp))
                         }
                     }
                 }
@@ -704,10 +762,9 @@ fun EditorSeriesPrescritas(
                 val nuevaSerie = PrescripcionSerie(numeroSerie = seriesPrescritas.size + 1, repsMin = 8, repsMax = 12, repeticiones = 0, tipo = TipoSerie.EFECTIVA)
                 onSeriesUpdate(seriesPrescritas + nuevaSerie)
             },
-            enabled = enabled,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = NaranjaAcento),
-            border = androidx.compose.foundation.BorderStroke(1.dp, if (enabled) NaranjaAcento.copy(alpha = 0.6f) else TextoSecundario.copy(alpha = 0.2f)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.6f)),
             shape = RoundedCornerShape(10.dp)
         ) {
             Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))

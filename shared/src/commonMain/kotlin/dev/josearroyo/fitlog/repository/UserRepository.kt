@@ -7,6 +7,9 @@ import dev.gitlive.firebase.firestore.where
 import dev.josearroyo.fitlog.data.model.*
 import dev.josearroyo.fitlog.esMismoDia
 import dev.josearroyo.fitlog.getCurrentTimeMillis
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlin.uuid.Uuid
 
 class UserRepository {
@@ -93,12 +96,43 @@ class UserRepository {
         }
     }
 
+    // 🟢 OPTIMIZADO: Lectura única a colección 'users' + reevaluación local en memoria
     suspend fun obtenerAtletasPorEntrenador(entrenadorId: String): List<Usuario> = try {
-        usersCollection
+        val snapshot = usersCollection
             .where("entrenadorId", equalTo = entrenadorId)
             .where("rol", equalTo = RolUsuario.ATLETA.name)
             .get()
-            .documents.map { doc -> doc.data<Usuario>().copy(id = doc.id) }
+
+        val ahora = getCurrentTimeMillis()
+        val atletasRaw = snapshot.documents.map { doc -> doc.data<Usuario>().copy(id = doc.id) }
+
+        atletasRaw.map { atleta ->
+            val tienePlanExpiradoLocal = atleta.estadoSuscripcion == EstadoSuscripcion.ACTIVO &&
+                    atleta.vencimientoSuscripcion != null &&
+                    atleta.vencimientoSuscripcion > 0L &&
+                    atleta.vencimientoSuscripcion < ahora
+
+            val tieneDiferidoListoLocal = atleta.estadoSuscripcion == EstadoSuscripcion.DIFERIDO &&
+                    atleta.fechaInicioSuscripcion != null &&
+                    atleta.fechaInicioSuscripcion <= ahora
+
+            if (tienePlanExpiradoLocal || tieneDiferidoListoLocal) {
+                val estadoTemporal = if (tienePlanExpiradoLocal) EstadoSuscripcion.VENCIDO else EstadoSuscripcion.ACTIVO
+                val atletaActualizadoMemoria = atleta.copy(
+                    estadoSuscripcion = estadoTemporal,
+                    planActivo = if (tienePlanExpiradoLocal) "Ninguno" else atleta.planActivo
+                )
+
+                // Sincronización a Firestore solo para el atleta en cuestión en segundo plano
+                CoroutineScope(Dispatchers.Default).launch {
+                    evaluarYActualizarEstadoSuscripcion(atleta)
+                }
+
+                atletaActualizadoMemoria
+            } else {
+                atleta
+            }
+        }
     } catch (e: Exception) {
         println("🔥 [UserRepository] Error en obtenerAtletasPorEntrenador ($entrenadorId): ${e.message}")
         e.printStackTrace()
