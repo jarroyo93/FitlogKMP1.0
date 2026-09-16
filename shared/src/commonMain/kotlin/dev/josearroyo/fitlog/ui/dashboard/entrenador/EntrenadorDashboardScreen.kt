@@ -42,7 +42,7 @@ fun EntrenadorDashboardScreen(
     onAtletaClick: (String) -> Unit,
     onSemaforoClick: (String) -> Unit,
     onAddAtletaClick: () -> Unit,
-    navController: NavController? = null // 🟢 AGREGADO: Para escuchar retornos con cambios
+    navController: NavController? = null
 ) {
     val dashboardViewModel: EntrenadorViewModel = viewModel { EntrenadorViewModel() }
     val semaforoViewModel: EntrenadorDashboardViewModel = viewModel { EntrenadorDashboardViewModel() }
@@ -51,18 +51,22 @@ fun EntrenadorDashboardScreen(
     val clipboardManager = LocalClipboardManager.current
     var mostrarDialogOpciones by rememberSaveable { mutableStateOf(false) }
 
-    // 🟢 Carga inicial
     LaunchedEffect(entrenadorId) {
         dashboardViewModel.cargarDashboard(entrenadorId)
     }
 
-    // 🟢 Escuchamos la bandera 'hubo_cambios_atleta' desde el NavBackStackEntry actual
+    // 🟢 Refresca la información del Semáforo al cambiar a la pestaña 1
+    LaunchedEffect(state.tabSeleccionado) {
+        if (state.tabSeleccionado == 1) {
+            semaforoViewModel.cargarDashboard(entrenadorId, forzarRecarga = true)
+        }
+    }
+
     val savedStateHandle = navController?.currentBackStackEntry?.savedStateHandle
     val huboCambios by savedStateHandle
         ?.getStateFlow("hubo_cambios_atleta", false)
         ?.collectAsState() ?: remember { mutableStateOf(false) }
 
-    // 🟢 Refresco automático ÚNICAMENTE si regresamos habiendo modificado datos
     LaunchedEffect(huboCambios) {
         if (huboCambios) {
             dashboardViewModel.cargarDashboard(entrenadorId)
@@ -73,7 +77,6 @@ fun EntrenadorDashboardScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(FondoOscuro)) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // TabRow de 3 pestañas
             TabRow(
                 selectedTabIndex = state.tabSeleccionado,
                 containerColor = FondoOscuro,
@@ -318,13 +321,11 @@ fun AtletaCardItem(atleta: Usuario, onClick: () -> Unit) {
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
-                // 🟢 Mostramos siempre el plan activo
                 Text(
                     text = "Plan: ${atleta.planActivo}",
                     color = TextoSecundario,
                     style = MaterialTheme.typography.bodyMedium
                 )
-                // 🟢 Si es cumpleaños, se añade como una línea extra resaltada en naranja
                 if (esCumpleanos) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
