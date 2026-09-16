@@ -31,6 +31,7 @@ import dev.josearroyo.fitlog.data.model.PlantillaRutina
 import dev.josearroyo.fitlog.ui.components.EditorNotasLista
 import dev.josearroyo.fitlog.viewmodel.entrenador.AsignarRutinaViewModel
 import androidx.navigation.NavController
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -51,6 +52,8 @@ fun SeleccionarPlantillaScreen(
 
     var mostrarCatalogoSheet by remember { mutableStateOf(false) }
     var indiceDiaEdicionNotas by remember { mutableStateOf<Int?>(null) }
+
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(entrenadorId) { viewModel.cargarBiblioteca(entrenadorId) }
 
@@ -352,11 +355,16 @@ fun SeleccionarPlantillaScreen(
 
             // 🟢 MODAL 2: EDICIÓN RÁPIDA DE NOTAS TÉCNICAS POR EJERCICIO ANTES DE ASIGNAR
             // 🟢 MODAL 2: EDICIÓN INTERACTIVA DE RECOMENDACIONES TÉCNICAS (VIÑETA POR VIÑETA)
+            // 🟢 MODAL 2: EDICIÓN DE RECOMENDACIONES TÉCNICAS CON CONTROL DE TECLADO
             indiceDiaEdicionNotas?.let { index ->
                 val plantilla = state.plantillasSeleccionadas.getOrNull(index)
                 if (plantilla != null) {
                     ModalBottomSheet(
-                        onDismissRequest = { indiceDiaEdicionNotas = null },
+                        onDismissRequest = {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                            indiceDiaEdicionNotas = null
+                        },
                         containerColor = FondoTarjeta
                     ) {
                         Column(
@@ -364,14 +372,43 @@ fun SeleccionarPlantillaScreen(
                                 .fillMaxWidth()
                                 .padding(horizontal = 20.dp, vertical = 8.dp)
                                 .navigationBarsPadding()
+                                // 🟢 Oculta el teclado al tocar espacios vacíos del modal sin cerrarlo
+                                .pointerInput(Unit) {
+                                    detectTapGestures(onTap = {
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                    })
+                                }
                         ) {
-                            Text(
-                                text = "Recomendaciones Técnicas - Día ${index + 1}: ${plantilla.nombre}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = NaranjaAcento,
-                                modifier = Modifier.padding(bottom = 12.dp)
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Recomendaciones - Día ${index + 1}: ${plantilla.nombre}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = NaranjaAcento,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                // 🟢 Botón explícito para bajar el teclado
+                                IconButton(
+                                    onClick = {
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Ocultar teclado",
+                                        tint = TextoSecundario
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(12.dp))
 
                             LazyColumn(
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -380,7 +417,7 @@ fun SeleccionarPlantillaScreen(
                                 itemsIndexed(plantilla.ejercicios) { ejIndex, ejPrescrito ->
                                     EditorNotasLista(
                                         titulo = ejPrescrito.nombreEjercicio,
-                                        placeholder = "Ej: Pausa de 2s abajo",
+                                        placeholder = "Ej: Tempo 3-0-1-0",
                                         notasTexto = ejPrescrito.notas,
                                         onNotasChanged = { nuevasNotas ->
                                             viewModel.actualizarNotaEspecificaEjercicio(index, ejIndex, nuevasNotas)
@@ -391,14 +428,13 @@ fun SeleccionarPlantillaScreen(
 
                             Spacer(Modifier.height(16.dp))
                             Button(
-                                onClick = { indiceDiaEdicionNotas = null },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = NaranjaAcento,
-                                    contentColor = FondoOscuro
-                                ),
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    keyboardController?.hide()
+                                    indiceDiaEdicionNotas = null
+                                },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Text("Guardar Cambios del Día", fontWeight = FontWeight.Bold)
