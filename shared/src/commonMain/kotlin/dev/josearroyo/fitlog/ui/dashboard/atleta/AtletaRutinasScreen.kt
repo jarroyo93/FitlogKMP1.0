@@ -1,6 +1,7 @@
 package dev.josearroyo.fitlog.ui.dashboard.atleta
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,8 +21,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.josearroyo.fitlog.data.model.EjercicioAsignado
 import dev.josearroyo.fitlog.data.model.RutinaAsignada
 import dev.josearroyo.fitlog.viewmodel.atleta.AtletaRutinasViewModel
+import dev.josearroyo.fitlog.ui.dashboard.obtenerTituloBloque
 
 // 🟢 IMPORTACIONES DE PLATAFORMA KMP
 import dev.josearroyo.fitlog.getCurrentTimeMillis
@@ -37,7 +40,6 @@ fun AtletaRutinasScreen(
     uid: String,
     onNavigateToEntrenar: (String) -> Unit
 ) {
-    // 🟢 CORREGIDO: Inicialización explícita compatible con la arquitectura DI KMP
     val viewModel: AtletaRutinasViewModel = viewModel { AtletaRutinasViewModel() }
     val state by viewModel.state.collectAsState()
 
@@ -107,44 +109,47 @@ fun RutinaExpandableCard(rutina: RutinaAsignada, onComenzar: () -> Unit) {
                         Text("No hay días configurados.", style = MaterialTheme.typography.bodySmall, color = Color.Red)
                     } else {
                         rutina.diasEntrenamiento.sortedBy { it.ordenSecuencia }.forEach { dia ->
-                            Text(text = dia.nombreDia, fontWeight = FontWeight.Bold, color = NaranjaAcento, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp, bottom = 4.dp))
+                            Text(
+                                text = dia.nombreDia,
+                                fontWeight = FontWeight.Bold,
+                                color = NaranjaAcento,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 6.dp, bottom = 4.dp)
+                            )
 
-                            dia.ejercicios.sortedBy { it.ordenSecuencia }.forEachIndexed { index, ej ->
+                            val ejerciciosOrdenados = dia.ejercicios.sortedBy { it.ordenSecuencia }
+                            val gruposBloque = ejerciciosOrdenados.groupBy { it.bloqueId }
 
-                                val totalSeries = ej.seriesPrescritas.size
+                            gruposBloque.forEach { (bloqueId, ejerciciosDelGrupo) ->
+                                if (bloqueId != null && ejerciciosDelGrupo.size >= 2) {
+                                    val letra = ejerciciosDelGrupo.first().bloqueNombre?.take(1) ?: "A"
+                                    val tituloGrupo = obtenerTituloBloque(letra, ejerciciosDelGrupo.size)
 
-                                val listaTextosReps = ej.seriesPrescritas.map { serie ->
-                                    val minR = serie.minReps
-                                    val maxR = serie.maxReps
-                                    when {
-                                        minR > 0 && maxR > 0 && minR != maxR -> "$minR-$maxR"
-                                        maxR > 0 -> "$maxR"
-                                        minR > 0 -> "$minR"
-                                        else -> "${serie.repeticiones}"
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = FondoOscuro.copy(alpha = 0.5f),
+                                        border = BorderStroke(1.dp, NaranjaAcento.copy(alpha = 0.5f))
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp)) {
+                                            Text(
+                                                text = tituloGrupo,
+                                                color = NaranjaAcento,
+                                                fontWeight = FontWeight.Black,
+                                                fontSize = 11.sp,
+                                                modifier = Modifier.padding(bottom = 4.dp, start = 4.dp)
+                                            )
+                                            ejerciciosDelGrupo.forEach { ej ->
+                                                EjercicioRutinaRowItem(ejercicio = ej)
+                                            }
+                                        }
                                     }
-                                }
-                                val sonRepeticionesUniforme = listaTextosReps.distinct().size == 1
-
-                                val textoDosificacion = when {
-                                    totalSeries == 0 -> "Sin series"
-                                    sonRepeticionesUniforme -> "${totalSeries}s x ${listaTextosReps.first()} reps"
-                                    else -> "${totalSeries}s x ${listaTextosReps.joinToString("/")}"
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 3.dp, bottom = 3.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text("${index + 1}.", color = TextoSecundario, modifier = Modifier.width(24.dp), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                                    Text(ej.nombre, color = Color.White, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-
-                                    Text(
-                                        text = textoDosificacion,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = NaranjaAcento,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp
-                                    )
+                                } else {
+                                    ejerciciosDelGrupo.forEach { ej ->
+                                        EjercicioRutinaRowItem(ejercicio = ej)
+                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
@@ -175,6 +180,75 @@ fun RutinaExpandableCard(rutina: RutinaAsignada, onComenzar: () -> Unit) {
 }
 
 @Composable
+fun EjercicioRutinaRowItem(ejercicio: EjercicioAsignado) {
+    val totalSeries = ejercicio.seriesPrescritas.size
+
+    val listaTextosReps = ejercicio.seriesPrescritas.map { serie ->
+        val minR = serie.minReps
+        val maxR = serie.maxReps
+        when {
+            minR > 0 && maxR > 0 && minR != maxR -> "$minR-$maxR"
+            maxR > 0 -> "$maxR"
+            minR > 0 -> "$minR"
+            else -> "${serie.repeticiones}"
+        }
+    }
+    val sonRepeticionesUniforme = listaTextosReps.distinct().size == 1
+
+    val textoDosificacion = when {
+        totalSeries == 0 -> "Sin series"
+        sonRepeticionesUniforme -> "${totalSeries}s x ${listaTextosReps.first()} reps"
+        else -> "${totalSeries}s x ${listaTextosReps.joinToString("/")}"
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, top = 3.dp, bottom = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "${ejercicio.ordenSecuencia}.",
+            color = TextoSecundario,
+            modifier = Modifier.width(24.dp),
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        ejercicio.bloqueNombre?.let { badge ->
+            Surface(
+                color = NaranjaAcento,
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier.padding(end = 6.dp)
+            ) {
+                Text(
+                    text = badge,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    color = FondoOscuro
+                )
+            }
+        }
+
+        Text(
+            text = ejercicio.nombre,
+            color = Color.White,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        Text(
+            text = textoDosificacion,
+            style = MaterialTheme.typography.bodySmall,
+            color = NaranjaAcento,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp
+        )
+    }
+}
+
+@Composable
 fun IndicadorFrecuencia(ultimaVez: Long?) {
     if (ultimaVez == null) {
         Surface(shape = MaterialTheme.shapes.small, color = NaranjaAcento.copy(alpha = 0.15f), modifier = Modifier.padding(vertical = 2.dp)) {
@@ -183,7 +257,6 @@ fun IndicadorFrecuencia(ultimaVez: Long?) {
         return
     }
 
-    // 🟢 CORREGIDO: El cálculo matemático ahora se recuerda para evitar ejecuciones repetitivas en cada frame
     val esActivo = remember(ultimaVez) {
         val diffMilis = getCurrentTimeMillis() - ultimaVez
         val diffDias = diffMilis / (1000 * 60 * 60 * 24)
