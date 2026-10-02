@@ -34,6 +34,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.josearroyo.fitlog.data.model.CicloEntrenamiento
 import dev.josearroyo.fitlog.data.model.ModoCiclo
 import dev.josearroyo.fitlog.data.model.SesionEntrenamiento
+import dev.josearroyo.fitlog.data.remoteconfig.RemoteConfigManager
 import dev.josearroyo.fitlog.viewmodel.atleta.ProgresoAtletaViewModel
 import dev.josearroyo.fitlog.viewmodel.atleta.DetalleEjercicioUI
 import dev.josearroyo.fitlog.viewmodel.atleta.ImpactoFisicoUI
@@ -61,6 +62,11 @@ fun ProgresoAtletaScreen(
     viewModel: ProgresoAtletaViewModel = viewModel { ProgresoAtletaViewModel() }
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    // 🟢 Lectura dinámica de Remote Config y estado del Modal de Ayuda
+    val textoAyudaProgreso by RemoteConfigManager.ayudaProgresoAtleta.collectAsState()
+    var mostrarModalAyuda by remember { mutableStateOf(false) }
+
     var tabSeleccionada by rememberSaveable { mutableStateOf(1) }
     val titulosTabs = listOf("Evolución", "Diario de Ciclos", "Récords")
 
@@ -80,6 +86,38 @@ fun ProgresoAtletaScreen(
         viewModel.cargarDatosProgreso(userId)
     }
 
+    // 🟢 Modal de Ayuda Dinámico
+    if (mostrarModalAyuda) {
+        AlertDialog(
+            containerColor = FondoTarjeta,
+            onDismissRequest = { mostrarModalAyuda = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.HelpOutline,
+                        contentDescription = null,
+                        tint = NaranjaAcento
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Guía de Rendimiento", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Text(
+                    text = textoAyudaProgreso,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { mostrarModalAyuda = false }) {
+                    Text("Entendido", color = NaranjaAcento, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
     Scaffold(
         containerColor = FondoOscuro,
         topBar = {
@@ -90,6 +128,15 @@ fun ProgresoAtletaScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Volver", tint = NaranjaAcento)
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { mostrarModalAyuda = true }) {
+                            Icon(
+                                imageVector = Icons.Default.HelpOutline,
+                                contentDescription = "Guía de Rendimiento",
+                                tint = NaranjaAcento
+                            )
                         }
                     }
                 )
@@ -111,13 +158,25 @@ fun ProgresoAtletaScreen(
             ) {
                 if (onBack == null) {
                     item {
-                        Text(
-                            text = "Mi Rendimiento",
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Mi Rendimiento",
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White
+                            )
+                            IconButton(onClick = { mostrarModalAyuda = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.HelpOutline,
+                                    contentDescription = "Guía de Rendimiento",
+                                    tint = NaranjaAcento
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -262,6 +321,8 @@ fun ProgresoAtletaScreen(
         }
     }
 }
+
+// ... resto de funciones y Composables (EvolucionEjercicioSection, GraficaProgresoEjercicio, etc.) permanecen iguales ...
 
 // ============================================================
 // PESTAÑA DE EVOLUCIÓN: SELECCIÓN Y ANÁLISIS DE FUERZA

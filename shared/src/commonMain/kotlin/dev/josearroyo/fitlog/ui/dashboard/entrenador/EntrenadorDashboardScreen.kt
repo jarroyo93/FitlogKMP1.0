@@ -2,11 +2,15 @@ package dev.josearroyo.fitlog.ui.entrenador
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -16,8 +20,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,6 +56,16 @@ fun EntrenadorDashboardScreen(
 
     val state by dashboardViewModel.uiState.collectAsState()
     val clipboardManager = LocalClipboardManager.current
+
+    // 🟢 Gestores de foco y teclado suave para iOS / Android
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    val ocultarTeclado = {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+    }
+
     var mostrarDialogOpciones by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(entrenadorId) {
@@ -75,7 +92,17 @@ fun EntrenadorDashboardScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(FondoOscuro)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(FondoOscuro)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                ocultarTeclado()
+            }
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
             TabRow(
                 selectedTabIndex = state.tabSeleccionado,
@@ -84,17 +111,26 @@ fun EntrenadorDashboardScreen(
             ) {
                 Tab(
                     selected = state.tabSeleccionado == 0,
-                    onClick = { dashboardViewModel.cambiarTab(0) },
+                    onClick = {
+                        ocultarTeclado()
+                        dashboardViewModel.cambiarTab(0)
+                    },
                     text = { Text("Mis Atletas", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
                 )
                 Tab(
                     selected = state.tabSeleccionado == 1,
-                    onClick = { dashboardViewModel.cambiarTab(1) },
+                    onClick = {
+                        ocultarTeclado()
+                        dashboardViewModel.cambiarTab(1)
+                    },
                     text = { Text("Semáforo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
                 )
                 Tab(
                     selected = state.tabSeleccionado == 2,
-                    onClick = { dashboardViewModel.cambiarTab(2) },
+                    onClick = {
+                        ocultarTeclado()
+                        dashboardViewModel.cambiarTab(2)
+                    },
                     text = { Text("Asistencia Hoy", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
                 )
             }
@@ -106,6 +142,18 @@ fun EntrenadorDashboardScreen(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     placeholder = { Text("Buscar atleta por nombre...", color = TextoSecundario) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = NaranjaAcento) },
+                    trailingIcon = {
+                        if (state.textoBusqueda.isNotEmpty()) {
+                            IconButton(
+                                onClick = { dashboardViewModel.aplicarBusqueda("") }
+                            ) {
+                                Icon(Icons.Default.Clear, contentDescription = "Limpiar", tint = TextoSecundario)
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { ocultarTeclado() }),
                     shape = MaterialTheme.shapes.medium,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White, unfocusedTextColor = Color.White,
@@ -132,7 +180,13 @@ fun EntrenadorDashboardScreen(
                             contentPadding = PaddingValues(bottom = 88.dp)
                         ) {
                             items(state.atletas, key = { it.id }) { atleta ->
-                                AtletaCardItem(atleta = atleta, onClick = { onAtletaClick(atleta.id) })
+                                AtletaCardItem(
+                                    atleta = atleta,
+                                    onClick = {
+                                        ocultarTeclado()
+                                        onAtletaClick(atleta.id)
+                                    }
+                                )
                             }
                         }
                     }
@@ -143,7 +197,10 @@ fun EntrenadorDashboardScreen(
                         SemaforoDashboardContent(
                             entrenadorId = entrenadorId,
                             viewModel = semaforoViewModel,
-                            onAtletaClick = onAtletaClick
+                            onAtletaClick = { atletaId ->
+                                ocultarTeclado()
+                                onAtletaClick(atletaId)
+                            }
                         )
                     }
                 }
@@ -173,7 +230,10 @@ fun EntrenadorDashboardScreen(
         }
 
         FloatingActionButton(
-            onClick = { mostrarDialogOpciones = true },
+            onClick = {
+                ocultarTeclado()
+                mostrarDialogOpciones = true
+            },
             containerColor = NaranjaAcento,
             contentColor = FondoOscuro,
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
@@ -194,7 +254,10 @@ fun EntrenadorDashboardScreen(
                 confirmButton = {
                     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(
-                            onClick = { mostrarDialogOpciones = false; onAddAtletaClick() },
+                            onClick = {
+                                mostrarDialogOpciones = false
+                                onAddAtletaClick()
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento)
                         ) { Text("Crear Manualmente", color = Color.White, fontWeight = FontWeight.Bold) }

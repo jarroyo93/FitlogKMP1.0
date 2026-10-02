@@ -7,6 +7,7 @@ import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
 import dev.josearroyo.fitlog.data.model.Pesaje
 import dev.josearroyo.fitlog.data.model.RutinaAsignada
 import dev.josearroyo.fitlog.data.model.Usuario
+import dev.josearroyo.fitlog.data.remoteconfig.RemoteConfigManager
 import dev.josearroyo.fitlog.repository.AtletaProgresoRepository
 import dev.josearroyo.fitlog.repository.AtletaRepository
 import dev.josearroyo.fitlog.repository.UserRepository
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 
 data class AtletaInicioState(
     val isLoading: Boolean = true,
+    val isRefreshing: Boolean = false, // 🔄 Estado para el Pull-to-Refresh
     val usuario: Usuario? = null,
     val rutinasSugeridas: List<RutinaAsignada> = emptyList(),
     val ultimosPesajes: List<Pesaje> = emptyList(),
@@ -37,13 +39,28 @@ class AtletaInicioViewModel : ViewModel() {
 
     private var currentAtletaId: String? = null
 
-    fun cargarDashboard(authUid: String) {
+    fun cargarDashboard(authUid: String, esRefrescoManual: Boolean = false) {
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
+            if (esRefrescoManual) {
+                _state.update { it.copy(isRefreshing = true, error = null) }
+                // 🔄 Re-obtener Remote Config en segundo plano
+                try {
+                    RemoteConfigManager.fetchAndActivate()
+                } catch (_: Exception) { }
+            } else if (_state.value.usuario == null) {
+                _state.update { it.copy(isLoading = true, error = null) }
+            }
+
             try {
                 var usuario = userRepository.obtenerUsuario(authUid)
                 if (usuario == null) {
-                    _state.update { it.copy(isLoading = false, error = "Usuario no encontrado en BD.") }
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            error = "Usuario no encontrado en BD."
+                        )
+                    }
                     return@launch
                 }
                 currentAtletaId = usuario.id
@@ -64,6 +81,7 @@ class AtletaInicioViewModel : ViewModel() {
                     _state.update {
                         it.copy(
                             isLoading = false,
+                            isRefreshing = false,
                             usuario = finalUsuario,
                             rutinasSugeridas = rutinas,
                             ultimosPesajes = pesajes,
@@ -72,7 +90,13 @@ class AtletaInicioViewModel : ViewModel() {
                     }
                 }
             } catch (e: Exception) {
-                _state.update { it.copy(isLoading = false, error = e.message ?: "Error al cargar datos") }
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        error = e.message ?: "Error al cargar datos"
+                    )
+                }
             }
         }
     }

@@ -2,11 +2,14 @@ package dev.josearroyo.fitlog.ui.dashboard.entrenador
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -16,7 +19,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -42,7 +48,15 @@ fun BibliotecaScreen(
     val viewModel: BibliotecaViewModel = viewModel { BibliotecaViewModel() }
     val state by viewModel.state.collectAsState()
 
-    // 🟢 CORREGIDO: rememberSaveable blinda el estado del filtro contra recomposiciones de teclado
+    // 🟢 Gestores de foco y teclado suave para iOS / Android
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    val ocultarTeclado = {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+    }
+
     var menuExpandidoFiltro by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.tabSeleccionado) {
@@ -57,6 +71,12 @@ fun BibliotecaScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FondoOscuro)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                ocultarTeclado()
+            }
             .padding(16.dp)
     ) {
         TabRow(
@@ -73,14 +93,20 @@ fun BibliotecaScreen(
         ) {
             Tab(
                 selected = state.tabSeleccionado == 0,
-                onClick = { viewModel.cambiarPestana(0) },
+                onClick = {
+                    ocultarTeclado()
+                    viewModel.cambiarPestana(0)
+                },
                 text = { Text("Ejercicios", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
                 selectedContentColor = Color.White,
                 unselectedContentColor = TextoSecundario
             )
             Tab(
                 selected = state.tabSeleccionado == 1,
-                onClick = { viewModel.cambiarPestana(1) },
+                onClick = {
+                    ocultarTeclado()
+                    viewModel.cambiarPestana(1)
+                },
                 text = { Text("Plantillas", fontWeight = FontWeight.Bold, fontSize = 14.sp) },
                 selectedContentColor = Color.White,
                 unselectedContentColor = TextoSecundario
@@ -98,6 +124,8 @@ fun BibliotecaScreen(
                     leadingIcon = { Icon(Icons.Default.Search, null, tint = NaranjaAcento) },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { ocultarTeclado() }),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White, unfocusedTextColor = Color.White,
                         focusedBorderColor = NaranjaAcento, unfocusedBorderColor = FondoTarjeta,
@@ -108,18 +136,33 @@ fun BibliotecaScreen(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Box {
-                    IconButton(onClick = { menuExpandidoFiltro = true }) {
+                    IconButton(onClick = {
+                        ocultarTeclado()
+                        menuExpandidoFiltro = true
+                    }) {
                         Icon(Icons.Default.FilterList, "Filtrar grupo", tint = NaranjaAcento)
                     }
-                    DropdownMenu(expanded = menuExpandidoFiltro, onDismissRequest = { menuExpandidoFiltro = false }, modifier = Modifier.background(FondoTarjeta)) {
-                        DropdownMenuItem(text = { Text("Todos los grupos", color = Color.White) }, onClick = { viewModel.filtrarEjercicios(state.textoBusqueda, null); menuExpandidoFiltro = false })
+                    DropdownMenu(
+                        expanded = menuExpandidoFiltro,
+                        onDismissRequest = { menuExpandidoFiltro = false },
+                        modifier = Modifier.background(FondoTarjeta)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Todos los grupos", color = Color.White) },
+                            onClick = {
+                                viewModel.filtrarEjercicios(state.textoBusqueda, null)
+                                menuExpandidoFiltro = false
+                            }
+                        )
 
-                        // 🟢 CORREGIDO: Uso de .entries sobre .values() para proteger la memoria RAM
                         GrupoMuscular.entries.forEach { grupo ->
                             val nombreFormateado = grupo.name.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }
                             DropdownMenuItem(
                                 text = { Text(nombreFormateado, color = Color.White) },
-                                onClick = { viewModel.filtrarEjercicios(state.textoBusqueda, grupo); menuExpandidoFiltro = false }
+                                onClick = {
+                                    viewModel.filtrarEjercicios(state.textoBusqueda, grupo)
+                                    menuExpandidoFiltro = false
+                                }
                             )
                         }
                     }
@@ -131,19 +174,27 @@ fun BibliotecaScreen(
             if (state.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = NaranjaAcento) }
             } else {
-                // 🟢 CORREGIDO: Se inyecta key única para optimizar el reciclaje de las tarjetas de fuerza
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
                     items(state.listaFiltrada, key = { it.id }) { ejercicio ->
                         CardEjercicioRow(
                             ejercicio = ejercicio,
-                            onEdit = { onNavigateToEditEjercicio(entrenadorId, ejercicio.id) },
-                            onDelete = { viewModel.eliminarEjercicioPersonalizado(ejercicio.id, entrenadorId) }
+                            onEdit = {
+                                ocultarTeclado()
+                                onNavigateToEditEjercicio(entrenadorId, ejercicio.id)
+                            },
+                            onDelete = {
+                                ocultarTeclado()
+                                viewModel.eliminarEjercicioPersonalizado(ejercicio.id, entrenadorId)
+                            }
                         )
                     }
                 }
 
                 Button(
-                    onClick = { onNavigateToAddEjercicio(entrenadorId) },
+                    onClick = {
+                        ocultarTeclado()
+                        onNavigateToAddEjercicio(entrenadorId)
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(12.dp)
@@ -157,19 +208,27 @@ fun BibliotecaScreen(
             if (state.isLoadingPlantillas) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = NaranjaAcento) }
             } else {
-                // 🟢 CORREGIDO: Llave key explícita para evitar desfase de índices en la bitácora de plantillas
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
                     items(state.listaPlantillas, key = { it.id }) { plantilla ->
                         CardPlantillaRow(
                             plantilla = plantilla,
-                            onEdit = { onNavigateToEditPlantilla(entrenadorId, plantilla.id) },
-                            onDelete = { viewModel.eliminarPlantilla(plantilla.id, entrenadorId) }
+                            onEdit = {
+                                ocultarTeclado()
+                                onNavigateToEditPlantilla(entrenadorId, plantilla.id)
+                            },
+                            onDelete = {
+                                ocultarTeclado()
+                                viewModel.eliminarPlantilla(plantilla.id, entrenadorId)
+                            }
                         )
                     }
                 }
 
                 Button(
-                    onClick = { onNavigateToAddPlantilla(entrenadorId) },
+                    onClick = {
+                        ocultarTeclado()
+                        onNavigateToAddPlantilla(entrenadorId)
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = NaranjaAcento, contentColor = FondoOscuro),
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(12.dp)
@@ -195,7 +254,6 @@ fun CardEjercicioRow(ejercicio: Ejercicio, onEdit: () -> Unit, onDelete: () -> U
             Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 🖼️ MINIATURA DE ILUSTRACIÓN
             EjercicioImageThumbnail(
                 imagenRes = ejercicio.imagenRes,
                 nombreEjercicio = ejercicio.nombre,

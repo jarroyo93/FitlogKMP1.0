@@ -43,6 +43,7 @@ import kotlinx.coroutines.launch
 
 import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
 import dev.josearroyo.fitlog.data.model.Usuario
+import dev.josearroyo.fitlog.data.remoteconfig.RemoteConfigManager
 import dev.josearroyo.fitlog.repository.AuthRepository
 import dev.josearroyo.fitlog.repository.UserRepository
 import dev.josearroyo.fitlog.ui.navigation.BottomNavItem
@@ -52,6 +53,9 @@ import dev.josearroyo.fitlog.getCurrentTimeMillis
 import dev.josearroyo.fitlog.formatearFechaHistorial
 import dev.josearroyo.fitlog.ui.dashboard.ProgresoAtletaScreen
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MenuBook
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
 private val FondoTarjeta = Color(0xFF2F254E)
@@ -70,6 +74,12 @@ fun AtletaMainScreen(
     val scope = rememberCoroutineScope()
     val userRepository = remember { UserRepository() }
     val authRepository = remember { AuthRepository() }
+
+    // 🔄 Lectura de mensajes dinámicos desde Remote Config
+    val msgVencido by RemoteConfigManager.msgPlanVencido.collectAsState()
+    val msgPausado by RemoteConfigManager.msgCuentaPausada.collectAsState()
+    val msgDiferido by RemoteConfigManager.msgPlanDiferido.collectAsState()
+    val msgVinculacion by RemoteConfigManager.msgInstruccionesVinculacion.collectAsState()
 
     var usuario by remember { mutableStateOf<Usuario?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -159,6 +169,7 @@ fun AtletaMainScreen(
                 when (estadoReal) {
                     EstadoSuscripcion.HUERFANO -> {
                         PantallaHuerfano(
+                            mensajeInstrucciones = msgVinculacion,
                             isActionLoading = isActionLoading,
                             onIngresarCodigo = { corr, cod, onError ->
                                 scope.launch {
@@ -183,7 +194,7 @@ fun AtletaMainScreen(
                     EstadoSuscripcion.SUSPENDIDO -> {
                         PantallaRestringida(
                             titulo = "Cuenta Congelada",
-                            mensaje = "Tu plan de entrenamiento está pausado. Comunícate con tu coach.",
+                            mensaje = msgPausado,
                             textoBotonPrincipal = "Actualizar Estado",
                             isActionLoading = isActionLoading,
                             onAccionPrincipal = { recargarEstado() },
@@ -199,7 +210,7 @@ fun AtletaMainScreen(
                     EstadoSuscripcion.VENCIDO -> {
                         PantallaRestringida(
                             titulo = "Plan Vencido",
-                            mensaje = "Tu ciclo ha terminado. Solicita la renovación a tu entrenador.",
+                            mensaje = msgVencido,
                             textoBotonPrincipal = "Actualizar Estado",
                             isActionLoading = isActionLoading,
                             onAccionPrincipal = { recargarEstado() },
@@ -215,7 +226,7 @@ fun AtletaMainScreen(
                     EstadoSuscripcion.DIFERIDO -> {
                         PantallaRestringida(
                             titulo = "Plan Programado",
-                            mensaje = "Tu plan está agendado para iniciar próximamente. Vuelve a consultar cuando llegue la fecha de inicio.",
+                            mensaje = msgDiferido,
                             textoBotonPrincipal = "Actualizar Estado",
                             isActionLoading = isActionLoading,
                             onAccionPrincipal = { recargarEstado() },
@@ -468,6 +479,7 @@ fun PantallaRestringida(
 
 @Composable
 fun PantallaHuerfano(
+    mensajeInstrucciones: String,
     isActionLoading: Boolean,
     onIngresarCodigo: (correo: String, codigo: String, onError: () -> Unit) -> Unit,
     onLogout: () -> Unit
@@ -499,7 +511,7 @@ fun PantallaHuerfano(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Para utilizar la plataforma, pide a tu entrenador que genere un código de vinculación en su perfil.",
+                text = mensajeInstrucciones,
                 textAlign = TextAlign.Center,
                 color = TextoSecundario
             )

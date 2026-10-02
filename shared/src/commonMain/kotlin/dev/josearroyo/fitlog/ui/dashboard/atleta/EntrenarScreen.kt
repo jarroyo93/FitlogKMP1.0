@@ -32,6 +32,7 @@ import dev.josearroyo.fitlog.viewmodel.atleta.EntrenarViewModel
 import dev.josearroyo.fitlog.formatearFechaCorto
 import dev.josearroyo.fitlog.ui.components.EjercicioImageThumbnail
 import dev.josearroyo.fitlog.ui.dashboard.obtenerTituloBloque
+import dev.josearroyo.fitlog.data.remoteconfig.RemoteConfigManager
 
 private val FondoOscuro = Color(0xFF241B3C)
 private val NaranjaAcento = Color(0xFFFF9F6D)
@@ -48,6 +49,11 @@ fun EntrenarScreen(
 ) {
     val viewModel: EntrenarViewModel = viewModel { EntrenarViewModel() }
     val state by viewModel.state.collectAsState()
+
+    // 🟢 Lectura dinámica de Remote Config
+    val textoAyudaEntrenar by RemoteConfigManager.ayudaPantallaEntrenar.collectAsState()
+    var mostrarModalAyudaGeneral by remember { mutableStateOf(false) }
+
     var mostrarConfirmacion by remember { mutableStateOf(false) }
     var mostrarModalNotasGeneral by remember { mutableStateOf(false) }
 
@@ -94,6 +100,15 @@ fun EntrenarScreen(
                                 tint = NaranjaAcento
                             )
                         }
+                    }
+
+                    // 🟢 ÍCONO AYUDA REMOTE CONFIG
+                    IconButton(onClick = { mostrarModalAyudaGeneral = true }) {
+                        Icon(
+                            imageVector = Icons.Default.HelpOutline,
+                            contentDescription = "Guía de Ejecución",
+                            tint = NaranjaAcento
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = FondoOscuro),
@@ -205,6 +220,38 @@ fun EntrenarScreen(
                                 }
                             ) {
                                 Text("Cancelar", color = Color(0xFFE57373))
+                            }
+                        }
+                    )
+                }
+
+                // 🟢 MODAL AYUDA REMOTE CONFIG (NUEVO)
+                if (mostrarModalAyudaGeneral) {
+                    AlertDialog(
+                        containerColor = FondoTarjeta,
+                        onDismissRequest = { mostrarModalAyudaGeneral = false },
+                        title = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.HelpOutline,
+                                    contentDescription = null,
+                                    tint = NaranjaAcento
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Guía de Ejecución", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        text = {
+                            Text(
+                                text = textoAyudaEntrenar,
+                                color = Color.White,
+                                style = MaterialTheme.typography.bodyMedium,
+                                lineHeight = 20.sp
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { mostrarModalAyudaGeneral = false }) {
+                                Text("Entendido", color = NaranjaAcento, fontWeight = FontWeight.Bold)
                             }
                         }
                     )
@@ -341,7 +388,6 @@ fun EntrenarScreen(
                             }
                         }
 
-                        // Reemplazar la sección itemsIndexed en EntrenarScreen por:
                         val gruposBloque = ejerciciosOrdenados.groupBy { it.bloqueId }
 
                         gruposBloque.forEach { (bloqueId, ejerciciosDelGrupo) ->

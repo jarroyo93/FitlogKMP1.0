@@ -56,6 +56,15 @@ fun FacturacionScreen(
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // 🟢 Gestores de foco y teclado suave para iOS / Android
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    val ocultarTeclado = {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+    }
+
     var atletaSeleccionadoParaRenovar by rememberSaveable { mutableStateOf<Usuario?>(null) }
     var atletaSeleccionadoParaPausar by rememberSaveable { mutableStateOf<Usuario?>(null) }
 
@@ -80,7 +89,10 @@ fun FacturacionScreen(
                 title = { Text("Facturación & Suscripciones", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 20.sp) },
                 actions = {
                     IconButton(
-                        onClick = onNavigateToInformeGlobal,
+                        onClick = {
+                            ocultarTeclado()
+                            onNavigateToInformeGlobal()
+                        },
                         enabled = !state.isLoading
                     ) {
                         Icon(
@@ -94,7 +106,18 @@ fun FacturacionScreen(
             )
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().background(FondoOscuro).padding(paddingValues)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(FondoOscuro)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    ocultarTeclado()
+                }
+                .padding(paddingValues)
+        ) {
             Column(modifier = Modifier.fillMaxSize()) {
 
                 EstadisticasRapidas(atletas = state.atletas)
@@ -116,6 +139,9 @@ fun FacturacionScreen(
                             }
                         }
                     },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { ocultarTeclado() }),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
@@ -127,8 +153,7 @@ fun FacturacionScreen(
                         unfocusedContainerColor = FondoTarjeta,
                         disabledContainerColor = FondoTarjeta
                     ),
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
+                    shape = RoundedCornerShape(12.dp)
                 )
 
                 LazyRow(
@@ -140,7 +165,10 @@ fun FacturacionScreen(
                         FilterChip(
                             selected = esSeleccionado,
                             enabled = !state.isLoading,
-                            onClick = { viewModel.onFiltroChanged(filtro) },
+                            onClick = {
+                                ocultarTeclado()
+                                viewModel.onFiltroChanged(filtro)
+                            },
                             label = { Text(filtro.etiqueta) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = NaranjaAcento,
@@ -171,17 +199,28 @@ fun FacturacionScreen(
                             AtletaFacturacionItem(
                                 atleta = atleta,
                                 enabled = !state.isLoading,
-                                onHistory = { onNavigateToHistorial(atleta.id) },
-                                onPause = { atletaSeleccionadoParaPausar = atleta },
-                                onResume = { viewModel.reactivarAtleta(atleta.id, entrenadorId) },
-                                onRenew = { atletaSeleccionadoParaRenovar = atleta }
+                                onHistory = {
+                                    ocultarTeclado()
+                                    onNavigateToHistorial(atleta.id)
+                                },
+                                onPause = {
+                                    ocultarTeclado()
+                                    atletaSeleccionadoParaPausar = atleta
+                                },
+                                onResume = {
+                                    ocultarTeclado()
+                                    viewModel.reactivarAtleta(atleta.id, entrenadorId)
+                                },
+                                onRenew = {
+                                    ocultarTeclado()
+                                    atletaSeleccionadoParaRenovar = atleta
+                                }
                             )
                         }
                     }
                 }
             }
 
-            // DIÁLOGO UNIFICADO PARA RENOVAR / VENDER PLAN
             atletaSeleccionadoParaRenovar?.let { atleta ->
                 val ahora = getCurrentTimeMillis()
                 val periodosExistentes = remember(atleta) {

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import dev.josearroyo.fitlog.data.model.EstadoSuscripcion
+import dev.josearroyo.fitlog.data.remoteconfig.RemoteConfigManager
 import dev.josearroyo.fitlog.formatearFechaHistorial
 import dev.josearroyo.fitlog.viewmodel.atleta.AtletaDetailViewModel
 import dev.josearroyo.fitlog.viewmodel.atleta.InformeCoach
@@ -50,7 +51,11 @@ fun AtletaDetailScreen(
     val detailViewModel: AtletaDetailViewModel = viewModel { AtletaDetailViewModel() }
     val state by detailViewModel.state.collectAsState()
 
-// 🟢 Escuchamos si pantallas de edición hijas (como EditRutinaAsignada o SeleccionarPlantilla) enviaron cambios
+    // 🟢 Lectura dinámica de Remote Config y estado del Modal de Ayuda
+    val textoAyudaExpediente by RemoteConfigManager.ayudaExpedienteAtleta.collectAsState()
+    var mostrarModalAyuda by remember { mutableStateOf(false) }
+
+    // 🟢 Escuchamos si pantallas de edición hijas enviaron cambios
     val savedStateHandle = navController?.currentBackStackEntry?.savedStateHandle
     val huboCambiosHijo by savedStateHandle
         ?.getStateFlow("hubo_cambios_atleta", false)
@@ -60,7 +65,7 @@ fun AtletaDetailScreen(
         detailViewModel.cargarExpedienteAtleta(atletaId)
     }
 
-// 🟢 Refresco automático del expediente Y propagación directa hacia el Semáforo/Dashboard
+    // 🟢 Refresco automático del expediente Y propagación directa hacia el Semáforo/Dashboard
     LaunchedEffect(huboCambiosHijo) {
         if (huboCambiosHijo) {
             detailViewModel.cargarExpedienteAtleta(atletaId)
@@ -85,6 +90,38 @@ fun AtletaDetailScreen(
         onBack()
     }
 
+    // 🟢 Modal de Ayuda Dinámico (Firebase Remote Config)
+    if (mostrarModalAyuda) {
+        AlertDialog(
+            containerColor = FondoTarjeta,
+            onDismissRequest = { mostrarModalAyuda = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.HelpOutline,
+                        contentDescription = null,
+                        tint = NaranjaAcento
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Guía del Expediente", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Text(
+                    text = textoAyudaExpediente,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { mostrarModalAyuda = false }) {
+                    Text("Entendido", color = NaranjaAcento, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -101,6 +138,15 @@ fun AtletaDetailScreen(
                         Icon(
                             Icons.Default.ArrowBack,
                             contentDescription = "Atrás",
+                            tint = NaranjaAcento
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { mostrarModalAyuda = true }) {
+                        Icon(
+                            imageVector = Icons.Default.HelpOutline,
+                            contentDescription = "Guía del Expediente",
                             tint = NaranjaAcento
                         )
                     }

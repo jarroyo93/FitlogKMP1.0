@@ -71,6 +71,7 @@ kotlin {
             implementation(compose.materialIconsExtended)
             implementation(libs.firebase.firestore)
             implementation(libs.firebase.auth)
+            implementation(libs.firebase.config) // 👈 Agregado
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
